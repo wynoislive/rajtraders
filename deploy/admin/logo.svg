@@ -1,7 +1,0 @@
-<svg width="160" height="48" viewBox="0 0 160 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="48" height="48" rx="14" fill="#0E3D42"/>
-  <path d="M15 20.5C15 18.567 16.567 17 18.5 17H29.5C31.433 17 33 18.567 33 20.5V30.5C33 32.433 31.433 34 29.5 34H18.5C16.567 34 15 32.433 15 30.5V20.5Z" stroke="#E2A93B" stroke-width="2.2"/>
-  <path d="M19 17V22C19 23.657 20.343 25 22 25H26C27.657 25 29 23.657 29 22V17" stroke="#E2A93B" stroke-width="2.2"/>
-  <path d="M21 29H27" stroke="#E2A93B" stroke-width="2.2" stroke-linecap="round"/>
-  <text x="58" y="29" fill="#0E3D42" font-family="Arial, sans-serif" font-size="16" font-weight="700">Shop Admin</text>
-</svg>

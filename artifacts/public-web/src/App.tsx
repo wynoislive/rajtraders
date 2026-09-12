@@ -205,6 +205,7 @@ export default function App() {
       if (data.requiresVerification) {
         setOtpRequired(true);
         setPendingEmail(email);
+        setOtpCode('');
         setResendCooldown(45);
       } else if (data.token && data.user) {
         setToken(data.token);
@@ -246,6 +247,7 @@ export default function App() {
       if (data.requiresVerification) {
         setOtpRequired(true);
         setPendingEmail(email);
+        setOtpCode('');
         setResendCooldown(45);
       } else if (data.token && data.user) {
         setToken(data.token);
@@ -280,6 +282,7 @@ export default function App() {
         localStorage.setItem('raj_user', JSON.stringify(data.user));
         setShowAuthModal(false);
         setOtpRequired(false);
+        setOtpCode('');
       } else {
         setAuthError(data.error || 'Verification failed.');
       }
@@ -303,6 +306,7 @@ export default function App() {
       const data = await res.json();
       if (res.ok) {
         setAuthError(null);
+        setOtpCode('');
         setResendCooldown(45);
         alert(`New verification OTP code sent to ${pendingEmail}`);
       } else {
@@ -682,7 +686,7 @@ export default function App() {
             {otpRequired ? (
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <p className="text-xs text-gray-500 font-medium">A 6-digit verification code was sent to <strong className="text-[#0E3D42]">{pendingEmail}</strong></p>
-                <input required type="text" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="6-Digit OTP" className="w-full p-3 text-center tracking-widest text-xl font-bold rounded-xl border border-gray-300" />
+                <input required type="text" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="6-Digit OTP" autoComplete="one-time-code" className="w-full p-3 text-center tracking-widest text-xl font-bold rounded-xl border border-gray-300" />
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Verifying...' : 'Verify OTP'}</button>
                 <div className="flex justify-between items-center text-xs pt-1">
                   <button
