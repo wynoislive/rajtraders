@@ -192,7 +192,7 @@ INSERT INTO admin_users (id, name, email, password_hash, role, active)
 VALUES (
   'main_admin_01',
   'Master Administrator',
-  'admin@harborlane.shop',
+  'admin@rajtraders.com',
   'd6c547847c23114a:61a9e3a6aef60cf3ff13d96df2bc2d5c4125b290ba234857b29a28c2e99d3fbc9583be5fcaaebe3ffc129e612cb7f8d672ea351b8d601bce2b8a69d7b4a2b16d',
   'MAIN_ADMIN',
   true

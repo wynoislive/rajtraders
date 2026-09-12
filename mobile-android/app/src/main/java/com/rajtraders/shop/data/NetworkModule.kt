@@ -1,6 +1,6 @@
-package com.harborlane.shop.data
+package com.rajtraders.shop.data
 
-import com.harborlane.shop.BuildConfig
+import com.rajtraders.shop.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit

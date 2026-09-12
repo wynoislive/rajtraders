@@ -1,4 +1,4 @@
-package com.harborlane.shop
+package com.rajtraders.shop
 
 import android.content.Context
 import android.content.Intent
@@ -76,33 +76,33 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.harborlane.shop.data.Product
+import com.rajtraders.shop.data.Product
 import java.text.NumberFormat
 import java.util.Locale
 
-private val HarborTeal = Color(0xFF0E3D42)
-private val HarborSaffron = Color(0xFFE2A93B)
-private val HarborCanvas = Color(0xFFF7F2EA)
+private val RajTeal = Color(0xFF0E3D42)
+private val RajSaffron = Color(0xFFE2A93B)
+private val RajCanvas = Color(0xFFF7F2EA)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            HarborLaneTheme {
+            RajTradersTheme {
                 val viewModel: StorefrontViewModel = viewModel(factory = StorefrontViewModelFactory())
-                HarborLaneApp(viewModel)
+                RajTradersApp(viewModel)
             }
         }
     }
 }
 
 @Composable
-private fun HarborLaneTheme(content: @Composable () -> Unit) {
+private fun RajTradersTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(
-            primary = HarborTeal,
-            secondary = HarborSaffron,
-            background = HarborCanvas,
+            primary = RajTeal,
+            secondary = RajSaffron,
+            background = RajCanvas,
             surface = Color.White,
         ),
         content = content,
@@ -111,13 +111,13 @@ private fun HarborLaneTheme(content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun HarborLaneApp(viewModel: StorefrontViewModel) {
+private fun RajTradersApp(viewModel: StorefrontViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
     val cartCount = state.cart.sumOf { it.quantity }
 
     Scaffold(
-        containerColor = HarborCanvas,
+        containerColor = RajCanvas,
         topBar = {
             TopAppBar(
                 title = {
@@ -137,7 +137,7 @@ private fun HarborLaneApp(viewModel: StorefrontViewModel) {
                                 Surface(
                                     modifier = Modifier.align(Alignment.TopEnd).size(16.dp),
                                     shape = RoundedCornerShape(8.dp),
-                                    color = HarborSaffron,
+                                    color = RajSaffron,
                                 ) {
                                     Text("$cartCount", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 4.dp))
                                 }
@@ -197,8 +197,8 @@ private fun HarborLaneApp(viewModel: StorefrontViewModel) {
 
 // ─── Native Share Helper ────────────────────────────────────
 
-private fun shareProductUrl(context: Context, product: Product, shopName: String = "My Shop") {
-    val shareUrl = "https://rajtraders.shop/products/${product.slug}"
+private fun shareProductUrl(context: Context, product: Product, shopName: String = "RAJ TRADERS") {
+    val shareUrl = "https://sundarvan.xyz/products/${product.slug}"
     val sendIntent: Intent = Intent().apply {
         action = Intent.ACTION_SEND
         putExtra(Intent.EXTRA_TEXT, "Check out ${product.name} at $shopName! Prep time: ${product.prepTimeMinutes} mins.\n$shareUrl")
@@ -225,7 +225,7 @@ private fun AuthDialog(state: StorefrontUiState, viewModel: StorefrontViewModel)
             Text(
                 if (state.isRegistering) "Create Account" else "Sign In",
                 fontWeight = FontWeight.Bold,
-                color = HarborTeal,
+                color = RajTeal,
             )
         },
         text = {
@@ -254,7 +254,7 @@ private fun AuthDialog(state: StorefrontUiState, viewModel: StorefrontViewModel)
                     Spacer(Modifier.height(6.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { viewModel.setForgotPasswordDialog(true); viewModel.hideAuth() }) {
-                            Text("Forgot password?", style = MaterialTheme.typography.labelSmall, color = HarborTeal)
+                            Text("Forgot password?", style = MaterialTheme.typography.labelSmall, color = RajTeal)
                         }
                     }
                 }
@@ -268,7 +268,7 @@ private fun AuthDialog(state: StorefrontUiState, viewModel: StorefrontViewModel)
                 TextButton(onClick = { viewModel.toggleAuthMode() }, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         if (state.isRegistering) "Already have an account? Sign In" else "Don't have an account? Register",
-                        color = HarborTeal,
+                        color = RajTeal,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
@@ -284,7 +284,7 @@ private fun AuthDialog(state: StorefrontUiState, viewModel: StorefrontViewModel)
                     }
                 },
                 enabled = !state.isAuthenticating,
-                colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
             ) {
                 if (state.isAuthenticating) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
@@ -295,7 +295,7 @@ private fun AuthDialog(state: StorefrontUiState, viewModel: StorefrontViewModel)
         },
         dismissButton = {
             TextButton(onClick = { viewModel.hideAuth() }) {
-                Text("Cancel", color = HarborTeal)
+                Text("Cancel", color = RajTeal)
             }
         }
     )
@@ -307,7 +307,7 @@ private fun ForgotPasswordDialog(state: StorefrontUiState, viewModel: Storefront
 
     AlertDialog(
         onDismissRequest = { viewModel.setForgotPasswordDialog(false) },
-        title = { Text("Password Recovery", fontWeight = FontWeight.Bold, color = HarborTeal) },
+        title = { Text("Password Recovery", fontWeight = FontWeight.Bold, color = RajTeal) },
         text = {
             Column {
                 Text(
@@ -339,7 +339,7 @@ private fun ForgotPasswordDialog(state: StorefrontUiState, viewModel: Storefront
             Button(
                 onClick = { viewModel.requestForgotPassword(recoveryEmail) },
                 enabled = recoveryEmail.isNotBlank() && !state.isSendingRecoveryEmail,
-                colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
             ) {
                 if (state.isSendingRecoveryEmail) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
@@ -353,7 +353,7 @@ private fun ForgotPasswordDialog(state: StorefrontUiState, viewModel: Storefront
                 viewModel.setForgotPasswordDialog(false)
                 viewModel.setResetPasswordDialog(true)
             }) {
-                Text("I have a token / code", color = HarborTeal)
+                Text("I have a token / code", color = RajTeal)
             }
         }
     )
@@ -368,7 +368,7 @@ private fun ResetPasswordDialog(state: StorefrontUiState, viewModel: StorefrontV
 
     AlertDialog(
         onDismissRequest = { viewModel.setResetPasswordDialog(false) },
-        title = { Text("Enter Reset Code", fontWeight = FontWeight.Bold, color = HarborTeal) },
+        title = { Text("Enter Reset Code", fontWeight = FontWeight.Bold, color = RajTeal) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text("Enter the 60-minute token received in your email and your new password.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -391,7 +391,7 @@ private fun ResetPasswordDialog(state: StorefrontUiState, viewModel: StorefrontV
             Button(
                 onClick = { viewModel.submitResetPassword(resetEmail, resetToken, newPassword, confirmNewPassword) },
                 enabled = !state.isResettingPassword,
-                colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
             ) {
                 if (state.isResettingPassword) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
@@ -402,7 +402,7 @@ private fun ResetPasswordDialog(state: StorefrontUiState, viewModel: StorefrontV
         },
         dismissButton = {
             TextButton(onClick = { viewModel.setResetPasswordDialog(false) }) {
-                Text("Cancel", color = HarborTeal)
+                Text("Cancel", color = RajTeal)
             }
         }
     )
@@ -418,7 +418,7 @@ private fun OtpVerificationDialog(state: StorefrontUiState, viewModel: Storefron
         onDismissRequest = { viewModel.hideOtpVerification() },
         title = {
             Column {
-                Text("Email Verification", fontWeight = FontWeight.Bold, color = HarborTeal)
+                Text("Email Verification", fontWeight = FontWeight.Bold, color = RajTeal)
                 Spacer(Modifier.height(4.dp))
                 Text(
                     "A 6-digit code was sent to ${state.pendingLoginEmail}",
@@ -431,11 +431,11 @@ private fun OtpVerificationDialog(state: StorefrontUiState, viewModel: Storefron
             Column {
                 state.otpNotice?.let { notice ->
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = HarborTeal.copy(alpha = 0.08f)),
+                        colors = CardDefaults.cardColors(containerColor = RajTeal.copy(alpha = 0.08f)),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(notice, modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodySmall, color = HarborTeal)
+                        Text(notice, modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodySmall, color = RajTeal)
                     }
                     Spacer(Modifier.height(12.dp))
                 }
@@ -465,10 +465,10 @@ private fun OtpVerificationDialog(state: StorefrontUiState, viewModel: Storefron
                     Text("Didn't receive the code?", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     TextButton(onClick = { viewModel.resendLoginOtp() }, enabled = !state.isResendingOtp) {
                         if (state.isResendingOtp) {
-                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = HarborTeal)
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = RajTeal)
                             Spacer(Modifier.width(6.dp))
                         }
-                        Text("Resend Code", color = HarborTeal, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                        Text("Resend Code", color = RajTeal, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
                     }
                 }
 
@@ -484,7 +484,7 @@ private fun OtpVerificationDialog(state: StorefrontUiState, viewModel: Storefron
             Button(
                 onClick = { viewModel.verifyLoginOtp(otpInput) },
                 enabled = otpInput.length == 6 && !state.isVerifyingOtp,
-                colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
             ) {
                 if (state.isVerifyingOtp) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
@@ -495,7 +495,7 @@ private fun OtpVerificationDialog(state: StorefrontUiState, viewModel: Storefron
         },
         dismissButton = {
             TextButton(onClick = { viewModel.hideOtpVerification() }) {
-                Text("Cancel", color = HarborTeal)
+                Text("Cancel", color = RajTeal)
             }
         },
     )
@@ -515,7 +515,7 @@ private fun TotpChallengeDialog(state: StorefrontUiState, viewModel: StorefrontV
             Text(
                 if (recoveryMode) "Account Recovery Code" else "Two-Factor Authentication",
                 fontWeight = FontWeight.Bold,
-                color = HarborTeal
+                color = RajTeal
             )
         },
         text = {
@@ -561,7 +561,7 @@ private fun TotpChallengeDialog(state: StorefrontUiState, viewModel: StorefrontV
                 TextButton(onClick = { recoveryMode = !recoveryMode }) {
                     Text(
                         if (recoveryMode) "Use Authenticator App Code" else "Lost device? Use Recovery Code",
-                        color = HarborTeal,
+                        color = RajTeal,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -577,7 +577,7 @@ private fun TotpChallengeDialog(state: StorefrontUiState, viewModel: StorefrontV
                     }
                 },
                 enabled = if (recoveryMode) recoveryCodeInput.isNotBlank() else totpInput.length == 6,
-                colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
             ) {
                 if (state.isAuthenticating) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
@@ -588,7 +588,7 @@ private fun TotpChallengeDialog(state: StorefrontUiState, viewModel: StorefrontV
         },
         dismissButton = {
             TextButton(onClick = { viewModel.dismissTotpDialog() }) {
-                Text("Cancel", color = HarborTeal)
+                Text("Cancel", color = RajTeal)
             }
         }
     )
@@ -600,7 +600,7 @@ private fun TotpSetupDialog(state: StorefrontUiState, viewModel: StorefrontViewM
 
     AlertDialog(
         onDismissRequest = { viewModel.dismissTotpDialog() },
-        title = { Text("Set Up 2FA Authenticator", fontWeight = FontWeight.Bold, color = HarborTeal) },
+        title = { Text("Set Up 2FA Authenticator", fontWeight = FontWeight.Bold, color = RajTeal) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(
@@ -610,7 +610,7 @@ private fun TotpSetupDialog(state: StorefrontUiState, viewModel: StorefrontViewM
                 )
                 state.totpManualKey?.let { secretKey ->
                     Surface(
-                        color = HarborCanvas,
+                        color = RajCanvas,
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
                     ) {
@@ -621,7 +621,7 @@ private fun TotpSetupDialog(state: StorefrontUiState, viewModel: StorefrontViewM
                             letterSpacing = 2.sp,
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = HarborTeal
+                            color = RajTeal
                         )
                     }
                 }
@@ -664,7 +664,7 @@ private fun TotpSetupDialog(state: StorefrontUiState, viewModel: StorefrontViewM
             Button(
                 onClick = { viewModel.enableTotp(verifyCodeInput) },
                 enabled = verifyCodeInput.length == 6 && !state.isSettingUpTotp,
-                colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
             ) {
                 if (state.isSettingUpTotp) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
@@ -675,7 +675,7 @@ private fun TotpSetupDialog(state: StorefrontUiState, viewModel: StorefrontViewM
         },
         dismissButton = {
             TextButton(onClick = { viewModel.dismissTotpDialog() }) {
-                Text("Cancel", color = HarborTeal)
+                Text("Cancel", color = RajTeal)
             }
         }
     )
@@ -694,17 +694,17 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
         if (state.currentUser == null) {
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.Person, contentDescription = null, tint = HarborTeal, modifier = Modifier.size(48.dp))
+                    Icon(Icons.Outlined.Person, contentDescription = null, tint = RajTeal, modifier = Modifier.size(48.dp))
                     Spacer(Modifier.height(12.dp))
                     Text("Sign in to place orders", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                     Text("Register or log in with your email and password.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { viewModel.showAuth(true) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = HarborTeal), shape = RoundedCornerShape(10.dp)) {
+                    Button(onClick = { viewModel.showAuth(true) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = RajTeal), shape = RoundedCornerShape(10.dp)) {
                         Text("Register", fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(onClick = { viewModel.showAuth(false) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
-                        Text("Sign In", fontWeight = FontWeight.Bold, color = HarborTeal)
+                        Text("Sign In", fontWeight = FontWeight.Bold, color = RajTeal)
                     }
                 }
             }
@@ -716,7 +716,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
 
             // 15-Day Lockdown Warning banner if applicable
             state.lockdownWarning?.let { warning ->
-                Card(colors = CardDefaults.cardColors(containerColor = HarborSaffron.copy(alpha = 0.15f)), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Card(colors = CardDefaults.cardColors(containerColor = RajSaffron.copy(alpha = 0.15f)), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
                     Text(warning, modifier = Modifier.padding(12.dp), color = Color(0xFFB45309), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(12.dp))
@@ -725,7 +725,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = RoundedCornerShape(24.dp), color = HarborTeal, modifier = Modifier.size(48.dp)) {
+                        Surface(shape = RoundedCornerShape(24.dp), color = RajTeal, modifier = Modifier.size(48.dp)) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text("${user.firstName.first()}${user.lastName.first()}", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             }
@@ -738,7 +738,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    HorizontalDivider(color = HarborTeal.copy(alpha = 0.15f))
+                    HorizontalDivider(color = RajTeal.copy(alpha = 0.15f))
                     Spacer(Modifier.height(14.dp))
 
                     Text("Edit Profile", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
@@ -751,7 +751,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
 
                     state.profileUpdateMessage?.let {
                         Spacer(Modifier.height(8.dp))
-                        Text(it, color = HarborTeal, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Text(it, color = RajTeal, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(Modifier.height(14.dp))
@@ -759,7 +759,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                         onClick = { viewModel.updateProfile(editingFirstName, editingLastName, editingMobile) },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !state.isUpdatingProfile,
-                        colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                        colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
                         shape = RoundedCornerShape(10.dp),
                     ) {
                         if (state.isUpdatingProfile) {
@@ -770,7 +770,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                     }
 
                     Spacer(Modifier.height(14.dp))
-                    HorizontalDivider(color = HarborTeal.copy(alpha = 0.15f))
+                    HorizontalDivider(color = RajTeal.copy(alpha = 0.15f))
                     Spacer(Modifier.height(14.dp))
 
                     Text("Two-Factor Security (2FA)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
@@ -831,7 +831,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                         Button(
                             onClick = { viewModel.setupTotp() },
                             modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                            colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Text("Enable 2FA (Authenticator App)", fontWeight = FontWeight.Bold)
@@ -840,7 +840,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
 
                     Spacer(Modifier.height(14.dp))
                     OutlinedButton(onClick = { viewModel.logout() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
-                        Text("Logout", fontWeight = FontWeight.Bold, color = HarborTeal)
+                        Text("Logout", fontWeight = FontWeight.Bold, color = RajTeal)
                     }
 
                     Spacer(Modifier.height(12.dp))
@@ -902,7 +902,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text("Keep Account", color = HarborTeal)
+                    Text("Keep Account", color = RajTeal)
                 }
             }
         )
@@ -920,7 +920,7 @@ private fun CatalogScreen(state: StorefrontUiState, padding: PaddingValues, view
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             Spacer(Modifier.height(10.dp))
             Text("Made for the everyday", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Small-batch cakes & artisanal bakery.", color = HarborTeal)
+            Text("Small-batch cakes & artisanal bakery.", color = RajTeal)
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = search,
@@ -939,7 +939,7 @@ private fun CatalogScreen(state: StorefrontUiState, padding: PaddingValues, view
             Spacer(Modifier.height(12.dp))
         }
         when {
-            state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = HarborTeal) }
+            state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = RajTeal) }
             state.error != null && state.products.isEmpty() -> ErrorState(state.error, viewModel::refresh)
             else -> LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
@@ -990,14 +990,14 @@ private fun ProductCard(product: Product, onAdd: () -> Unit, onShare: () -> Unit
                 ) {
                     Surface(shape = RoundedCornerShape(16.dp), color = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(30.dp)) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Outlined.Share, contentDescription = "Share", modifier = Modifier.size(16.dp), tint = HarborTeal)
+                            Icon(Icons.Outlined.Share, contentDescription = "Share", modifier = Modifier.size(16.dp), tint = RajTeal)
                         }
                     }
                 }
             }
 
             Column(modifier = Modifier.padding(12.dp)) {
-                Text(product.category.uppercase(), style = MaterialTheme.typography.labelSmall, color = HarborTeal)
+                Text(product.category.uppercase(), style = MaterialTheme.typography.labelSmall, color = RajTeal)
                 Text(product.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(money(product.priceCents), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
@@ -1019,13 +1019,13 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
         Text("Your bag", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
         if (state.cart.isEmpty() && state.receipt == null) {
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = HarborCanvas), shape = RoundedCornerShape(12.dp)) {
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RajCanvas), shape = RoundedCornerShape(12.dp)) {
                 Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Your bag is ready when you are.", color = HarborTeal, fontWeight = FontWeight.SemiBold)
+                    Text("Your bag is ready when you are.", color = RajTeal, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(16.dp))
                     Button(
                         onClick = onNavigateToOrders,
-                        colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                        colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
                         shape = RoundedCornerShape(10.dp),
                     ) {
                         Icon(Icons.Outlined.CheckCircle, contentDescription = null)
@@ -1040,7 +1040,7 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
                     AsyncImage(model = line.product.imageUrl, contentDescription = null, modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                     Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
                         Text(line.product.name, fontWeight = FontWeight.SemiBold)
-                        Text(money(line.product.priceCents * line.quantity), color = HarborTeal)
+                        Text(money(line.product.priceCents * line.quantity), color = RajTeal)
                     }
                     IconButton(onClick = { viewModel.removeFromCart(line.product.id) }, enabled = !state.isCheckingOut) { Icon(Icons.Outlined.Remove, "Remove one") }
                     Text("${line.quantity}")
@@ -1048,7 +1048,7 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
                 }
             }
             Spacer(Modifier.height(12.dp))
-            HorizontalDivider(color = HarborTeal.copy(alpha = 0.2f))
+            HorizontalDivider(color = RajTeal.copy(alpha = 0.2f))
             Spacer(Modifier.height(12.dp))
 
             // Order Breakdown
@@ -1070,7 +1070,7 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
             Spacer(Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Total Payable", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(money(viewModel.finalPayableCents()), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = HarborTeal)
+                Text(money(viewModel.finalPayableCents()), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RajTeal)
             }
 
             Spacer(Modifier.height(20.dp))
@@ -1078,11 +1078,11 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
             Spacer(Modifier.height(8.dp))
             Button(onClick = { viewModel.validateDiscount(code, state.claim?.claimed == true) }, enabled = code.isNotBlank() && !state.isCheckingOut, modifier = Modifier.fillMaxWidth()) { Text("Apply code") }
             state.discount?.let { result ->
-                Text(if (result.valid) "${result.message}  −${money(result.discountCents)}" else result.message, modifier = Modifier.padding(top = 8.dp), color = if (result.valid) HarborTeal else Color(0xFFB84A3D))
+                Text(if (result.valid) "${result.message}  −${money(result.discountCents)}" else result.message, modifier = Modifier.padding(top = 8.dp), color = if (result.valid) RajTeal else Color(0xFFB84A3D))
             }
 
             Spacer(Modifier.height(20.dp))
-            HorizontalDivider(color = HarborTeal.copy(alpha = 0.15f))
+            HorizontalDivider(color = RajTeal.copy(alpha = 0.15f))
             Spacer(Modifier.height(14.dp))
 
             // ─── Shipping Address & Delivery Validation ─────
@@ -1143,9 +1143,9 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
             if (state.isValidatingDelivery) {
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = HarborTeal, strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = RajTeal, strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
-                    Text("Checking delivery range...", style = MaterialTheme.typography.bodySmall, color = HarborTeal)
+                    Text("Checking delivery range...", style = MaterialTheme.typography.bodySmall, color = RajTeal)
                 }
             }
 
@@ -1184,11 +1184,11 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
             Spacer(Modifier.height(20.dp))
 
             if (state.currentUser == null) {
-                Card(colors = CardDefaults.cardColors(containerColor = HarborSaffron.copy(alpha = 0.15f)), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Card(colors = CardDefaults.cardColors(containerColor = RajSaffron.copy(alpha = 0.15f)), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp)) {
                         Text("Please log in or register to checkout", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                         Spacer(Modifier.height(8.dp))
-                        Button(onClick = { viewModel.showAuth(true) }, colors = ButtonDefaults.buttonColors(containerColor = HarborTeal), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
+                        Button(onClick = { viewModel.showAuth(true) }, colors = ButtonDefaults.buttonColors(containerColor = RajTeal), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
                             Text("Login / Register", fontWeight = FontWeight.Bold)
                         }
                     }
@@ -1199,7 +1199,7 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
             Button(
                 onClick = { viewModel.startRazorpayCheckout() },
                 enabled = !isCheckoutDisabled,
-                colors = ButtonDefaults.buttonColors(containerColor = HarborTeal),
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(12.dp),
             ) {
@@ -1228,19 +1228,19 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
             AlertDialog(
                 onDismissRequest = { viewModel.dismissReceipt() },
                 icon = { Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF147A46), modifier = Modifier.size(36.dp)) },
-                title = { Text("Payment Confirmed!", fontWeight = FontWeight.Bold, color = HarborTeal) },
+                title = { Text("Payment Confirmed!", fontWeight = FontWeight.Bold, color = RajTeal) },
                 text = {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text("Thank you for your order. Your transaction was processed securely.", style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(14.dp))
-                        Card(colors = CardDefaults.cardColors(containerColor = HarborCanvas), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        Card(colors = CardDefaults.cardColors(containerColor = RajCanvas), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
                                 Text("Order ID: ${receipt.orderId.take(18)}...", style = MaterialTheme.typography.labelSmall)
                                 Text("Razorpay Ref: ${receipt.razorpayPaymentId}", style = MaterialTheme.typography.labelSmall)
                                 Spacer(Modifier.height(6.dp))
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("Amount Paid:", fontWeight = FontWeight.Bold)
-                                    Text(money(receipt.amountCents), fontWeight = FontWeight.Bold, color = HarborTeal)
+                                    Text(money(receipt.amountCents), fontWeight = FontWeight.Bold, color = RajTeal)
                                 }
                                 Text("Status: ${receipt.status.uppercase()}", color = Color(0xFF147A46), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             }
@@ -1248,13 +1248,13 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
                     }
                 },
                 confirmButton = {
-                    Button(onClick = { viewModel.dismissReceipt(); onNavigateToOrders() }, colors = ButtonDefaults.buttonColors(containerColor = HarborTeal)) {
+                    Button(onClick = { viewModel.dismissReceipt(); onNavigateToOrders() }, colors = ButtonDefaults.buttonColors(containerColor = RajTeal)) {
                         Text("View in Orders", fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { viewModel.dismissReceipt() }) {
-                        Text("Continue Shopping", fontWeight = FontWeight.Bold, color = HarborTeal)
+                        Text("Continue Shopping", fontWeight = FontWeight.Bold, color = RajTeal)
                     }
                 }
             )
@@ -1270,20 +1270,20 @@ private fun OrdersScreen(state: StorefrontUiState, padding: PaddingValues, viewM
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
                 Text("Order History", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text("View past orders, live status & receipts.", color = HarborTeal, style = MaterialTheme.typography.bodySmall)
+                Text("View past orders, live status & receipts.", color = RajTeal, style = MaterialTheme.typography.bodySmall)
             }
             IconButton(onClick = { viewModel.fetchOrders() }) {
-                Icon(Icons.Outlined.CheckCircle, contentDescription = "Refresh", tint = HarborTeal)
+                Icon(Icons.Outlined.CheckCircle, contentDescription = "Refresh", tint = RajTeal)
             }
         }
 
         if (state.currentUser == null) {
             Spacer(Modifier.height(20.dp))
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = HarborSaffron.copy(alpha = 0.15f)), shape = RoundedCornerShape(12.dp)) {
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RajSaffron.copy(alpha = 0.15f)), shape = RoundedCornerShape(12.dp)) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Log in to view your orders", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
-                    Button(onClick = { viewModel.showAuth(false) }, colors = ButtonDefaults.buttonColors(containerColor = HarborTeal), shape = RoundedCornerShape(10.dp)) {
+                    Button(onClick = { viewModel.showAuth(false) }, colors = ButtonDefaults.buttonColors(containerColor = RajTeal), shape = RoundedCornerShape(10.dp)) {
                         Text("Sign In", fontWeight = FontWeight.Bold)
                     }
                 }
@@ -1314,22 +1314,22 @@ private fun OrdersScreen(state: StorefrontUiState, padding: PaddingValues, viewM
         Spacer(Modifier.height(16.dp))
 
         state.orderNotice?.let { notice ->
-            Text(notice, color = HarborTeal, modifier = Modifier.padding(bottom = 10.dp), fontWeight = FontWeight.Bold)
+            Text(notice, color = RajTeal, modifier = Modifier.padding(bottom = 10.dp), fontWeight = FontWeight.Bold)
         }
 
         if (state.isLoadingOrders) {
-            Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(color = HarborTeal) }
+            Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(color = RajTeal) }
         } else if (state.orders.isEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = HarborCanvas)) {
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = RajCanvas)) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("No orders found", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
-                    Text("No orders match your selected filters.", style = MaterialTheme.typography.bodySmall, color = HarborTeal)
+                    Text("No orders match your selected filters.", style = MaterialTheme.typography.bodySmall, color = RajTeal)
                 }
             }
         } else {
             state.orders.forEach { order ->
-                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = HarborCanvas)) {
+                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = RajCanvas)) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("Order #${order.id.take(12)}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
@@ -1352,12 +1352,12 @@ private fun OrdersScreen(state: StorefrontUiState, padding: PaddingValues, viewM
                         }
 
                         Spacer(Modifier.height(8.dp))
-                        HorizontalDivider(color = HarborTeal.copy(alpha = 0.15f))
+                        HorizontalDivider(color = RajTeal.copy(alpha = 0.15f))
                         Spacer(Modifier.height(8.dp))
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("Total Amount Paid:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                            Text(money(order.totalCents), fontWeight = FontWeight.Bold, color = HarborTeal, style = MaterialTheme.typography.titleMedium)
+                            Text(money(order.totalCents), fontWeight = FontWeight.Bold, color = RajTeal, style = MaterialTheme.typography.titleMedium)
                         }
 
                         if (order.status == "created") {

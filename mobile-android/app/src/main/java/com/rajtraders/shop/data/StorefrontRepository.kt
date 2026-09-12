@@ -1,4 +1,4 @@
-package com.harborlane.shop.data
+package com.rajtraders.shop.data
 
 class StorefrontRepository(private val api: StorefrontApi) {
     suspend fun products(search: String? = null, category: String? = null) =

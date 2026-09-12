@@ -1,4 +1,4 @@
-package com.harborlane.shop.data
+package com.rajtraders.shop.data
 
 data class Product(
     val id: String,

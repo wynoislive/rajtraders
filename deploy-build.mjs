@@ -42,7 +42,7 @@ cpSync(
 
 // Create minimal production package.json
 const prodPackageJson = {
-  name: "harborlane-api",
+  name: "rajtraders-api",
   version: "1.0.0",
   private: true,
   type: "module",

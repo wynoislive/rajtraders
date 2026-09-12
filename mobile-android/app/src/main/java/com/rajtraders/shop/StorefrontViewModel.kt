@@ -1,19 +1,19 @@
-package com.harborlane.shop
+package com.rajtraders.shop
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.harborlane.shop.data.DeliveryValidationResponse
-import com.harborlane.shop.data.DiscountValidation
-import com.harborlane.shop.data.OrderHistoryItem
-import com.harborlane.shop.data.OrderItemRequest
-import com.harborlane.shop.data.OrderReceipt
-import com.harborlane.shop.data.Product
-import com.harborlane.shop.data.RegistrationClaim
-import com.harborlane.shop.data.RegistrationEligibility
-import com.harborlane.shop.data.ShopInfoResponse
-import com.harborlane.shop.data.StorefrontRepository
-import com.harborlane.shop.data.StorefrontSummary
-import com.harborlane.shop.data.UserProfile
+import com.rajtraders.shop.data.DeliveryValidationResponse
+import com.rajtraders.shop.data.DiscountValidation
+import com.rajtraders.shop.data.OrderHistoryItem
+import com.rajtraders.shop.data.OrderItemRequest
+import com.rajtraders.shop.data.OrderReceipt
+import com.rajtraders.shop.data.Product
+import com.rajtraders.shop.data.RegistrationClaim
+import com.rajtraders.shop.data.RegistrationEligibility
+import com.rajtraders.shop.data.ShopInfoResponse
+import com.rajtraders.shop.data.StorefrontRepository
+import com.rajtraders.shop.data.StorefrontSummary
+import com.rajtraders.shop.data.UserProfile
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -784,6 +784,6 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
 class StorefrontViewModelFactory : androidx.lifecycle.ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return StorefrontViewModel(StorefrontRepository(com.harborlane.shop.data.NetworkModule.api)) as T
+        return StorefrontViewModel(StorefrontRepository(com.rajtraders.shop.data.NetworkModule.api)) as T
     }
 }

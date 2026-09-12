@@ -15,7 +15,7 @@ This is "Harbor Lane" — a bakery/cake ordering platform. It's a pnpm workspace
 - `artifacts/api-server/` — Express API and security gateway.
 - `artifacts/shop-admin/` — Clerk-protected admin console (Vite + React + shadcn/radix).
 - `artifacts/mockup-sandbox/` — standalone Vite preview app for design mockups, not part of the shipped product.
-- `mobile-android/` — native Kotlin/Jetpack Compose storefront client (package `com.harborlane.shop`).
+- `mobile-android/` — native Kotlin/Jetpack Compose storefront client (package `com.rajtraders.shop`).
 - `scripts/` — misc workspace-local tsx scripts.
 
 Any change to `openapi.yaml` requires re-running codegen before the API server or admin app will typecheck against it.

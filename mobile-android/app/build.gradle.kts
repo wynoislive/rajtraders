@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.harborlane.shop"
+    namespace = "com.rajtraders.shop"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.harborlane.shop"
+        applicationId = "com.rajtraders.shop"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
