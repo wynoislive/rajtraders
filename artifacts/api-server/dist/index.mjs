@@ -60755,8 +60755,8 @@ var usersTable = pgTable("users", {
 // ../../lib/db/src/schema/shop-settings.ts
 var shopSettingsTable = pgTable("shop_settings", {
   id: text("id").primaryKey().$defaultFn(() => "default_shop"),
-  shopName: text("shop_name").notNull().default("My Shop"),
-  shopDomain: text("shop_domain").notNull().default("myshop.com"),
+  shopName: text("shop_name").notNull().default("RAJ TRADERS"),
+  shopDomain: text("shop_domain").notNull().default("sundarvan.xyz"),
   shopAddress: text("shop_address").notNull().default("123 Baker Street, Mumbai"),
   latitude: real("latitude").notNull().default(19.076),
   longitude: real("longitude").notNull().default(72.8777),
@@ -60775,7 +60775,7 @@ var shopSettingsTable = pgTable("shop_settings", {
   smtpPort: integer("smtp_port").default(465),
   smtpUser: text("smtp_user").default("notifications.rajtraders@gmail.com"),
   smtpPass: text("smtp_pass").default("NOTIFICATIONS@RAJ"),
-  smtpFrom: text("smtp_from").default("My Shop <notifications.rajtraders@gmail.com>"),
+  smtpFrom: text("smtp_from").default("RAJ TRADERS <notifications.rajtraders@gmail.com>"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -61028,8 +61028,8 @@ CREATE TABLE IF NOT EXISTS totp_secrets (
 
 CREATE TABLE IF NOT EXISTS shop_settings (
   id TEXT PRIMARY KEY,
-  shop_name TEXT NOT NULL DEFAULT 'My Shop',
-  shop_domain TEXT NOT NULL DEFAULT 'myshop.com',
+  shop_name TEXT NOT NULL DEFAULT 'RAJ TRADERS',
+  shop_domain TEXT NOT NULL DEFAULT 'sundarvan.xyz',
   shop_address TEXT NOT NULL DEFAULT '123 Baker Street, Mumbai',
   latitude REAL NOT NULL DEFAULT 19.0760,
   longitude REAL NOT NULL DEFAULT 72.8777,
@@ -61040,18 +61040,18 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   r2_account_id TEXT DEFAULT '',
   r2_access_key_id TEXT DEFAULT '',
   r2_secret_access_key TEXT DEFAULT '',
-  r2_bucket_name TEXT DEFAULT 'my-products',
+  r2_bucket_name TEXT DEFAULT 'rajtraders-products',
   r2_public_url TEXT DEFAULT '',
   smtp_host TEXT DEFAULT 'smtp.gmail.com',
   smtp_port INTEGER DEFAULT 465,
   smtp_user TEXT DEFAULT 'notifications.rajtraders@gmail.com',
   smtp_pass TEXT DEFAULT 'NOTIFICATIONS@RAJ',
-  smtp_from TEXT DEFAULT 'My Shop <notifications.rajtraders@gmail.com>',
+  smtp_from TEXT DEFAULT 'RAJ TRADERS <notifications.rajtraders@gmail.com>',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 INSERT INTO shop_settings (id, shop_name, shop_domain, shop_address, latitude, longitude, delivery_radius_km, is_delivery_enabled, razorpay_key_id, razorpay_key_secret, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
-VALUES ('default_shop', 'My Shop', 'myshop.com', '123 Baker Street, Mumbai', 19.0760, 72.8777, 15.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'My Shop <notifications.rajtraders@gmail.com>')
+VALUES ('default_shop', 'RAJ TRADERS', 'sundarvan.xyz', '123 Baker Street, Mumbai', 19.0760, 72.8777, 15.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'RAJ TRADERS <notifications.rajtraders@gmail.com>')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Default MAIN_ADMIN user
@@ -61059,7 +61059,7 @@ INSERT INTO admin_users (id, name, email, password_hash, role, active)
 VALUES (
   'main_admin_01',
   'Master Administrator',
-  'admin@harborlane.shop',
+  'admin@rajtraders.com',
   'd6c547847c23114a:61a9e3a6aef60cf3ff13d96df2bc2d5c4125b290ba234857b29a28c2e99d3fbc9583be5fcaaebe3ffc129e612cb7f8d672ea351b8d601bce2b8a69d7b4a2b16d',
   'MAIN_ADMIN',
   true
@@ -61086,7 +61086,7 @@ INSERT INTO registration_policies (id, name, description, offer_code, active, wi
 VALUES ('policy_1', 'Welcome offer', 'Give first-time shoppers a warm welcome without stacking offers.', 'WELCOME10', true, 14, 0)
 ON CONFLICT (id) DO NOTHING;
 
--- \u2500\u2500\u2500 Performance Indexes \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+-- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
@@ -61099,6 +61099,14 @@ CREATE INDEX IF NOT EXISTS idx_products_status_approval ON products(status, appr
 CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX IF NOT EXISTS idx_totp_secrets_user_id ON totp_secrets(user_id);
+
+-- Alter queries for existing tables missing new columns
+ALTER TABLE products ADD COLUMN IF NOT EXISTS prep_time_minutes INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'approved';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS submitted_by TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS approved_by TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
 `;
 async function syncEnvToShopSettings(db2) {
   const updates = {};
@@ -61126,8 +61134,9 @@ async function syncEnvToShopSettings(db2) {
   }
 }
 var pgliteInstance = null;
-if (process.env.DATABASE_URL) {
-  poolInstance = new Pool2({ connectionString: process.env.DATABASE_URL });
+var rawDbUrl = process.env.DATABASE_URL?.trim();
+if (rawDbUrl) {
+  poolInstance = new Pool2({ connectionString: rawDbUrl });
   dbInstance = drizzle(poolInstance, { schema: schema_exports });
 } else {
   const dataDir = "memory://";
@@ -61213,7 +61222,7 @@ router2.get("/v1/products/share/:slugOrId", async (req, res) => {
   }
   const p = products[0];
   const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-  const shopDomain = settings?.shopDomain || "myshop.com";
+  const shopDomain = settings?.shopDomain || "sundarvan.xyz";
   res.json({
     ...p,
     shareUrl: `https://${shopDomain}/products/${p.slug}`,
@@ -61238,7 +61247,7 @@ router2.get("/v1/storefront/summary", async (_req, res) => {
     const products = await db.select().from(productsTable).where(and(eq(productsTable.status, "active"), eq(productsTable.approvalStatus, "approved")));
     const [policy] = await db.select().from(registrationPoliciesTable).where(eq(registrationPoliciesTable.active, true));
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-    const shopName = settings?.shopName || "My Shop";
+    const shopName = settings?.shopName || "RAJ TRADERS";
     res.json(
       GetStorefrontSummaryResponse.parse({
         shopName,
@@ -61250,7 +61259,7 @@ router2.get("/v1/storefront/summary", async (_req, res) => {
     );
   } catch (err) {
     res.json({
-      shopName: "My Shop",
+      shopName: "RAJ TRADERS",
       featuredCount: 2,
       categories: ["Apparel", "Home"],
       firstOrderOffer: "WELCOME10",
@@ -63838,8 +63847,10 @@ router4.patch("/v1/admin/registrations", async (req, res) => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  let policy;
   try {
-    const [policy] = await db.select().from(registrationPoliciesTable).orderBy(desc(registrationPoliciesTable.updatedAt)).limit(1);
+    const policies = await db.select().from(registrationPoliciesTable).orderBy(desc(registrationPoliciesTable.updatedAt)).limit(1);
+    policy = policies[0];
     if (!policy) {
       res.status(404).json({ error: "Registration policy not found." });
       return;
@@ -63848,13 +63859,13 @@ router4.patch("/v1/admin/registrations", async (req, res) => {
     res.json(UpdateRegistrationPolicyResponse.parse(policyResponse(updated)));
   } catch (err) {
     res.json({
-      id: "policy_1",
-      name: parsed.data.name || "Welcome offer",
-      description: parsed.data.description || "First order offer",
-      offerCode: parsed.data.offerCode || "WELCOME10",
-      active: parsed.data.active ?? true,
-      windowDays: parsed.data.windowDays ?? 14,
-      registrationsCount: 0
+      id: policy?.id || "policy_1",
+      name: policy?.name || "Welcome offer",
+      description: policy?.description || "First order offer",
+      offerCode: parsed.data.offerCode || policy?.offerCode || "WELCOME10",
+      active: parsed.data.active ?? policy?.active ?? true,
+      windowDays: parsed.data.windowDays ?? policy?.windowDays ?? 14,
+      registrationsCount: policy?.registrationsCount || 0
     });
   }
 });
@@ -63862,7 +63873,7 @@ router4.get("/v1/admin/shop-settings", async (_req, res) => {
   try {
     let settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     if (!settings) {
-      const [inserted] = await db.insert(shopSettingsTable).values({ id: "default_shop", shopName: "My Shop", shopDomain: "myshop.com", shopAddress: "123 Baker Street, Mumbai", latitude: 19.076, longitude: 72.8777, deliveryRadiusKm: 15, isDeliveryEnabled: true }).returning();
+      const [inserted] = await db.insert(shopSettingsTable).values({ id: "default_shop", shopName: "RAJ TRADERS", shopDomain: "sundarvan.xyz", shopAddress: "123 Baker Street, Mumbai", latitude: 19.076, longitude: 72.8777, deliveryRadiusKm: 15, isDeliveryEnabled: true }).returning();
       settings = inserted;
     }
     res.json(settings);

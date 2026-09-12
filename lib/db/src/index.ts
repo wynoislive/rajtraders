@@ -281,8 +281,10 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
 let dbReadyPromise: Promise<any> | null = null;
 let pgliteInstance: any = null;
 
-if (process.env.DATABASE_URL) {
-  poolInstance = new Pool({ connectionString: process.env.DATABASE_URL });
+const rawDbUrl = process.env.DATABASE_URL?.trim();
+
+if (rawDbUrl) {
+  poolInstance = new Pool({ connectionString: rawDbUrl });
   dbInstance = drizzlePg(poolInstance, { schema });
 } else {
   const dataDir = "memory://";
