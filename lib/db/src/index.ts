@@ -282,7 +282,7 @@ let dbReadyPromise: Promise<any> | null = null;
 let pgliteInstance: any = null;
 let isInitialized = false;
 
-const DEFAULT_SUPABASE_URL = "postgresql://postgres:jooPR0L9GDu6R7sM@db.hbwwbapappmsbdsjaasm.supabase.co:5432/postgres";
+const DEFAULT_SUPABASE_URL = "postgresql://postgres.hbwwbapappmsbdsjaasm:jooPR0L9GDu6R7sM@aws-0-ap-south-1.pooler.supabase.com:6543/postgres";
 const rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : undefined);
 
 if (rawDbUrl) {

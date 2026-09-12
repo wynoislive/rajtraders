@@ -123600,7 +123600,7 @@ async function syncEnvToShopSettings(db2) {
 var dbReadyPromise = null;
 var pgliteInstance = null;
 var isInitialized = false;
-var DEFAULT_SUPABASE_URL = "postgresql://postgres:jooPR0L9GDu6R7sM@db.hbwwbapappmsbdsjaasm.supabase.co:5432/postgres";
+var DEFAULT_SUPABASE_URL = "postgresql://postgres.hbwwbapappmsbdsjaasm:jooPR0L9GDu6R7sM@aws-0-ap-south-1.pooler.supabase.com:6543/postgres";
 var rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : void 0);
 if (rawDbUrl) {
   const isCloudPg = rawDbUrl.includes("supabase.co") || rawDbUrl.includes("sslmode=") || !!process.env.VERCEL;
