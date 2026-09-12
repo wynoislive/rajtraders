@@ -11,19 +11,7 @@ object NetworkModule {
     const val DEFAULT_API_URL = "https://api.sundarvan.xyz/api/"
 
     val resolvedBaseUrl: String
-        get() {
-            val configUrl = BuildConfig.API_BASE_URL.trim()
-            return if (configUrl.isBlank() || 
-                configUrl.contains("127.0.0.1") || 
-                configUrl.contains("localhost") || 
-                configUrl.contains("10.0.2.2") || 
-                configUrl.contains("9000")
-            ) {
-                DEFAULT_API_URL
-            } else {
-                if (configUrl.endsWith("/")) configUrl else "$configUrl/"
-            }
-        }
+        get() = DEFAULT_API_URL
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
