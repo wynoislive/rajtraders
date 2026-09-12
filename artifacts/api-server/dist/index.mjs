@@ -61134,13 +61134,20 @@ if (process.env.DATABASE_URL) {
   dbInstance = drizzle2(pgliteInstance, { schema: schema_exports });
 }
 async function ensureDbReady() {
-  if (!process.env.DATABASE_URL && pgliteInstance) {
+  if (process.env.DATABASE_URL && poolInstance) {
+    try {
+      await poolInstance.query(createTablesSql);
+      await syncEnvToShopSettings(dbInstance);
+    } catch (err) {
+      console.error("ensureDbReady (PostgreSQL) error:", err);
+    }
+  } else if (!process.env.DATABASE_URL && pgliteInstance) {
     try {
       await pgliteInstance.waitReady;
       await pgliteInstance.exec(createTablesSql);
       await syncEnvToShopSettings(dbInstance);
     } catch (err) {
-      console.error("ensureDbReady error:", err);
+      console.error("ensureDbReady (PGlite) error:", err);
     }
   }
   return dbInstance;

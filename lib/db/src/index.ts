@@ -284,13 +284,20 @@ if (process.env.DATABASE_URL) {
 let lastDbError: string | null = null;
 
 export async function ensureDbReady(): Promise<any> {
-  if (!process.env.DATABASE_URL && pgliteInstance) {
+  if (process.env.DATABASE_URL && poolInstance) {
+    try {
+      await poolInstance.query(createTablesSql);
+      await syncEnvToShopSettings(dbInstance);
+    } catch (err: any) {
+      console.error("ensureDbReady (PostgreSQL) error:", err);
+    }
+  } else if (!process.env.DATABASE_URL && pgliteInstance) {
     try {
       await pgliteInstance.waitReady;
       await pgliteInstance.exec(createTablesSql);
       await syncEnvToShopSettings(dbInstance);
     } catch (err: any) {
-      console.error("ensureDbReady error:", err);
+      console.error("ensureDbReady (PGlite) error:", err);
     }
   }
   return dbInstance;
