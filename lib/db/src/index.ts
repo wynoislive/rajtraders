@@ -272,7 +272,14 @@ if (process.env.DATABASE_URL) {
   poolInstance = new Pool({ connectionString: process.env.DATABASE_URL });
   dbInstance = drizzlePg(poolInstance, { schema });
 } else {
-  const dataDir = path.resolve(process.cwd(), ".local-db");
+  const isServerless = Boolean(
+    process.env.VERCEL ||
+    process.env.VERCEL_ENV ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.NOW_REGION ||
+    process.env.NODE_ENV === "production"
+  );
+  const dataDir = isServerless ? "/tmp/.local-db" : path.resolve(process.cwd(), ".local-db");
   const pglite = new PGlite(dataDir);
   await pglite.exec(createTablesSql);
   dbInstance = drizzlePglite(pglite, { schema });

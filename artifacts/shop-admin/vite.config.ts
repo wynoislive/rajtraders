@@ -36,8 +36,9 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.VITE_API_TARGET || 'https://rajtraders-api-server.vercel.app',
         changeOrigin: true,
+        secure: false,
       },
     },
     fs: {
@@ -50,8 +51,9 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.VITE_API_TARGET || 'https://rajtraders-api-server.vercel.app',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

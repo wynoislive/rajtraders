@@ -655,7 +655,7 @@ private fun TotpSetupDialog(state: StorefrontUiState, viewModel: StorefrontViewM
                     Spacer(Modifier.height(12.dp))
                     Text("⚠️ SAVE THESE RECOVERY CODES:", fontWeight = FontWeight.Bold, color = Color(0xFFB45309), style = MaterialTheme.typography.bodySmall)
                     state.totpRecoveryCodes.forEach { code ->
-                        Text(code, fontWeight = FontWeight.Monospace, style = MaterialTheme.typography.bodySmall)
+                        Text(code, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
