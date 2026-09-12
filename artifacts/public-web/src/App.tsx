@@ -601,19 +601,11 @@ export default function App() {
                   <ShoppingBag size={28} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-[#0E3D42]">Catalog Ready for Real Products</h3>
+                  <h3 className="text-lg font-black text-[#0E3D42]">New Collection Coming Soon</h3>
                   <p className="mt-2 text-xs text-gray-500 max-w-xs mx-auto leading-relaxed font-medium">
-                    All sample products have been cleared. You can now add your real Indian merchandise from the <a href="https://admin.sundarvan.xyz" target="_blank" rel="noreferrer" className="font-extrabold underline text-[#0E3D42]">Master Operations Console</a>.
+                    We are currently updating our catalog with fresh items. Please check back shortly to explore our handcrafted selections.
                   </p>
                 </div>
-                <a
-                  href="https://admin.sundarvan.xyz"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-block px-5 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 shadow transition"
-                >
-                  Go to Shop Admin Console
-                </a>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
