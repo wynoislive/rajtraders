@@ -44,19 +44,26 @@ async function getTransporter(): Promise<{ transporter: nodemailer.Transporter; 
       },
     } as any);
   } else {
-    // Priority 3: Ethereal test transport (development fallback)
-    if (!testAccountCache) {
-      testAccountCache = await nodemailer.createTestAccount();
+    // Priority 3: Ethereal test transport (development fallback) with safe jsonTransport fallback
+    try {
+      if (!testAccountCache) {
+        testAccountCache = await nodemailer.createTestAccount();
+      }
+      transporter = nodemailer.createTransport({
+        host: "smtp.ethereal.email",
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccountCache.user,
+          pass: testAccountCache.pass,
+        },
+      });
+    } catch (e) {
+      logger.warn({ err: e }, "Ethereal test transport creation failed, falling back to JSON logger transport");
+      transporter = nodemailer.createTransport({
+        jsonTransport: true,
+      } as any);
     }
-    transporter = nodemailer.createTransport({
-      host: "smtp.ethereal.email",
-      port: 587,
-      secure: false,
-      auth: {
-        user: testAccountCache.user,
-        pass: testAccountCache.pass,
-      },
-    });
   }
 
   transporterCache = { transporter, from: smtpFrom, shopName };
@@ -139,21 +146,26 @@ export async function sendVerificationOtpEmail(
   userName: string,
   otpCode: string,
 ): Promise<{ success: boolean; previewUrl?: string }> {
-  // Try queue first
-  const queued = await enqueueEmail({
-    type: "verification-otp",
-    to: toEmail,
-    userName,
-    otpCode,
-  });
-  if (queued) return { success: true };
+  try {
+    // Try queue first
+    const queued = await enqueueEmail({
+      type: "verification-otp",
+      to: toEmail,
+      userName,
+      otpCode,
+    });
+    if (queued) return { success: true };
 
-  // Direct send (queue unavailable)
-  const { shopName } = await getTransporter();
-  const formattedCode = `${otpCode.slice(0, 3)} ${otpCode.slice(3)}`;
-  const subject = `Your ${shopName} Verification Code: ${otpCode} (Valid 10 mins)`;
-  const htmlContent = buildOtpHtml(shopName, userName, formattedCode);
-  return sendEmail(toEmail, subject, htmlContent);
+    // Direct send (queue unavailable)
+    const { shopName } = await getTransporter();
+    const formattedCode = `${otpCode.slice(0, 3)} ${otpCode.slice(3)}`;
+    const subject = `Your ${shopName} Verification Code: ${otpCode} (Valid 10 mins)`;
+    const htmlContent = buildOtpHtml(shopName, userName, formattedCode);
+    return await sendEmail(toEmail, subject, htmlContent);
+  } catch (err) {
+    logger.error({ err, toEmail }, "Failed to send verification OTP email");
+    return { success: false };
+  }
 }
 
 /**
@@ -166,21 +178,26 @@ export async function sendPasswordRecoveryEmail(
   resetToken: string,
   resetUrl: string,
 ): Promise<{ success: boolean; previewUrl?: string }> {
-  // Try queue first
-  const queued = await enqueueEmail({
-    type: "password-recovery",
-    to: toEmail,
-    userName,
-    resetToken,
-    resetUrl,
-  });
-  if (queued) return { success: true };
+  try {
+    // Try queue first
+    const queued = await enqueueEmail({
+      type: "password-recovery",
+      to: toEmail,
+      userName,
+      resetToken,
+      resetUrl,
+    });
+    if (queued) return { success: true };
 
-  // Direct send (queue unavailable)
-  const { shopName } = await getTransporter();
-  const subject = `Action Required: Reset your ${shopName} password (valid 60 mins)`;
-  const htmlContent = buildRecoveryHtml(shopName, userName, resetToken, resetUrl);
-  return sendEmail(toEmail, subject, htmlContent);
+    // Direct send (queue unavailable)
+    const { shopName } = await getTransporter();
+    const subject = `Action Required: Reset your ${shopName} password (valid 60 mins)`;
+    const htmlContent = buildRecoveryHtml(shopName, userName, resetToken, resetUrl);
+    return await sendEmail(toEmail, subject, htmlContent);
+  } catch (err) {
+    logger.error({ err, toEmail }, "Failed to send password recovery email");
+    return { success: false };
+  }
 }
 
 // ── HTML template builders ──────────────────────────────────
