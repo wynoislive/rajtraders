@@ -123247,6 +123247,12 @@ var shopSettingsTable = pgTable("shop_settings", {
   // Hostinger Mail REST API Config (Primary HTTPS Sender)
   hostingerApiToken: text("hostinger_api_token").default(""),
   hostingerMailboxResourceId: text("hostinger_mailbox_resource_id").default(""),
+  // Dedicated System Notifications Mailer (Gmail / Custom Nodemailer SMTP)
+  notificationSmtpHost: text("notification_smtp_host").default("smtp.gmail.com"),
+  notificationSmtpPort: integer("notification_smtp_port").default(465),
+  notificationSmtpUser: text("notification_smtp_user").default("notifications.rajtraders@gmail.com"),
+  notificationSmtpPass: text("notification_smtp_pass").default(""),
+  notificationSmtpFrom: text("notification_smtp_from").default("RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -123584,6 +123590,11 @@ ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS contact_email TEXT DEFAULT 'c
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS orders_email TEXT DEFAULT 'orders@sundarvan.xyz';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS hostinger_api_token TEXT DEFAULT '';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS hostinger_mailbox_resource_id TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_host TEXT DEFAULT 'smtp.gmail.com';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_port INTEGER DEFAULT 465;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_user TEXT DEFAULT 'notifications.rajtraders@gmail.com';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_pass TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_from TEXT DEFAULT 'RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>';
 
 `;
 async function syncEnvToShopSettings(db2) {
@@ -123595,6 +123606,11 @@ async function syncEnvToShopSettings(db2) {
   if (process.env.SMTP_USER) updates.smtpUser = process.env.SMTP_USER;
   if (process.env.SMTP_PASS) updates.smtpPass = process.env.SMTP_PASS;
   if (process.env.SMTP_FROM) updates.smtpFrom = process.env.SMTP_FROM;
+  if (process.env.NOTIFICATION_SMTP_HOST) updates.notificationSmtpHost = process.env.NOTIFICATION_SMTP_HOST;
+  if (process.env.NOTIFICATION_SMTP_PORT) updates.notificationSmtpPort = parseInt(process.env.NOTIFICATION_SMTP_PORT, 10);
+  if (process.env.NOTIFICATION_SMTP_USER) updates.notificationSmtpUser = process.env.NOTIFICATION_SMTP_USER;
+  if (process.env.NOTIFICATION_SMTP_PASS) updates.notificationSmtpPass = process.env.NOTIFICATION_SMTP_PASS;
+  if (process.env.NOTIFICATION_SMTP_FROM) updates.notificationSmtpFrom = process.env.NOTIFICATION_SMTP_FROM;
   if (process.env.SUPPORT_EMAIL) updates.supportEmail = process.env.SUPPORT_EMAIL;
   if (process.env.CONTACT_EMAIL) updates.contactEmail = process.env.CONTACT_EMAIL;
   if (process.env.ORDERS_EMAIL) updates.ordersEmail = process.env.ORDERS_EMAIL;
@@ -126067,8 +126083,10 @@ async function enqueueEmail(data) {
 // artifacts/api-server/src/utils/mailer.ts
 var testAccountCache = null;
 var transporterCache = null;
+var notificationTransporterCache = null;
 function clearTransporterCache() {
   transporterCache = null;
+  notificationTransporterCache = null;
 }
 async function getTransporter() {
   if (transporterCache) return transporterCache;
@@ -126123,6 +126141,36 @@ async function getTransporter() {
   }
   transporterCache = { transporter, from: smtpFrom, shopName };
   return transporterCache;
+}
+async function getNotificationTransporter() {
+  if (notificationTransporterCache) return notificationTransporterCache;
+  const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+  const shopName = settings?.shopName || process.env.SHOP_NAME || "RAJ TRADERS";
+  const host = process.env.NOTIFICATION_SMTP_HOST || settings?.notificationSmtpHost || "smtp.gmail.com";
+  const user = process.env.NOTIFICATION_SMTP_USER || settings?.notificationSmtpUser || "notifications.rajtraders@gmail.com";
+  const pass = process.env.NOTIFICATION_SMTP_PASS || settings?.notificationSmtpPass || "";
+  const port = parseInt(process.env.NOTIFICATION_SMTP_PORT || String(settings?.notificationSmtpPort || 465), 10);
+  const from = process.env.NOTIFICATION_SMTP_FROM || settings?.notificationSmtpFrom || `RAJ TRADERS Notifications <${user}>`;
+  let transporter;
+  if (user && pass && host) {
+    const isProduction2 = process.env.NODE_ENV === "production";
+    transporter = import_nodemailer.default.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: {
+        user,
+        pass
+      },
+      tls: {
+        rejectUnauthorized: isProduction2
+      }
+    });
+  } else {
+    return getTransporter();
+  }
+  notificationTransporterCache = { transporter, from, shopName };
+  return notificationTransporterCache;
 }
 async function sendViaHostingerApi(to, subject, htmlContent) {
   try {
@@ -126181,6 +126229,18 @@ async function sendViaHostingerApi(to, subject, htmlContent) {
   }
 }
 async function sendEmail(to, subject, htmlContent, forceProvider) {
+  if (forceProvider === "gmail_notifications") {
+    try {
+      const { transporter, from } = await getNotificationTransporter();
+      const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
+      const previewUrl = import_nodemailer.default.getTestMessageUrl(info) || void 0;
+      logger2.info({ to, subject: subject.slice(0, 50) }, "Email sent via Gmail Notifications Nodemailer SMTP");
+      return { success: true, provider: "gmail_notifications", previewUrl: previewUrl ? previewUrl.toString() : void 0 };
+    } catch (err) {
+      logger2.error({ err, to }, "Gmail Notifications Nodemailer send failed");
+      return { success: false, provider: "gmail_notifications", error: err.message || "Gmail Notifications Send Failed" };
+    }
+  }
   if (forceProvider === "smtp") {
     try {
       const { transporter, from } = await getTransporter();
@@ -126809,6 +126869,11 @@ router4.put("/v1/admin/shop-settings", async (req, res) => {
     if (smtpFrom !== void 0) updateData.smtpFrom = smtpFrom.trim();
     if (req.body.hostingerApiToken !== void 0) updateData.hostingerApiToken = req.body.hostingerApiToken.trim();
     if (req.body.hostingerMailboxResourceId !== void 0) updateData.hostingerMailboxResourceId = req.body.hostingerMailboxResourceId.trim();
+    if (req.body.notificationSmtpHost !== void 0) updateData.notificationSmtpHost = req.body.notificationSmtpHost.trim();
+    if (req.body.notificationSmtpPort !== void 0) updateData.notificationSmtpPort = Number(req.body.notificationSmtpPort) || 465;
+    if (req.body.notificationSmtpUser !== void 0) updateData.notificationSmtpUser = req.body.notificationSmtpUser.trim();
+    if (req.body.notificationSmtpPass !== void 0) updateData.notificationSmtpPass = req.body.notificationSmtpPass.trim();
+    if (req.body.notificationSmtpFrom !== void 0) updateData.notificationSmtpFrom = req.body.notificationSmtpFrom.trim();
     if (req.body.supportEmail !== void 0) updateData.supportEmail = req.body.supportEmail.trim();
     if (req.body.contactEmail !== void 0) updateData.contactEmail = req.body.contactEmail.trim();
     if (req.body.ordersEmail !== void 0) updateData.ordersEmail = req.body.ordersEmail.trim();
@@ -126826,11 +126891,12 @@ router4.post("/v1/admin/test-email", async (req, res) => {
     res.status(400).json({ error: "Valid recipient email address is required." });
     return;
   }
-  const targetProvider = provider === "smtp" ? "smtp" : provider === "hostinger_rest" ? "hostinger_rest" : void 0;
-  const providerLabel = targetProvider === "smtp" ? "Nodemailer Hostinger SMTP Direct" : targetProvider === "hostinger_rest" ? "Hostinger REST Mail API Direct" : "Auto Transport (Hostinger API + SMTP Fallback)";
+  const targetProvider = provider === "gmail_notifications" ? "gmail_notifications" : provider === "smtp" ? "smtp" : provider === "hostinger_rest" ? "hostinger_rest" : void 0;
+  const providerLabel = targetProvider === "gmail_notifications" ? "Gmail System Notifications Nodemailer SMTP Direct" : targetProvider === "smtp" ? "Nodemailer Hostinger SMTP Direct" : targetProvider === "hostinger_rest" ? "Hostinger REST Mail API Direct" : "Auto Transport (Hostinger API + SMTP Fallback)";
   try {
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const shopName = settings?.shopName || "RAJ TRADERS";
+    const senderEmail = targetProvider === "gmail_notifications" ? settings?.notificationSmtpUser || "notifications.rajtraders@gmail.com" : settings?.smtpUser || "wyno@justbuyme.in";
     const subject = `[Test Email - ${targetProvider ? targetProvider.toUpperCase() : "AUTO"}] Live Email Check from ${shopName}`;
     const htmlContent = `
       <div style="font-family: sans-serif; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 12px; max-width: 560px;">
@@ -126838,7 +126904,7 @@ router4.post("/v1/admin/test-email", async (req, res) => {
         <p>This email confirms that your <strong>${shopName} Email Gateway</strong> delivered this message via <strong>${providerLabel}</strong>!</p>
         <div style="background: #1e293b; padding: 14px; border-radius: 8px; font-size: 13px; color: #cbd5e1; margin: 16px 0;">
           <p style="margin: 4px 0;"><strong>Active Transport Mode:</strong> ${providerLabel}</p>
-          <p style="margin: 4px 0;"><strong>Sender Account:</strong> ${settings?.smtpUser || "wyno@justbuyme.in"}</p>
+          <p style="margin: 4px 0;"><strong>Sender Account:</strong> ${senderEmail}</p>
           <p style="margin: 4px 0;"><strong>Timestamp:</strong> ${(/* @__PURE__ */ new Date()).toISOString()}</p>
         </div>
         <p style="font-size: 12px; color: #64748b; margin: 0;">If you received this message, your configured email transport is active and delivering emails.</p>

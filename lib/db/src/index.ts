@@ -246,6 +246,11 @@ ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS contact_email TEXT DEFAULT 'c
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS orders_email TEXT DEFAULT 'orders@sundarvan.xyz';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS hostinger_api_token TEXT DEFAULT '';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS hostinger_mailbox_resource_id TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_host TEXT DEFAULT 'smtp.gmail.com';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_port INTEGER DEFAULT 465;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_user TEXT DEFAULT 'notifications.rajtraders@gmail.com';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_pass TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_from TEXT DEFAULT 'RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>';
 
 `;
 
@@ -264,6 +269,11 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
   if (process.env.SMTP_USER) updates.smtpUser = process.env.SMTP_USER;
   if (process.env.SMTP_PASS) updates.smtpPass = process.env.SMTP_PASS;
   if (process.env.SMTP_FROM) updates.smtpFrom = process.env.SMTP_FROM;
+  if (process.env.NOTIFICATION_SMTP_HOST) updates.notificationSmtpHost = process.env.NOTIFICATION_SMTP_HOST;
+  if (process.env.NOTIFICATION_SMTP_PORT) updates.notificationSmtpPort = parseInt(process.env.NOTIFICATION_SMTP_PORT, 10);
+  if (process.env.NOTIFICATION_SMTP_USER) updates.notificationSmtpUser = process.env.NOTIFICATION_SMTP_USER;
+  if (process.env.NOTIFICATION_SMTP_PASS) updates.notificationSmtpPass = process.env.NOTIFICATION_SMTP_PASS;
+  if (process.env.NOTIFICATION_SMTP_FROM) updates.notificationSmtpFrom = process.env.NOTIFICATION_SMTP_FROM;
   if (process.env.SUPPORT_EMAIL) updates.supportEmail = process.env.SUPPORT_EMAIL;
   if (process.env.CONTACT_EMAIL) updates.contactEmail = process.env.CONTACT_EMAIL;
   if (process.env.ORDERS_EMAIL) updates.ordersEmail = process.env.ORDERS_EMAIL;

@@ -30,6 +30,12 @@ export const shopSettingsTable = pgTable("shop_settings", {
   // Hostinger Mail REST API Config (Primary HTTPS Sender)
   hostingerApiToken: text("hostinger_api_token").default(""),
   hostingerMailboxResourceId: text("hostinger_mailbox_resource_id").default(""),
+  // Dedicated System Notifications Mailer (Gmail / Custom Nodemailer SMTP)
+  notificationSmtpHost: text("notification_smtp_host").default("smtp.gmail.com"),
+  notificationSmtpPort: integer("notification_smtp_port").default(465),
+  notificationSmtpUser: text("notification_smtp_user").default("notifications.rajtraders@gmail.com"),
+  notificationSmtpPass: text("notification_smtp_pass").default(""),
+  notificationSmtpFrom: text("notification_smtp_from").default("RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

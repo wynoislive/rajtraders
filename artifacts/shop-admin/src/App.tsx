@@ -1291,14 +1291,19 @@ function StoreSettings() {
     ordersEmail: 'orders@sundarvan.xyz',
     hostingerApiToken: '',
     hostingerMailboxResourceId: '',
+    notificationSmtpHost: 'smtp.gmail.com',
+    notificationSmtpPort: 465,
+    notificationSmtpUser: 'notifications.rajtraders@gmail.com',
+    notificationSmtpPass: '',
+    notificationSmtpFrom: 'RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>',
   });
 
   const [showSecret, setShowSecret] = useState(false);
   const [testRecipient, setTestRecipient] = useState('dcwynolive@gmail.com');
-  const [testingProvider, setTestingProvider] = useState<'auto' | 'hostinger_rest' | 'smtp' | null>(null);
+  const [testingProvider, setTestingProvider] = useState<'auto' | 'hostinger_rest' | 'smtp' | 'gmail_notifications' | null>(null);
   const [testEmailResult, setTestEmailResult] = useState<{ success?: boolean; provider?: string; error?: string; hostingerError?: string } | null>(null);
 
-  const handleSendTestEmail = async (provider: 'auto' | 'hostinger_rest' | 'smtp' = 'auto') => {
+  const handleSendTestEmail = async (provider: 'auto' | 'hostinger_rest' | 'smtp' | 'gmail_notifications' = 'auto') => {
     if (!testRecipient) return;
     setTestingProvider(provider);
     setTestEmailResult(null);
@@ -1574,9 +1579,50 @@ function StoreSettings() {
               </div>
             </div>
 
-            {/* 3. Multi-Mailbox Routing */}
+            {/* 3. Dedicated System Notifications Mailer (Gmail / Custom Nodemailer SMTP) */}
             <div className="pt-4 border-t border-[hsl(var(--border))]">
-              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">3. Dedicated Business Mailboxes</h4>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-red-500/15 px-2 py-0.5 text-[10px] font-black uppercase text-red-600">Gmail System Mailer</span>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)]">3. System Notifications Mailer (notifications.rajtraders@gmail.com)</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSendTestEmail('gmail_notifications')}
+                  disabled={testingProvider !== null || !testRecipient}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-red-500/10 px-3 py-1 text-xs font-extrabold text-red-600 hover:bg-red-500/20 disabled:opacity-50 transition-colors"
+                >
+                  <Mail size={14} className={testingProvider === 'gmail_notifications' ? 'animate-spin' : ''} />
+                  {testingProvider === 'gmail_notifications' ? 'Testing Gmail Mailer...' : 'Test Gmail System Mailer Direct'}
+                </button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Notification Host</label>
+                  <input type="text" value={form.notificationSmtpHost} onChange={(e) => setForm({ ...form, notificationSmtpHost: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="smtp.gmail.com" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Notification Port</label>
+                  <input type="number" value={form.notificationSmtpPort} onChange={(e) => setForm({ ...form, notificationSmtpPort: parseInt(e.target.value) || 465 })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="465 (SSL)" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Header Display Name</label>
+                  <input type="text" value={form.notificationSmtpFrom} onChange={(e) => setForm({ ...form, notificationSmtpFrom: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm" placeholder="RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Gmail Notification Email</label>
+                  <input type="email" value={form.notificationSmtpUser} onChange={(e) => setForm({ ...form, notificationSmtpUser: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="notifications.rajtraders@gmail.com" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Gmail App Password</label>
+                  <input type={showSecret ? 'text' : 'password'} value={form.notificationSmtpPass} onChange={(e) => setForm({ ...form, notificationSmtpPass: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="Enter Gmail 16-character App Password" />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Multi-Mailbox Routing */}
+            <div className="pt-4 border-t border-[hsl(var(--border))]">
+              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">4. Dedicated Business Mailboxes</h4>
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Customer Support Email</label>
@@ -1593,9 +1639,9 @@ function StoreSettings() {
               </div>
             </div>
 
-            {/* 4. Live 1-Click Test Email Diagnostics */}
+            {/* 5. Live 1-Click Test Email Diagnostics */}
             <div className="pt-4 border-t border-[hsl(var(--border))]">
-              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">4. 1-Click Live Email Gateway Tester</h4>
+              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">5. 1-Click Live Email Gateway Tester</h4>
               <div className="rounded-xl bg-[hsl(var(--background))] p-4 border border-[hsl(var(--border))] space-y-3">
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Send a test email to verify live delivery using a specific transport mode.</p>
                 <div className="space-y-3">
@@ -1623,7 +1669,16 @@ function StoreSettings() {
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-[hsl(32_73%_31%)] px-4 py-2 text-xs font-bold text-white hover:bg-[hsl(32_73%_25%)] disabled:opacity-50 transition-colors"
                     >
                       <Mail size={14} className={testingProvider === 'smtp' ? 'animate-spin' : ''} />
-                      {testingProvider === 'smtp' ? 'Testing Nodemailer...' : '📧 Test Nodemailer SMTP Direct'}
+                      {testingProvider === 'smtp' ? 'Testing Nodemailer...' : '📧 Test Nodemailer Hostinger SMTP'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSendTestEmail('gmail_notifications')}
+                      disabled={testingProvider !== null || !testRecipient}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      <Mail size={14} className={testingProvider === 'gmail_notifications' ? 'animate-spin' : ''} />
+                      {testingProvider === 'gmail_notifications' ? 'Testing Gmail System...' : '📧 Test Gmail System Mailer'}
                     </button>
                     <button
                       type="button"
@@ -1643,7 +1698,7 @@ function StoreSettings() {
                       {testEmailResult.success ? '✅ Test Email Delivered Successfully!' : '❌ Test Email Delivery Failed'}
                     </div>
                     {testEmailResult.provider && (
-                      <p>Transport Provider: <strong>{testEmailResult.provider === 'hostinger_rest' ? 'Hostinger REST API (Primary)' : 'Nodemailer SMTP (Secondary Direct)'}</strong></p>
+                      <p>Transport Provider: <strong>{testEmailResult.provider === 'hostinger_rest' ? 'Hostinger REST API (Primary)' : testEmailResult.provider === 'gmail_notifications' ? 'Gmail System Notifications Nodemailer SMTP' : 'Nodemailer Hostinger SMTP'}</strong></p>
                     )}
                     {testEmailResult.error && <p className="mt-1">Error: {testEmailResult.error}</p>}
                     {testEmailResult.hostingerError && <p className="mt-1">Hostinger REST Error: {testEmailResult.hostingerError}</p>}

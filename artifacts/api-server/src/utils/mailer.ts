@@ -6,9 +6,11 @@ import { enqueueEmail, type EmailJobData } from "../lib/email-queue";
 
 let testAccountCache: nodemailer.TestAccount | null = null;
 let transporterCache: { transporter: nodemailer.Transporter; from: string; shopName: string } | null = null;
+let notificationTransporterCache: { transporter: nodemailer.Transporter; from: string; shopName: string } | null = null;
 
 export function clearTransporterCache(): void {
   transporterCache = null;
+  notificationTransporterCache = null;
 }
 
 async function getTransporter(): Promise<{ transporter: nodemailer.Transporter; from: string; shopName: string }> {
@@ -72,6 +74,42 @@ async function getTransporter(): Promise<{ transporter: nodemailer.Transporter; 
 
   transporterCache = { transporter, from: smtpFrom, shopName };
   return transporterCache;
+}
+
+async function getNotificationTransporter(): Promise<{ transporter: nodemailer.Transporter; from: string; shopName: string }> {
+  if (notificationTransporterCache) return notificationTransporterCache;
+
+  const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+  const shopName = settings?.shopName || process.env.SHOP_NAME || "RAJ TRADERS";
+
+  const host = process.env.NOTIFICATION_SMTP_HOST || settings?.notificationSmtpHost || "smtp.gmail.com";
+  const user = process.env.NOTIFICATION_SMTP_USER || settings?.notificationSmtpUser || "notifications.rajtraders@gmail.com";
+  const pass = process.env.NOTIFICATION_SMTP_PASS || settings?.notificationSmtpPass || "";
+  const port = parseInt(process.env.NOTIFICATION_SMTP_PORT || String(settings?.notificationSmtpPort || 465), 10);
+  const from = process.env.NOTIFICATION_SMTP_FROM || settings?.notificationSmtpFrom || `RAJ TRADERS Notifications <${user}>`;
+
+  let transporter: nodemailer.Transporter;
+
+  if (user && pass && host) {
+    const isProduction = process.env.NODE_ENV === "production";
+    transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: {
+        user,
+        pass,
+      },
+      tls: {
+        rejectUnauthorized: isProduction,
+      },
+    } as any);
+  } else {
+    return getTransporter();
+  }
+
+  notificationTransporterCache = { transporter, from, shopName };
+  return notificationTransporterCache;
 }
 
 // ── Hostinger Mail API (primary sender) ─────────────────────
@@ -150,8 +188,22 @@ export async function sendEmail(
   to: string,
   subject: string,
   htmlContent: string,
-  forceProvider?: "hostinger_rest" | "smtp",
-): Promise<{ success: boolean; provider?: "hostinger_rest" | "smtp"; previewUrl?: string; error?: string; hostingerError?: string }> {
+  forceProvider?: "hostinger_rest" | "smtp" | "gmail_notifications",
+): Promise<{ success: boolean; provider?: "hostinger_rest" | "smtp" | "gmail_notifications"; previewUrl?: string; error?: string; hostingerError?: string }> {
+  // Forced Gmail / System Notifications Nodemailer mode
+  if (forceProvider === "gmail_notifications") {
+    try {
+      const { transporter, from } = await getNotificationTransporter();
+      const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
+      const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
+      logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Gmail Notifications Nodemailer SMTP");
+      return { success: true, provider: "gmail_notifications", previewUrl: previewUrl ? previewUrl.toString() : undefined };
+    } catch (err: any) {
+      logger.error({ err, to }, "Gmail Notifications Nodemailer send failed");
+      return { success: false, provider: "gmail_notifications", error: err.message || "Gmail Notifications Send Failed" };
+    }
+  }
+
   // Forced Nodemailer SMTP mode
   if (forceProvider === "smtp") {
     try {

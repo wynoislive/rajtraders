@@ -530,6 +530,13 @@ router.put("/v1/admin/shop-settings", async (req, res): Promise<void> => {
     if (req.body.hostingerApiToken !== undefined) updateData.hostingerApiToken = req.body.hostingerApiToken.trim();
     if (req.body.hostingerMailboxResourceId !== undefined) updateData.hostingerMailboxResourceId = req.body.hostingerMailboxResourceId.trim();
 
+    // System Notifications Mailer (Gmail / Custom Nodemailer SMTP)
+    if (req.body.notificationSmtpHost !== undefined) updateData.notificationSmtpHost = req.body.notificationSmtpHost.trim();
+    if (req.body.notificationSmtpPort !== undefined) updateData.notificationSmtpPort = Number(req.body.notificationSmtpPort) || 465;
+    if (req.body.notificationSmtpUser !== undefined) updateData.notificationSmtpUser = req.body.notificationSmtpUser.trim();
+    if (req.body.notificationSmtpPass !== undefined) updateData.notificationSmtpPass = req.body.notificationSmtpPass.trim();
+    if (req.body.notificationSmtpFrom !== undefined) updateData.notificationSmtpFrom = req.body.notificationSmtpFrom.trim();
+
     // Multi-Mailbox Config
     if (req.body.supportEmail !== undefined) updateData.supportEmail = req.body.supportEmail.trim();
     if (req.body.contactEmail !== undefined) updateData.contactEmail = req.body.contactEmail.trim();
@@ -552,12 +559,13 @@ router.post("/v1/admin/test-email", async (req, res): Promise<void> => {
     return;
   }
 
-  const targetProvider = provider === "smtp" ? "smtp" : provider === "hostinger_rest" ? "hostinger_rest" : undefined;
-  const providerLabel = targetProvider === "smtp" ? "Nodemailer Hostinger SMTP Direct" : targetProvider === "hostinger_rest" ? "Hostinger REST Mail API Direct" : "Auto Transport (Hostinger API + SMTP Fallback)";
+  const targetProvider = provider === "gmail_notifications" ? "gmail_notifications" : provider === "smtp" ? "smtp" : provider === "hostinger_rest" ? "hostinger_rest" : undefined;
+  const providerLabel = targetProvider === "gmail_notifications" ? "Gmail System Notifications Nodemailer SMTP Direct" : targetProvider === "smtp" ? "Nodemailer Hostinger SMTP Direct" : targetProvider === "hostinger_rest" ? "Hostinger REST Mail API Direct" : "Auto Transport (Hostinger API + SMTP Fallback)";
 
   try {
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const shopName = settings?.shopName || "RAJ TRADERS";
+    const senderEmail = targetProvider === "gmail_notifications" ? (settings?.notificationSmtpUser || "notifications.rajtraders@gmail.com") : (settings?.smtpUser || "wyno@justbuyme.in");
     const subject = `[Test Email - ${targetProvider ? targetProvider.toUpperCase() : 'AUTO'}] Live Email Check from ${shopName}`;
     const htmlContent = `
       <div style="font-family: sans-serif; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 12px; max-width: 560px;">
@@ -565,7 +573,7 @@ router.post("/v1/admin/test-email", async (req, res): Promise<void> => {
         <p>This email confirms that your <strong>${shopName} Email Gateway</strong> delivered this message via <strong>${providerLabel}</strong>!</p>
         <div style="background: #1e293b; padding: 14px; border-radius: 8px; font-size: 13px; color: #cbd5e1; margin: 16px 0;">
           <p style="margin: 4px 0;"><strong>Active Transport Mode:</strong> ${providerLabel}</p>
-          <p style="margin: 4px 0;"><strong>Sender Account:</strong> ${settings?.smtpUser || "wyno@justbuyme.in"}</p>
+          <p style="margin: 4px 0;"><strong>Sender Account:</strong> ${senderEmail}</p>
           <p style="margin: 4px 0;"><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
         </div>
         <p style="font-size: 12px; color: #64748b; margin: 0;">If you received this message, your configured email transport is active and delivering emails.</p>
