@@ -85,6 +85,12 @@ type Tone = 'teal' | 'yellow' | 'coral' | 'green' | 'slate';
 import { createContext, useContext } from 'react';
 const ShopContext = createContext<{ shopName: string; shopDomain: string }>({ shopName: 'RAJ TRADERS', shopDomain: 'sundarvan.xyz' });
 
+function getApiUrl(path: string): string {
+  const apiTarget = import.meta.env.VITE_API_TARGET || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? 'https://api.sundarvan.xyz' : '');
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return apiTarget ? `${apiTarget.replace(/\/+$/, '')}${cleanPath}` : cleanPath;
+}
+
 function money(cents = 0) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(cents / 100);
 }
@@ -422,9 +428,9 @@ function Products() {
     };
 
     try {
-      const url = editingId ? `/api/v1/admin/products/${editingId}` : '/api/v1/admin/products';
+      const path = editingId ? `/api/v1/admin/products/${editingId}` : '/api/v1/admin/products';
       const method = editingId ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
+      const res = await fetch(getApiUrl(path), {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -445,7 +451,7 @@ function Products() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/v1/admin/products/${deleteTarget.id}`, {
+      const res = await fetch(getApiUrl(`/api/v1/admin/products/${deleteTarget.id}`), {
         method: 'DELETE',
       });
       if (res.ok || res.status === 204) {
@@ -720,7 +726,7 @@ function Approvals() {
   const fetchApprovals = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/admin/approvals');
+      const res = await fetch(getApiUrl('/api/v1/admin/approvals'));
       if (res.ok) {
         const data = await res.json();
         setPending(data);
@@ -738,7 +744,7 @@ function Approvals() {
 
   const handleApprove = async (id: string) => {
     try {
-      const res = await fetch(`/api/v1/admin/approvals/${id}/approve`, { method: 'POST' });
+      const res = await fetch(getApiUrl(`/api/v1/admin/approvals/${id}/approve`), { method: 'POST' });
       if (res.ok) {
         setNotice('Product approved and published to live storefront!');
         fetchApprovals();
@@ -753,7 +759,7 @@ function Approvals() {
     if (reason === null) return;
 
     try {
-      const res = await fetch(`/api/v1/admin/approvals/${id}/reject`, {
+      const res = await fetch(getApiUrl(`/api/v1/admin/approvals/${id}/reject`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
@@ -849,7 +855,7 @@ function StaffManagement() {
   const fetchStaff = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/admin/staff');
+      const res = await fetch(getApiUrl('/api/v1/admin/staff'));
       if (res.ok) {
         const data = await res.json();
         setStaffList(data);
@@ -873,7 +879,7 @@ function StaffManagement() {
       else if (form.accessDuration === '7d') expiresAtHours = 24 * 7;
       else if (form.accessDuration === '30d') expiresAtHours = 24 * 30;
 
-      const res = await fetch('/api/v1/admin/staff', {
+      const res = await fetch(getApiUrl('/api/v1/admin/staff'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1040,7 +1046,7 @@ function StoreSettings() {
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/admin/shop-settings');
+      const res = await fetch(getApiUrl('/api/v1/admin/shop-settings'));
       if (res.ok) {
         const data = await res.json();
         setForm((prev) => ({
@@ -1070,7 +1076,7 @@ function StoreSettings() {
     setErrorMessage(null);
 
     try {
-      const res = await fetch('/api/v1/admin/shop-settings', {
+      const res = await fetch(getApiUrl('/api/v1/admin/shop-settings'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1306,8 +1312,8 @@ function Orders() {
       if (search.trim()) params.append('search', search.trim());
 
       const [ordersRes, statsRes] = await Promise.all([
-        fetch(`/api/v1/admin/orders?${params.toString()}`),
-        fetch('/api/v1/admin/orders/stats'),
+        fetch(getApiUrl(`/api/v1/admin/orders?${params.toString()}`)),
+        fetch(getApiUrl('/api/v1/admin/orders/stats')),
       ]);
 
       if (ordersRes.ok) setOrders(await ordersRes.json());
@@ -1332,7 +1338,7 @@ function Orders() {
     if (!window.confirm('Are you sure you want to cancel this pending order?')) return;
     setCancellingId(orderId);
     try {
-      const res = await fetch(`/api/v1/admin/orders/${orderId}/cancel`, { method: 'POST' });
+      const res = await fetch(getApiUrl(`/api/v1/admin/orders/${orderId}/cancel`), { method: 'POST' });
       if (res.ok) fetchOrdersData();
     } catch (err) {
       console.error(err);
@@ -1384,13 +1390,81 @@ function Orders() {
 }
 
 function Discounts() {
-  const discounts = useListDiscounts({ query: { queryKey: getListDiscountsQueryKey() } });
-  return <AdminGate isLoading={discounts.isPending} isError={discounts.isError} retry={() => discounts.refetch()}><PageIntro eyebrow="Offers" title="Discount Engine" detail="Configure percentage and fixed price discount offers." /><div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] divide-y divide-[hsl(var(--border))]">{(discounts.data ?? []).map((d) => <div key={d.id} className="p-4 flex items-center justify-between font-mono"><span className="font-bold text-sm">{d.code}</span><span className="text-xs text-[hsl(var(--muted-foreground))]">{d.type === 'percentage' ? `${d.value}% off` : `${money(d.value)} off`}</span></div>)}</div></AdminGate>;
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const fetchDiscounts = () => {
+    setLoading(true);
+    setError(false);
+    fetch(getApiUrl('/api/v1/admin/discounts'))
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((items) => setData(Array.isArray(items) ? items : []))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchDiscounts();
+  }, []);
+
+  return (
+    <AdminGate isLoading={loading} isError={error} retry={fetchDiscounts}>
+      <PageIntro eyebrow="Offers" title="Discount Engine" detail="Configure percentage and fixed price discount offers." />
+      <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] divide-y divide-[hsl(var(--border))]">
+        {data.length === 0 ? (
+          <EmptyState icon={BadgePercent} title="No active discount codes" detail="Create percentage or fixed discounts for customer checkout." />
+        ) : (
+          data.map((d) => (
+            <div key={d.id} className="p-4 flex items-center justify-between font-mono">
+              <span className="font-bold text-sm">{d.code}</span>
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                {d.type === 'percentage' ? `${d.value}% off` : `${money(d.value)} off`}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </AdminGate>
+  );
 }
 
 function Registrations() {
-  const policies = useListRegistrationPolicies({ query: { queryKey: getListRegistrationPoliciesQueryKey() } });
-  return <AdminGate isLoading={policies.isPending} isError={policies.isError} retry={() => policies.refetch()}><PageIntro eyebrow="Growth" title="Welcome Policies" detail="Configure first-order customer reward rules." /><div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] divide-y divide-[hsl(var(--border))]">{(policies.data ?? []).map((p) => <div key={p.id} className="p-4 flex items-center justify-between"><span className="font-bold text-sm">{p.name}</span><StatusPill tone={p.active ? 'green' : 'slate'}>{p.offerCode}</StatusPill></div>)}</div></AdminGate>;
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const fetchPolicies = () => {
+    setLoading(true);
+    setError(false);
+    fetch(getApiUrl('/api/v1/admin/registrations'))
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((items) => setData(Array.isArray(items) ? items : []))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchPolicies();
+  }, []);
+
+  return (
+    <AdminGate isLoading={loading} isError={error} retry={fetchPolicies}>
+      <PageIntro eyebrow="Growth" title="Welcome Policies" detail="Configure first-order customer reward rules." />
+      <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] divide-y divide-[hsl(var(--border))]">
+        {data.length === 0 ? (
+          <EmptyState icon={UserRoundPlus} title="No registration policies configured" detail="Welcome policies grant automatic discounts to newly registered users." />
+        ) : (
+          data.map((p) => (
+            <div key={p.id} className="p-4 flex items-center justify-between">
+              <span className="font-bold text-sm">{p.name}</span>
+              <StatusPill tone={p.active ? 'green' : 'slate'}>{p.offerCode}</StatusPill>
+            </div>
+          ))
+        )}
+      </div>
+    </AdminGate>
+  );
 }
 
 function Field({ label, value, onChange, placeholder, type = 'text', testId }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; testId?: string }) {
