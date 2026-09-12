@@ -60748,6 +60748,7 @@ async function syncEnvToShopSettings(db2) {
   }
 }
 var pgliteInstance = null;
+var rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 if (rawDbUrl) {
   poolInstance = new Pool2({ connectionString: rawDbUrl });
   dbInstance = drizzle(poolInstance, { schema: schema_exports });
