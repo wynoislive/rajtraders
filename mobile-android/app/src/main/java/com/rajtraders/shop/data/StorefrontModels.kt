@@ -231,6 +231,19 @@ data class ShopInfoResponse(
     val razorpayKeyId: String,
 )
 
+data class PincodeCheckRequest(
+    val pincode: String,
+)
+
+data class PincodeCheckResponse(
+    val allowed: Boolean,
+    val pincode: String? = null,
+    val city: String? = null,
+    val estimatedDays: String? = null,
+    val isExpressAvailable: Boolean? = null,
+    val message: String,
+)
+
 data class ApiError(
     val error: String,
 )

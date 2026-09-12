@@ -95,6 +95,14 @@ data class StorefrontUiState(
     val totpRecoveryCodes: List<String> = emptyList(),
     val totpError: String? = null,
     val totpNotice: String? = null,
+    // PIN Code Delivery & Location States
+    val selectedPincode: String = "482004",
+    val selectedCity: String = "Jabalpur",
+    val showPincodeDialog: Boolean = false,
+    val pincodeCheckResult: com.rajtraders.shop.data.PincodeCheckResponse? = null,
+    val isCheckingPincode: Boolean = false,
+    val pincodeError: String? = null,
+    val isPincodeFilterActive: Boolean = false,
 )
 
 class StorefrontViewModel(private val repository: StorefrontRepository) : ViewModel() {
@@ -778,6 +786,48 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
 
     fun dismissTotpDialog() {
         _uiState.update { it.copy(showTotpChallengeDialog = false, showTotpSetupDialog = false, totpError = null, totpNotice = null) }
+    }
+
+    // ─── PIN Code Check & Location Filter ───────────────────────
+
+    fun openPincodeDialog() {
+        _uiState.update { it.copy(showPincodeDialog = true, pincodeError = null) }
+    }
+
+    fun closePincodeDialog() {
+        _uiState.update { it.copy(showPincodeDialog = false, pincodeError = null) }
+    }
+
+    fun checkPincode(pincode: String) {
+        val cleanPin = pincode.trim()
+        if (cleanPin.length != 6 || !cleanPin.all { it.isDigit() }) {
+            _uiState.update { it.copy(pincodeError = "Please enter a valid 6-digit PIN code.") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCheckingPincode = true, pincodeError = null) }
+            runCatching {
+                repository.checkPincode(cleanPin)
+            }.onSuccess { result ->
+                _uiState.update { state ->
+                    val nextCity = result.city ?: state.selectedCity
+                    val prefilledAddress = if (state.shippingAddress.isBlank()) "PIN: $cleanPin, $nextCity" else state.shippingAddress
+                    state.copy(
+                        isCheckingPincode = false,
+                        pincodeCheckResult = result,
+                        selectedPincode = cleanPin,
+                        selectedCity = nextCity,
+                        shippingAddress = prefilledAddress,
+                    )
+                }
+            }.onFailure { err ->
+                _uiState.update { it.copy(isCheckingPincode = false, pincodeError = err.message ?: "Failed to check PIN code.") }
+            }
+        }
+    }
+
+    fun setPincodeFilter(enabled: Boolean) {
+        _uiState.update { it.copy(isPincodeFilterActive = enabled) }
     }
 }
 

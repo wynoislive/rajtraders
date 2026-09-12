@@ -120,6 +120,45 @@ router.get("/shop-info", async (_req: Request, res: Response) => {
   }
 });
 
+// 0c. Validate PIN code delivery availability
+router.post("/check-pincode", async (req: Request, res: Response) => {
+  const { pincode } = req.body;
+  if (!pincode || typeof pincode !== "string" || !/^[1-9][0-9]{5}$/.test(pincode.trim())) {
+    res.status(400).json({ allowed: false, message: "Please enter a valid 6-digit Indian PIN code." });
+    return;
+  }
+
+  const cleanPin = pincode.trim();
+  let locationName = "India";
+  const firstTwo = cleanPin.substring(0, 2);
+  const firstThree = cleanPin.substring(0, 3);
+
+  if (firstTwo === "48" || firstThree === "482") locationName = "Jabalpur, MP";
+  else if (firstTwo === "40") locationName = "Mumbai, MH";
+  else if (firstTwo === "11") locationName = "New Delhi, DL";
+  else if (firstTwo === "56") locationName = "Bengaluru, KA";
+  else if (firstTwo === "70") locationName = "Kolkata, WB";
+  else if (firstTwo === "60") locationName = "Chennai, TN";
+  else if (firstTwo === "50") locationName = "Hyderabad, TS";
+  else if (firstTwo === "38") locationName = "Ahmedabad, GJ";
+  else if (firstThree === "411") locationName = "Pune, MH";
+  else if (firstThree === "302") locationName = "Jaipur, RJ";
+  else if (cleanPin.startsWith("4")) locationName = "Central India (MP/MH)";
+  else if (cleanPin.startsWith("1") || cleanPin.startsWith("2")) locationName = "North India";
+  else if (cleanPin.startsWith("5") || cleanPin.startsWith("6")) locationName = "South India";
+  else if (cleanPin.startsWith("7") || cleanPin.startsWith("8")) locationName = "East India";
+  else if (cleanPin.startsWith("3")) locationName = "West India";
+
+  res.status(200).json({
+    allowed: true,
+    pincode: cleanPin,
+    city: locationName,
+    estimatedDays: "1-2 Days",
+    isExpressAvailable: cleanPin.startsWith("482") || cleanPin.startsWith("40"),
+    message: `Delivery available to ${cleanPin} (${locationName})`
+  });
+});
+
 // 1. Create Razorpay Order with Idempotency Guard (1-Payment Only Security)
 router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: Response) => {
   const {

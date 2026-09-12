@@ -68,6 +68,9 @@ interface StorefrontApi {
     @POST("v1/checkout/validate-delivery")
     suspend fun validateDelivery(@Body body: DeliveryValidationRequest): DeliveryValidationResponse
 
+    @POST("v1/checkout/check-pincode")
+    suspend fun checkPincode(@Body body: PincodeCheckRequest): PincodeCheckResponse
+
     @POST("v1/checkout/create-order")
     suspend fun createOrder(
         @Header("Authorization") token: String?,

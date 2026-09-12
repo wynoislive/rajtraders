@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -119,33 +120,68 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
     Scaffold(
         containerColor = RajCanvas,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(state.shopName, fontWeight = FontWeight.Bold)
-                        Text(
-                            if (state.currentUser != null) "Welcome, ${state.currentUser!!.firstName}!" else "gourmet bakery & artisanal cakes",
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { selectedTab = 1 }) {
-                        Box {
-                            Icon(Icons.Outlined.ShoppingBag, contentDescription = "Open bag")
-                            if (cartCount > 0) {
-                                Surface(
-                                    modifier = Modifier.align(Alignment.TopEnd).size(16.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = RajSaffron,
-                                ) {
-                                    Text("$cartCount", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 4.dp))
+            Column {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(state.shopName, fontWeight = FontWeight.Bold)
+                            Text(
+                                if (state.currentUser != null) "Welcome, ${state.currentUser!!.firstName}!" else "gourmet bakery & artisanal cakes",
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { selectedTab = 1 }) {
+                            Box {
+                                Icon(Icons.Outlined.ShoppingBag, contentDescription = "Open bag")
+                                if (cartCount > 0) {
+                                    Surface(
+                                        modifier = Modifier.align(Alignment.TopEnd).size(16.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = RajSaffron,
+                                    ) {
+                                        Text("$cartCount", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 4.dp))
+                                    }
                                 }
                             }
                         }
+                    },
+                )
+                // Amazon-style Location Header Bar
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = RajTeal,
+                    onClick = { viewModel.openPincodeDialog() }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.LocationOn,
+                            contentDescription = "Location",
+                            tint = RajSaffron,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Deliver to ${state.selectedCity} ${state.selectedPincode}",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "▼",
+                            color = RajSaffron,
+                            fontSize = 10.sp
+                        )
                     }
-                },
-            )
+                }
+            }
         },
         bottomBar = {
             NavigationBar(containerColor = Color.White) {
@@ -162,6 +198,11 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
             2 -> OrdersScreen(state, padding, viewModel)
             else -> AccountScreen(state, padding, viewModel)
         }
+    }
+
+    // PIN code check dialog overlay
+    if (state.showPincodeDialog) {
+        PincodeDialog(state, viewModel)
     }
 
     // Auth dialog overlay
@@ -216,6 +257,120 @@ private fun shareProductUrl(context: Context, product: Product, shopName: String
     }
     val shareIntent = Intent.createChooser(sendIntent, "Share ${product.name}")
     context.startActivity(shareIntent)
+}
+
+// ─── PIN Code Check & Location Dialog ───────────────────────
+
+@Composable
+private fun PincodeDialog(state: StorefrontUiState, viewModel: StorefrontViewModel) {
+    var pincodeInput by remember { mutableStateOf(state.selectedPincode) }
+
+    AlertDialog(
+        onDismissRequest = { viewModel.closePincodeDialog() },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = RajTeal, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Select Delivery Location", fontWeight = FontWeight.Bold, color = RajTeal)
+            }
+        },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "Enter an Indian 6-digit PIN code to check delivery availability and estimated timelines.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = pincodeInput,
+                    onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) pincodeInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("6-Digit PIN Code") },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    textStyle = LocalTextStyle.current.copy(
+                        fontSize = 20.sp,
+                        letterSpacing = 4.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    ),
+                )
+
+                Spacer(Modifier.height(10.dp))
+                Text("Popular Locations:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Spacer(Modifier.height(4.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("482004" to "Jabalpur", "400001" to "Mumbai", "110001" to "Delhi", "560001" to "Bengaluru").forEach { (pin, name) ->
+                        FilterChip(
+                            selected = pincodeInput == pin,
+                            onClick = { pincodeInput = pin; viewModel.checkPincode(pin) },
+                            label = { Text("$name ($pin)", style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+
+                state.pincodeError?.let { err ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(err, color = Color(0xFFB84A3D), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                }
+
+                state.pincodeCheckResult?.let { res ->
+                    Spacer(Modifier.height(12.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = if (res.allowed) Color(0xFF147A46).copy(alpha = 0.08f) else Color(0xFFB84A3D).copy(alpha = 0.08f)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    if (res.allowed) Icons.Outlined.CheckCircle else Icons.Outlined.LocationOn,
+                                    contentDescription = null,
+                                    tint = if (res.allowed) Color(0xFF147A46) else Color(0xFFB84A3D),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    if (res.allowed) "Delivery Available" else "Delivery Unavailable",
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (res.allowed) Color(0xFF147A46) else Color(0xFFB84A3D),
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(res.message, style = MaterialTheme.typography.bodySmall)
+                            if (res.allowed && res.isExpressAvailable == true) {
+                                Spacer(Modifier.height(4.dp))
+                                Text("⚡ Express Delivery Available!", color = RajSaffron, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    viewModel.checkPincode(pincodeInput)
+                    viewModel.closePincodeDialog()
+                },
+                enabled = pincodeInput.length == 6 && !state.isCheckingPincode,
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
+            ) {
+                if (state.isCheckingPincode) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text("Apply & Set Location", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { viewModel.closePincodeDialog() }) {
+                Text("Cancel", color = RajTeal)
+            }
+        }
+    )
 }
 
 // ─── Auth & Security Dialogs ────────────────────────────────
@@ -939,11 +1094,26 @@ private fun CatalogScreen(state: StorefrontUiState, padding: PaddingValues, view
                 singleLine = true,
                 label = { Text("Search products, cakes or flavours") },
             )
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = state.selectedCategory == null, onClick = { viewModel.selectCategory(null) }, label = { Text("All") })
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            ) {
+                FilterChip(
+                    selected = state.selectedCategory == null && !state.isPincodeFilterActive,
+                    onClick = { viewModel.selectCategory(null); viewModel.setPincodeFilter(false) },
+                    label = { Text("All") }
+                )
+                FilterChip(
+                    selected = state.isPincodeFilterActive,
+                    onClick = { viewModel.setPincodeFilter(!state.isPincodeFilterActive) },
+                    label = { Text("📍 Deliverable to ${state.selectedPincode}") }
+                )
                 state.summary?.categories?.take(3)?.forEach { category ->
-                    FilterChip(selected = state.selectedCategory == category, onClick = { viewModel.selectCategory(category) }, label = { Text(category) })
+                    FilterChip(
+                        selected = state.selectedCategory == category && !state.isPincodeFilterActive,
+                        onClick = { viewModel.selectCategory(category); viewModel.setPincodeFilter(false) },
+                        label = { Text(category) }
+                    )
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -1110,6 +1280,30 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
             Spacer(Modifier.height(14.dp))
 
             // ─── Shipping Address & Delivery Validation ─────
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = RajTeal.copy(alpha = 0.08f)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { viewModel.openPincodeDialog() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = RajTeal)
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Delivery PIN: ${state.selectedPincode} (${state.selectedCity})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                            Text("Tap to check or change delivery PIN code", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        }
+                    }
+                    Text("Change", color = RajTeal, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
 
             Text("Shipping Address", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
