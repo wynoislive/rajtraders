@@ -16,22 +16,12 @@ async function buildAll() {
 
   const { copyFile, readdir, mkdir } = await import("node:fs/promises");
 
-  await esbuild({
-    entryPoints: [
-      path.resolve(artifactDir, "src/index.ts"),
-      path.resolve(artifactDir, "src/app.ts")
-    ],
+  const commonOptions = {
     platform: "node",
     bundle: true,
     format: "esm",
-    outdir: distDir,
-    outExtension: { ".js": ".mjs" },
     logLevel: "info",
-    // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
-    // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
-    // Examples of unbundleable packages:
-    // - uses native modules and loads them dynamically (e.g. sharp)
-    // - use path traversal to read files (e.g. @google-cloud/secret-manager loads sibling .proto files)
+    sourcemap: "linked",
     external: [
       "*.node",
       "@electric-sql/pglite",
@@ -111,12 +101,9 @@ async function buildAll() {
       "puppeteer-core",
       "electron",
     ],
-    sourcemap: "linked",
     plugins: [
-      // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
       esbuildPluginPino({ transports: ["pino-pretty"] })
     ],
-    // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
     banner: {
       js: `import { createRequire as __bannerCrReq } from 'node:module';
 import __bannerPath from 'node:path';
@@ -127,6 +114,17 @@ globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
 globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
+  };
+
+  // Build dist/index.mjs and dist/app.mjs
+  await esbuild({
+    ...commonOptions,
+    entryPoints: {
+      index: path.resolve(artifactDir, "src/index.ts"),
+      app: path.resolve(artifactDir, "src/app.ts"),
+    },
+    outdir: distDir,
+    outExtension: { ".js": ".mjs" },
   });
 
   // Copy PGlite WASM assets into dist output directory for serverless deployment
