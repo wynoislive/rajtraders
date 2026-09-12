@@ -963,11 +963,25 @@ private fun CatalogScreen(state: StorefrontUiState, padding: PaddingValues, view
 private fun ProductCard(product: Product, onAdd: () -> Unit, onShare: () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
         Column {
-            Box {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                    .background(Color(0xFFEFE8DC)),
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Outlined.ShoppingBag,
+                        contentDescription = null,
+                        tint = RajTeal.copy(alpha = 0.25f),
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
                 AsyncImage(
                     model = product.imageUrl,
                     contentDescription = product.name,
-                    modifier = Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)),
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
                 // Preparation Time Pill
