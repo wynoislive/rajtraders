@@ -1295,25 +1295,25 @@ function StoreSettings() {
 
   const [showSecret, setShowSecret] = useState(false);
   const [testRecipient, setTestRecipient] = useState('dcwynolive@gmail.com');
-  const [testingEmail, setTestingEmail] = useState(false);
+  const [testingProvider, setTestingProvider] = useState<'auto' | 'hostinger_rest' | 'smtp' | null>(null);
   const [testEmailResult, setTestEmailResult] = useState<{ success?: boolean; provider?: string; error?: string; hostingerError?: string } | null>(null);
 
-  const handleSendTestEmail = async () => {
+  const handleSendTestEmail = async (provider: 'auto' | 'hostinger_rest' | 'smtp' = 'auto') => {
     if (!testRecipient) return;
-    setTestingEmail(true);
+    setTestingProvider(provider);
     setTestEmailResult(null);
     try {
       const res = await fetch(getApiUrl('/api/v1/admin/test-email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toEmail: testRecipient }),
+        body: JSON.stringify({ toEmail: testRecipient, provider }),
       });
       const data = await res.json();
       setTestEmailResult(data);
     } catch (e: any) {
       setTestEmailResult({ success: false, error: 'Network error while triggering test email.' });
     } finally {
-      setTestingEmail(false);
+      setTestingProvider(null);
     }
   };
 
@@ -1535,9 +1535,20 @@ function StoreSettings() {
 
             {/* 2. Nodemailer Hostinger SMTP (Secondary Transport) */}
             <div className="pt-4 border-t border-[hsl(var(--border))]">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="rounded bg-[hsl(var(--secondary)/.3)] px-2 py-0.5 text-[10px] font-black uppercase text-[hsl(32_73%_31%)]">Secondary Fallback</span>
-                <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)]">2. Outbound Nodemailer SMTP Configuration (wyno@justbuyme.in)</h4>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-[hsl(var(--secondary)/.3)] px-2 py-0.5 text-[10px] font-black uppercase text-[hsl(32_73%_31%)]">Secondary Fallback</span>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)]">2. Outbound Nodemailer SMTP Configuration (wyno@justbuyme.in)</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSendTestEmail('smtp')}
+                  disabled={testingProvider !== null || !testRecipient}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[hsl(32_73%_31%/.13)] px-3 py-1 text-xs font-extrabold text-[hsl(32_73%_25%)] hover:bg-[hsl(32_73%_31%/.25)] disabled:opacity-50 transition-colors"
+                >
+                  <Mail size={14} className={testingProvider === 'smtp' ? 'animate-spin' : ''} />
+                  {testingProvider === 'smtp' ? 'Testing Nodemailer...' : 'Test Nodemailer SMTP Direct'}
+                </button>
               </div>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <div>
@@ -1586,24 +1597,44 @@ function StoreSettings() {
             <div className="pt-4 border-t border-[hsl(var(--border))]">
               <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">4. 1-Click Live Email Gateway Tester</h4>
               <div className="rounded-xl bg-[hsl(var(--background))] p-4 border border-[hsl(var(--border))] space-y-3">
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">Send a test email to verify live delivery via Hostinger REST API / SMTP.</p>
-                <div className="flex flex-col sm:flex-row gap-3">
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Send a test email to verify live delivery using a specific transport mode.</p>
+                <div className="space-y-3">
                   <input
                     type="email"
                     value={testRecipient}
                     onChange={(e) => setTestRecipient(e.target.value)}
-                    className="flex-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-sm font-mono"
+                    className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-sm font-mono"
                     placeholder="dcwynolive@gmail.com"
                   />
-                  <button
-                    type="button"
-                    onClick={handleSendTestEmail}
-                    disabled={testingEmail || !testRecipient}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E3D42] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#0A2E32] disabled:opacity-50 transition-colors"
-                  >
-                    <Mail size={16} className={testingEmail ? 'animate-spin' : ''} />
-                    {testingEmail ? 'Sending Test Email...' : 'Send Live Test Email'}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSendTestEmail('hostinger_rest')}
+                      disabled={testingProvider !== null || !testRecipient}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E3D42] px-4 py-2 text-xs font-bold text-white hover:bg-[#0A2E32] disabled:opacity-50 transition-colors"
+                    >
+                      <Mail size={14} className={testingProvider === 'hostinger_rest' ? 'animate-spin' : ''} />
+                      {testingProvider === 'hostinger_rest' ? 'Testing Hostinger API...' : '⚡ Test Hostinger REST API'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSendTestEmail('smtp')}
+                      disabled={testingProvider !== null || !testRecipient}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-[hsl(32_73%_31%)] px-4 py-2 text-xs font-bold text-white hover:bg-[hsl(32_73%_25%)] disabled:opacity-50 transition-colors"
+                    >
+                      <Mail size={14} className={testingProvider === 'smtp' ? 'animate-spin' : ''} />
+                      {testingProvider === 'smtp' ? 'Testing Nodemailer...' : '📧 Test Nodemailer SMTP Direct'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSendTestEmail('auto')}
+                      disabled={testingProvider !== null || !testRecipient}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 py-2 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50 transition-colors"
+                    >
+                      <Mail size={14} className={testingProvider === 'auto' ? 'animate-spin' : ''} />
+                      {testingProvider === 'auto' ? 'Testing Auto...' : '🔄 Test Auto Delivery'}
+                    </button>
+                  </div>
                 </div>
 
                 {testEmailResult && (
@@ -1612,7 +1643,7 @@ function StoreSettings() {
                       {testEmailResult.success ? '✅ Test Email Delivered Successfully!' : '❌ Test Email Delivery Failed'}
                     </div>
                     {testEmailResult.provider && (
-                      <p>Transport Provider: <strong>{testEmailResult.provider === 'hostinger_rest' ? 'Hostinger REST API (Primary)' : 'Nodemailer SMTP (Secondary Fallback)'}</strong></p>
+                      <p>Transport Provider: <strong>{testEmailResult.provider === 'hostinger_rest' ? 'Hostinger REST API (Primary)' : 'Nodemailer SMTP (Secondary Direct)'}</strong></p>
                     )}
                     {testEmailResult.error && <p className="mt-1">Error: {testEmailResult.error}</p>}
                     {testEmailResult.hostingerError && <p className="mt-1">Hostinger REST Error: {testEmailResult.hostingerError}</p>}

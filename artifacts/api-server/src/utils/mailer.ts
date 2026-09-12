@@ -150,8 +150,32 @@ export async function sendEmail(
   to: string,
   subject: string,
   htmlContent: string,
-): Promise<{ success: boolean; provider?: "hostinger_rest" | "smtp"; previewUrl?: string; error?: string }> {
-  // Try Hostinger API first
+  forceProvider?: "hostinger_rest" | "smtp",
+): Promise<{ success: boolean; provider?: "hostinger_rest" | "smtp"; previewUrl?: string; error?: string; hostingerError?: string }> {
+  // Forced Nodemailer SMTP mode
+  if (forceProvider === "smtp") {
+    try {
+      const { transporter, from } = await getTransporter();
+      const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
+      const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
+      logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Nodemailer SMTP (Forced)");
+      return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : undefined };
+    } catch (err: any) {
+      logger.error({ err, to }, "SMTP email send failed (Forced)");
+      return { success: false, provider: "smtp", error: err.message || "SMTP Send Failed" };
+    }
+  }
+
+  // Forced Hostinger REST API mode
+  if (forceProvider === "hostinger_rest") {
+    const hostingerResult = await sendViaHostingerApi(to, subject, htmlContent);
+    if (hostingerResult.success) {
+      return { success: true, provider: "hostinger_rest" };
+    }
+    return { success: false, provider: "hostinger_rest", error: hostingerResult.error || "Hostinger REST API Failed" };
+  }
+
+  // Auto mode: Try Hostinger API first
   const hostingerResult = await sendViaHostingerApi(to, subject, htmlContent);
   if (hostingerResult.success) {
     return { success: true, provider: "hostinger_rest" };
@@ -166,7 +190,7 @@ export async function sendEmail(
     return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : undefined };
   } catch (err: any) {
     logger.error({ err, to }, "SMTP email send failed");
-    return { success: false, error: err.message || "SMTP Send Failed", hostingerError: hostingerResult.error } as any;
+    return { success: false, error: err.message || "SMTP Send Failed", hostingerError: hostingerResult.error };
   }
 }
 

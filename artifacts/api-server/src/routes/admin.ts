@@ -546,31 +546,33 @@ router.put("/v1/admin/shop-settings", async (req, res): Promise<void> => {
 });
 
 router.post("/v1/admin/test-email", async (req, res): Promise<void> => {
-  const { toEmail } = req.body;
+  const { toEmail, provider } = req.body;
   if (!toEmail || typeof toEmail !== "string" || !toEmail.includes("@")) {
     res.status(400).json({ error: "Valid recipient email address is required." });
     return;
   }
 
+  const targetProvider = provider === "smtp" ? "smtp" : provider === "hostinger_rest" ? "hostinger_rest" : undefined;
+  const providerLabel = targetProvider === "smtp" ? "Nodemailer Hostinger SMTP Direct" : targetProvider === "hostinger_rest" ? "Hostinger REST Mail API Direct" : "Auto Transport (Hostinger API + SMTP Fallback)";
+
   try {
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const shopName = settings?.shopName || "RAJ TRADERS";
-    const subject = `[Test Email] Live Email Delivery Check from ${shopName}`;
+    const subject = `[Test Email - ${targetProvider ? targetProvider.toUpperCase() : 'AUTO'}] Live Email Check from ${shopName}`;
     const htmlContent = `
       <div style="font-family: sans-serif; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 12px; max-width: 560px;">
         <h2 style="color: #38bdf8; margin-top: 0;">⚡ ${shopName} Live Test Email</h2>
-        <p>This email confirms that your <strong>${shopName} Email Gateway</strong> is online and delivering emails successfully!</p>
+        <p>This email confirms that your <strong>${shopName} Email Gateway</strong> delivered this message via <strong>${providerLabel}</strong>!</p>
         <div style="background: #1e293b; padding: 14px; border-radius: 8px; font-size: 13px; color: #cbd5e1; margin: 16px 0;">
-          <p style="margin: 4px 0;"><strong>Primary Sender:</strong> Hostinger REST Mail API (HTTPS / Port 445 Bypass)</p>
-          <p style="margin: 4px 0;"><strong>Secondary Sender:</strong> Nodemailer Hostinger SMTP</p>
+          <p style="margin: 4px 0;"><strong>Active Transport Mode:</strong> ${providerLabel}</p>
           <p style="margin: 4px 0;"><strong>Sender Account:</strong> ${settings?.smtpUser || "wyno@justbuyme.in"}</p>
           <p style="margin: 4px 0;"><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
         </div>
-        <p style="font-size: 12px; color: #64748b; margin: 0;">If you received this message, OTP and password recovery emails will be delivered instantly to customer inboxes.</p>
+        <p style="font-size: 12px; color: #64748b; margin: 0;">If you received this message, your configured email transport is active and delivering emails.</p>
       </div>
     `;
 
-    const result = await sendEmail(toEmail.trim(), subject, htmlContent);
+    const result = await sendEmail(toEmail.trim(), subject, htmlContent, targetProvider);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || "Failed to send test email" });
