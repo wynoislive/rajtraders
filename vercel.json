@@ -1,7 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "pnpm --filter @workspace/api-server... build && cd artifacts/shop-admin && npx vite build",
-  "outputDirectory": "artifacts/shop-admin/dist/public",
+  "buildCommand": "pnpm --filter @workspace/api-server... build",
   "functions": {
     "api/*.js": {
       "includeFiles": "{artifacts/api-server/dist/**,node_modules/@electric-sql/pglite/**,node_modules/pg/**}"
@@ -9,20 +8,8 @@
   },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    },
-    {
-      "source": "/v1/(.*)",
-      "destination": "/api"
-    },
-    {
-      "source": "/health",
-      "destination": "/api"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/api"
     }
   ]
 }
