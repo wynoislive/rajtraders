@@ -99,6 +99,21 @@ app.get("/", (_req, res) => {
 
 app.use("/api", router);
 
+// ── Static Web Storefront Serving (For standalone Node server) ──
+import path from "node:path";
+import fs from "node:fs";
+
+const staticPath = path.resolve(__dirname, "../../shop-admin/dist/public");
+if (fs.existsSync(staticPath)) {
+  app.use(express.static(staticPath));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/v1") || req.path.startsWith("/health")) {
+      return next();
+    }
+    res.sendFile(path.join(staticPath, "index.html"));
+  });
+}
+
 // ── Global error handler (MUST be last) ─────────────────────
 app.use(globalErrorHandler);
 
