@@ -87,18 +87,13 @@ router.get("/v1/admin/summary", async (_req, res): Promise<void> => {
     );
   } catch (err) {
     res.json({
-      activeProducts: 2,
-      draftProducts: 1,
-      liveDiscounts: 2,
+      activeProducts: 0,
+      draftProducts: 0,
+      liveDiscounts: 0,
       firstOrderRegistrations: 0,
-      inventoryValueCents: 406400,
-      recentActivity: [
-        { id: "disc-1", label: "Discount configured", detail: "WELCOME10", timestamp: new Date().toISOString() },
-        { id: "disc-2", label: "Discount configured", detail: "HARBOR15", timestamp: new Date().toISOString() },
-        { id: "prod-1", label: "Product in catalog", detail: "Harbor Linen Overshirt (30m prep)", timestamp: new Date().toISOString() },
-        { id: "prod-2", label: "Product in catalog", detail: "Stoneware Pour-Over Set (30m prep)", timestamp: new Date().toISOString() }
-      ],
-      policies: [{ id: "policy-1", name: "Welcome offer", description: "First order offer", offerCode: "WELCOME10", active: true, windowDays: 14, registrationsCount: 0 }]
+      inventoryValueCents: 0,
+      recentActivity: [],
+      policies: []
     });
   }
 });

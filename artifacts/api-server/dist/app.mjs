@@ -123545,25 +123545,6 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Seed Default Products
-INSERT INTO products (id, name, slug, description, price_cents, compare_at_price_cents, category, image_url, status, featured, inventory, prep_time_minutes, approval_status)
-VALUES 
-  ('prod_1', 'Harbor Linen Overshirt', 'harbor-linen-overshirt', 'A breathable everyday layer with a relaxed cut and soft washed finish.', 8900, 12000, 'Apparel', 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273?auto=format&fit=crop&w=900&q=80', 'active', true, 24, 30, 'approved'),
-  ('prod_2', 'Stoneware Pour-Over Set', 'stoneware-pour-over-set', 'Hand-finished stoneware for slow mornings and generous pours.', 5400, NULL, 'Home', 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=900&q=80', 'active', true, 12, 30, 'approved'),
-  ('prod_3', 'Canvas Market Tote', 'canvas-market-tote', 'A durable carryall with an inside pocket for the little things.', 3200, NULL, 'Accessories', 'https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=900&q=80', 'draft', false, 40, 30, 'pending_approval')
-ON CONFLICT (id) DO NOTHING;
-
--- Seed Default Discounts
-INSERT INTO discounts (id, code, type, value, minimum_subtotal_cents, usage_limit, active, first_order_only)
-VALUES 
-  ('disc_1', 'WELCOME10', 'percentage', 10, 2500, 500, true, true),
-  ('disc_2', 'HARBOR15', 'fixed', 1500, 9000, 100, true, false)
-ON CONFLICT (id) DO NOTHING;
-
--- Seed Default Registration Policy
-INSERT INTO registration_policies (id, name, description, offer_code, active, window_days, registrations_count)
-VALUES ('policy_1', 'Welcome offer', 'Give first-time shoppers a warm welcome without stacking offers.', 'WELCOME10', true, 14, 0)
-ON CONFLICT (id) DO NOTHING;
 
 -- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
@@ -126468,18 +126449,13 @@ router4.get("/v1/admin/summary", async (_req, res) => {
     );
   } catch (err) {
     res.json({
-      activeProducts: 2,
-      draftProducts: 1,
-      liveDiscounts: 2,
+      activeProducts: 0,
+      draftProducts: 0,
+      liveDiscounts: 0,
       firstOrderRegistrations: 0,
-      inventoryValueCents: 406400,
-      recentActivity: [
-        { id: "disc-1", label: "Discount configured", detail: "WELCOME10", timestamp: (/* @__PURE__ */ new Date()).toISOString() },
-        { id: "disc-2", label: "Discount configured", detail: "HARBOR15", timestamp: (/* @__PURE__ */ new Date()).toISOString() },
-        { id: "prod-1", label: "Product in catalog", detail: "Harbor Linen Overshirt (30m prep)", timestamp: (/* @__PURE__ */ new Date()).toISOString() },
-        { id: "prod-2", label: "Product in catalog", detail: "Stoneware Pour-Over Set (30m prep)", timestamp: (/* @__PURE__ */ new Date()).toISOString() }
-      ],
-      policies: [{ id: "policy-1", name: "Welcome offer", description: "First order offer", offerCode: "WELCOME10", active: true, windowDays: 14, registrationsCount: 0 }]
+      inventoryValueCents: 0,
+      recentActivity: [],
+      policies: []
     });
   }
 });

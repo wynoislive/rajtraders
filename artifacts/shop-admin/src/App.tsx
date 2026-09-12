@@ -116,7 +116,7 @@ function getAuthHeaders(): Record<string, string> {
 }
 
 function money(cents = 0) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(cents / 100);
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(cents / 100);
 }
 
 function shortDate(value?: string | null) {
@@ -912,7 +912,7 @@ function ProductDialog({ open, mode, form, setForm, busy, onClose, onSubmit }: {
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Product name" value={form.name} onChange={(v) => update('name', v)} placeholder="e.g. Belgian Truffle Cake" testId="input-product-name" />
         <Field label="Category" value={form.category} onChange={(v) => update('category', v)} placeholder="e.g. Artisanal Cakes" testId="input-product-category" />
-        <Field label="Price ($ USD)" type="number" value={form.price} onChange={(v) => update('price', v)} placeholder="28.00" testId="input-product-price" />
+        <Field label="Price (₹ INR)" type="number" value={form.price} onChange={(v) => update('price', v)} placeholder="28.00" testId="input-product-price" />
         <Field label="Compare-at price" type="number" value={form.compareAt} onChange={(v) => update('compareAt', v)} placeholder="Optional" testId="input-product-compare-price" />
         <Field label="Preparation Time (Minutes)" type="number" value={form.prepTimeMinutes} onChange={(v) => update('prepTimeMinutes', v)} placeholder="45" testId="input-product-prep-time" />
         <Field label="Inventory Units" type="number" value={form.inventory} onChange={(v) => update('inventory', v)} placeholder="15" testId="input-product-inventory" />
@@ -2015,7 +2015,7 @@ function Discounts() {
               </div>
 
               <div className="text-xs font-extrabold text-[hsl(var(--foreground))]">
-                {d.type === 'percentage' ? `${d.value}% OFF Order` : `$${d.value}.00 OFF Order`}
+                {d.type === 'percentage' ? `${d.value}% OFF Order` : `₹${d.value} OFF Order`}
               </div>
 
               <div className="text-xs text-[hsl(var(--muted-foreground))] font-medium">
@@ -2097,13 +2097,13 @@ function Discounts() {
                   className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-semibold outline-none focus:border-[hsl(var(--primary))]"
                 >
                   <option value="percentage">Percentage Off (%)</option>
-                  <option value="fixed">Fixed Amount Off ($)</option>
+                  <option value="fixed">Fixed Amount Off (₹)</option>
                 </select>
               </div>
 
               <div>
                 <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                  {form.type === 'percentage' ? 'Discount Value (%)' : 'Discount Value ($ USD)'}
+                  {form.type === 'percentage' ? 'Discount Value (%)' : 'Discount Value (₹ INR)'}
                 </label>
                 <input
                   type="number"
@@ -2117,7 +2117,7 @@ function Discounts() {
               </div>
 
               <div>
-                <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Min. Order Spend ($ USD)</label>
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Min. Order Spend (₹ INR)</label>
                 <input
                   type="number"
                   step="any"

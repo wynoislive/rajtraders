@@ -25,7 +25,7 @@ function getApiUrl(path: string): string {
 }
 
 function money(cents = 0) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(cents / 100);
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(cents / 100);
 }
 
 export default function App() {
