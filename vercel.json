@@ -1,6 +1,7 @@
 {
   "version": 2,
   "buildCommand": "pnpm --filter @workspace/api-server... build",
+  "outputDirectory": "public",
   "functions": {
     "api/*.js": {
       "includeFiles": "{artifacts/api-server/dist/**,node_modules/@electric-sql/pglite/**,node_modules/pg/**}"
