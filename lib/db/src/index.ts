@@ -33,13 +33,6 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Migration alters in case products table already existed
-ALTER TABLE products ADD COLUMN IF NOT EXISTS prep_time_minutes INTEGER NOT NULL DEFAULT 30;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'approved';
-ALTER TABLE products ADD COLUMN IF NOT EXISTS submitted_by TEXT;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS approved_by TEXT;
-ALTER TABLE products ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
-
 CREATE TABLE IF NOT EXISTS discounts (
   id TEXT PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
@@ -189,18 +182,6 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   smtp_from TEXT DEFAULT 'My Shop <notifications.rajtraders@gmail.com>',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS r2_account_id TEXT DEFAULT '';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS r2_access_key_id TEXT DEFAULT '';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS r2_secret_access_key TEXT DEFAULT '';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS r2_bucket_name TEXT DEFAULT 'my-products';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS r2_public_url TEXT DEFAULT '';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS smtp_host TEXT DEFAULT 'smtp.gmail.com';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS smtp_port INTEGER DEFAULT 465;
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS smtp_user TEXT DEFAULT 'notifications.rajtraders@gmail.com';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS smtp_pass TEXT DEFAULT 'NOTIFICATIONS@RAJ';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS smtp_from TEXT DEFAULT 'My Shop <notifications.rajtraders@gmail.com>';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS shop_domain TEXT NOT NULL DEFAULT 'myshop.com';
 
 INSERT INTO shop_settings (id, shop_name, shop_domain, shop_address, latitude, longitude, delivery_radius_km, is_delivery_enabled, razorpay_key_id, razorpay_key_secret, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
 VALUES ('default_shop', 'My Shop', 'myshop.com', '123 Baker Street, Mumbai', 19.0760, 72.8777, 15.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'My Shop <notifications.rajtraders@gmail.com>')
