@@ -8,7 +8,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object NetworkModule {
-    private const val PRODUCTION_API_URL = "https://rajtraders-api-server.vercel.app/api/"
+    private const val PRODUCTION_API_URL = "https://api.sundarvan.xyz/api/"
 
     private val resolvedBaseUrl: String
         get() {
