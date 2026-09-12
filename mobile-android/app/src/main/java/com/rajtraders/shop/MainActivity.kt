@@ -199,9 +199,19 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
 
 private fun shareProductUrl(context: Context, product: Product, shopName: String = "RAJ TRADERS") {
     val shareUrl = "https://sundarvan.xyz/products/${product.slug}"
+    val shareText = "Check out ${product.name} at $shopName! Prep time: ${product.prepTimeMinutes} mins.\n$shareUrl"
+
+    // Always copy directly to Android system Clipboard for maximum compatibility across all devices & BlueStacks
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+    if (clipboard != null) {
+        val clip = android.content.ClipData.newPlainText("Product Link", shareUrl)
+        clipboard.setPrimaryClip(clip)
+        android.widget.Toast.makeText(context, "Product link copied to clipboard!", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
     val sendIntent: Intent = Intent().apply {
         action = Intent.ACTION_SEND
-        putExtra(Intent.EXTRA_TEXT, "Check out ${product.name} at $shopName! Prep time: ${product.prepTimeMinutes} mins.\n$shareUrl")
+        putExtra(Intent.EXTRA_TEXT, shareText)
         type = "text/plain"
     }
     val shareIntent = Intent.createChooser(sendIntent, "Share ${product.name}")
