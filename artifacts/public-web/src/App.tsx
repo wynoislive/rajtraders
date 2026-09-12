@@ -89,50 +89,19 @@ export default function App() {
     fetch(getApiUrl('/api/v1/products'))
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setProducts(data);
         } else {
-          setProducts(fallbackProducts);
+          setProducts([]);
         }
       })
-      .catch(() => setProducts(fallbackProducts))
+      .catch(() => setProducts([]))
       .finally(() => setProductsLoading(false));
   }, []);
 
-  const fallbackProducts = [
-    {
-      id: "prod_1",
-      name: "Harbor Linen Overshirt",
-      slug: "harbor-linen-overshirt",
-      description: "A breathable everyday layer with a relaxed cut and soft washed finish.",
-      priceCents: 8900,
-      compareAtPriceCents: 12000,
-      category: "Apparel",
-      imageUrl: "https://images.unsplash.com/photo-1596755389378-c31d21fd1273?auto=format&fit=crop&w=900&q=80",
-      status: "active",
-      featured: true,
-      inventory: 24,
-      prepTimeMinutes: 30,
-    },
-    {
-      id: "prod_2",
-      name: "Stoneware Pour-Over Set",
-      slug: "stoneware-pour-over-set",
-      description: "Hand-finished stoneware for slow mornings and generous pours.",
-      priceCents: 5400,
-      compareAtPriceCents: null,
-      category: "Home",
-      imageUrl: "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=900&q=80",
-      status: "active",
-      featured: true,
-      inventory: 12,
-      prepTimeMinutes: 30,
-    }
-  ];
-
   const currentProduct = useMemo(() => {
     if (!params?.slug) return null;
-    return products.find((p: any) => p.slug === params.slug || p.id === params.slug) || products[0];
+    return products.find((p: any) => p.slug === params.slug || p.id === params.slug) || null;
   }, [params, products]);
 
   const filteredProducts = useMemo(() => {
@@ -551,32 +520,54 @@ export default function App() {
               ))}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProducts.map((product: any) => (
-                <div key={product.id} className="bg-white rounded-3xl border border-[#0E3D42]/10 overflow-hidden shadow-md hover:shadow-xl transition group flex flex-col justify-between">
-                  <div>
-                    <div className="relative aspect-square bg-[#EFE8DC] overflow-hidden">
-                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                      <span className="absolute bottom-3 left-3 bg-black/70 text-white text-[11px] font-semibold px-2.5 py-0.5 rounded-full">⏱️ {product.prepTimeMinutes || 30}m prep</span>
-                      <button onClick={() => shareProduct(product)} className="absolute top-3 right-3 p-2 rounded-full bg-white/80 text-[#0E3D42] hover:bg-white shadow">
-                        <Share2 size={16} />
+            {filteredProducts.length === 0 ? (
+              <div className="text-center py-16 px-4 bg-white rounded-3xl border border-[#0E3D42]/10 shadow-sm max-w-md mx-auto my-6 space-y-4">
+                <div className="size-16 rounded-full bg-[#FAF5EE] border-2 border-dashed border-[#0E3D42]/20 flex items-center justify-center mx-auto text-[#0E3D42]">
+                  <ShoppingBag size={28} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-[#0E3D42]">Catalog Ready for Real Products</h3>
+                  <p className="mt-2 text-xs text-gray-500 max-w-xs mx-auto leading-relaxed font-medium">
+                    All sample products have been cleared. You can now add your real Indian merchandise from the <a href="https://admin.sundarvan.xyz" target="_blank" rel="noreferrer" className="font-extrabold underline text-[#0E3D42]">Master Operations Console</a>.
+                  </p>
+                </div>
+                <a
+                  href="https://admin.sundarvan.xyz"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block px-5 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 shadow transition"
+                >
+                  Go to Shop Admin Console
+                </a>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredProducts.map((product: any) => (
+                  <div key={product.id} className="bg-white rounded-3xl border border-[#0E3D42]/10 overflow-hidden shadow-md hover:shadow-xl transition group flex flex-col justify-between">
+                    <div>
+                      <div className="relative aspect-square bg-[#EFE8DC] overflow-hidden">
+                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                        <span className="absolute bottom-3 left-3 bg-black/70 text-white text-[11px] font-semibold px-2.5 py-0.5 rounded-full">⏱️ {product.prepTimeMinutes || 30}m prep</span>
+                        <button onClick={() => shareProduct(product)} className="absolute top-3 right-3 p-2 rounded-full bg-white/80 text-[#0E3D42] hover:bg-white shadow">
+                          <Share2 size={16} />
+                        </button>
+                      </div>
+                      <div className="p-5 space-y-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#E2A93B]">{product.category}</span>
+                        <Link href={`/products/${product.slug}`} className="block text-lg font-extrabold text-[#0E3D42] hover:underline">{product.name}</Link>
+                        <p className="text-xs text-[#0E3D42]/70 line-clamp-2">{product.description}</p>
+                      </div>
+                    </div>
+                    <div className="p-5 pt-0 flex items-center justify-between gap-4">
+                      <span className="text-xl font-black text-[#0E3D42]">{money(product.priceCents)}</span>
+                      <button onClick={() => addToCart(product)} className="px-4 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 shadow transition">
+                        Add to Bag
                       </button>
                     </div>
-                    <div className="p-5 space-y-2">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-[#E2A93B]">{product.category}</span>
-                      <Link href={`/products/${product.slug}`} className="block text-lg font-extrabold text-[#0E3D42] hover:underline">{product.name}</Link>
-                      <p className="text-xs text-[#0E3D42]/70 line-clamp-2">{product.description}</p>
-                    </div>
                   </div>
-                  <div className="p-5 pt-0 flex items-center justify-between gap-4">
-                    <span className="text-xl font-black text-[#0E3D42]">{money(product.priceCents)}</span>
-                    <button onClick={() => addToCart(product)} className="px-4 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 shadow transition">
-                      Add to Bag
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>
