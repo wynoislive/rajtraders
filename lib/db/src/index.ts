@@ -295,14 +295,14 @@ if (rawDbUrl) {
 let lastDbError: string | null = null;
 
 export async function ensureDbReady(): Promise<any> {
-  if (process.env.DATABASE_URL && poolInstance) {
+  if (rawDbUrl && poolInstance) {
     try {
       await poolInstance.query(createTablesSql);
       await syncEnvToShopSettings(dbInstance);
     } catch (err: any) {
       console.error("ensureDbReady (PostgreSQL) error:", err);
     }
-  } else if (!process.env.DATABASE_URL && pgliteInstance) {
+  } else if (!rawDbUrl && pgliteInstance) {
     try {
       await pgliteInstance.waitReady;
       await pgliteInstance.exec(createTablesSql);
