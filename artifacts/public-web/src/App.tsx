@@ -778,14 +778,19 @@ export default function App() {
                 <div>
                   <input required type="password" name="password" placeholder="Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                   <div className="flex justify-end mt-1.5">
-                    <button type="button" onClick={() => { setAuthMode('forgot_password'); setAuthError(null); }} className="text-xs font-extrabold text-[#0E3D42] hover:underline">
+                    <button type="button" onClick={() => { setAuthMode('forgot_password'); setAuthError(null); }} className="text-xs font-extrabold text-[#0E3D42] hover:underline cursor-pointer">
                       Forgot Password?
                     </button>
                   </div>
                 </div>
-                <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Signing in...' : 'Sign In'}</button>
-                <div className="text-center text-xs font-bold text-[#0E3D42]/70">
-                  Don't have an account? <button type="button" onClick={() => { setAuthMode('register'); setAuthError(null); }} className="underline text-[#0E3D42]">Register</button>
+                <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow hover:bg-[#0E3D42]/90 transition">{authLoading ? 'Signing in...' : 'Sign In'}</button>
+                <div className="flex justify-between items-center text-xs font-bold text-[#0E3D42]/70 pt-1">
+                  <button type="button" onClick={() => { setAuthMode('forgot_password'); setAuthError(null); }} className="underline text-[#0E3D42]">
+                    Forgot Password?
+                  </button>
+                  <div>
+                    Don't have an account? <button type="button" onClick={() => { setAuthMode('register'); setAuthError(null); }} className="underline text-[#0E3D42]">Register</button>
+                  </div>
                 </div>
               </form>
             ) : authMode === 'forgot_password' ? (
