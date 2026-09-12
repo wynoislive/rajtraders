@@ -39,6 +39,7 @@ import {
   Sparkles,
   Tag,
   Timer,
+  Trash2,
   UserCheck,
   UserRoundPlus,
   UsersRound,
@@ -188,7 +189,18 @@ const navItems = [
 function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [mobileNav, setMobileNav] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([
+    { id: '1', title: 'Welcome Offer Active', detail: 'WELCOME10 code is live for new registrants', time: '5m ago', unread: true },
+    { id: '2', title: 'Catalog Engine Online', detail: 'PGlite WASM database initialized & ready', time: '12m ago', unread: true },
+    { id: '3', title: 'RBAC Security Queue', detail: 'Sub-Admin & Moderator approval workflow active', time: '45m ago', unread: false },
+  ]);
   const active = navItems.find((item) => item.href === location)?.label ?? 'Shop Admin';
+  const unreadCount = notifications.filter((n) => n.unread).length;
+
+  const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+  const clearNotifications = () => setNotifications([]);
+
   return (
     <div className="app-shell grain flex bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
       <aside className={cx('fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar))] px-4 py-5 text-[hsl(var(--sidebar-foreground))] transition-transform duration-300 lg:static lg:translate-x-0', mobileNav ? 'translate-x-0' : '-translate-x-full')}>
@@ -220,7 +232,75 @@ function Shell({ children }: { children: ReactNode }) {
       <main className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--background)/.9)] px-5 backdrop-blur-md sm:px-8 lg:px-11">
           <div className="flex items-center gap-3"><button className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] lg:hidden" onClick={() => setMobileNav(true)} aria-label="Open navigation" data-testid="button-open-nav"><Menu size={20} /></button><div className="text-sm font-bold text-[hsl(var(--muted-foreground))]"><span className="hidden sm:inline">Operations / </span><span className="text-[hsl(var(--foreground))]">{active}</span></div></div>
-          <div className="flex items-center gap-2"><button className="relative rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]" aria-label="Notifications" data-testid="button-notifications"><Bell size={18} /><span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-[hsl(var(--accent))]" /></button><div className="hidden h-5 w-px bg-[hsl(var(--border))] sm:block" /><span className="hidden font-mono text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))] sm:block">Live</span><span className="relative flex size-2"><span className="absolute inline-flex size-full animate-ping rounded-full bg-[hsl(148_37%_43%)] opacity-50" /><span className="relative inline-flex size-2 rounded-full bg-[hsl(148_37%_43%)]" /></span></div>
+          <div className="relative flex items-center gap-2">
+            <button
+              className="relative rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+              aria-label="Notifications"
+              onClick={() => setNotificationsOpen((prev) => !prev)}
+              data-testid="button-notifications"
+            >
+              <Bell size={18} />
+              {unreadCount > 0 && <span className="absolute right-1 top-1 flex size-2.5 rounded-full bg-[hsl(var(--accent))]" />}
+            </button>
+
+            {notificationsOpen && (
+              <div className="absolute right-0 top-12 z-50 w-80 sm:w-96 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-2xl backdrop-blur-md">
+                <div className="flex items-center justify-between border-b border-[hsl(var(--border))] pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-extrabold text-[hsl(var(--foreground))]">Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="rounded-full bg-[hsl(var(--accent))] px-2 py-0.5 text-[10px] font-bold text-white">
+                        {unreadCount} new
+                      </span>
+                    )}
+                  </div>
+                  {notifications.length > 0 && unreadCount > 0 && (
+                    <button onClick={markAllRead} className="text-[11px] font-bold text-[hsl(var(--primary))] hover:underline">
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+
+                {notifications.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-[hsl(var(--muted-foreground))]">No active notifications</div>
+                ) : (
+                  <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {notifications.map((item) => (
+                      <div
+                        key={item.id}
+                        className={cx(
+                          'flex items-start justify-between rounded-xl p-3 text-xs transition',
+                          item.unread ? 'bg-[hsl(var(--primary)/.08)] border border-[hsl(var(--primary)/.15)]' : 'bg-[hsl(var(--muted)/.4)]'
+                        )}
+                      >
+                        <div>
+                          <div className="font-extrabold text-[hsl(var(--foreground))]">{item.title}</div>
+                          <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">{item.detail}</div>
+                          <div className="mt-1 font-mono text-[9px] text-[hsl(var(--muted-foreground))]">{item.time}</div>
+                        </div>
+                        {item.unread && <span className="size-2 rounded-full bg-[hsl(var(--accent))]" />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-3 flex justify-between border-t border-[hsl(var(--border))] pt-2.5">
+                  {notifications.length > 0 && (
+                    <button onClick={clearNotifications} className="text-[11px] font-bold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--destructive))]">
+                      Clear all
+                    </button>
+                  )}
+                  <button onClick={() => setNotificationsOpen(false)} className="ml-auto text-[11px] font-bold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="hidden h-5 w-px bg-[hsl(var(--border))] sm:block" />
+            <span className="hidden font-mono text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))] sm:block">Live</span>
+            <span className="relative flex size-2"><span className="absolute inline-flex size-full animate-ping rounded-full bg-[hsl(148_37%_43%)] opacity-50" /><span className="relative inline-flex size-2 rounded-full bg-[hsl(148_37%_43%)]" /></span>
+          </div>
         </header>
         <div className="mx-auto max-w-[1480px] px-5 py-8 sm:px-8 lg:px-11 lg:py-10">{children}</div>
       </main>
@@ -288,8 +368,8 @@ function Products() {
   const [filter, setFilter] = useState<'all' | 'active' | 'draft'>('all');
   const [dialog, setDialog] = useState<'create' | 'edit' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [form, setForm] = useState<ProductForm>(blankProduct);
-  const [archiveId, setArchiveId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
   const { shopDomain } = useContext(ShopContext);
@@ -353,6 +433,24 @@ function Products() {
       if (res.ok) {
         setDialog(null);
         setNotice(editingId ? 'Product updated successfully' : 'Product submitted / created');
+        client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
+        client.invalidateQueries({ queryKey: getListProductsQueryKey() });
+        client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const res = await fetch(`/api/v1/admin/products/${deleteTarget.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok || res.status === 204) {
+        setNotice(`Product "${deleteTarget.name}" deleted / archived successfully`);
+        setDeleteTarget(null);
         client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
         client.invalidateQueries({ queryKey: getListProductsQueryKey() });
         client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
@@ -428,7 +526,7 @@ function Products() {
         />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))]">
-          <div className="hidden grid-cols-[minmax(240px,1.6fr)_1fr_100px_90px_100px_90px_110px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-5 py-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] md:grid">
+          <div className="hidden grid-cols-[minmax(240px,1.6fr)_1fr_100px_90px_100px_90px_130px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-5 py-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] md:grid">
             <span>Product</span>
             <span>Category</span>
             <span>Prep Time</span>
@@ -440,7 +538,7 @@ function Products() {
           {products.map((product: any) => (
             <div
               key={product.id}
-              className="grid gap-3 border-b border-[hsl(var(--border))] px-4 py-4 last:border-0 md:grid-cols-[minmax(240px,1.6fr)_1fr_100px_90px_100px_90px_110px] md:items-center md:gap-4 md:px-5"
+              className="grid gap-3 border-b border-[hsl(var(--border))] px-4 py-4 last:border-0 md:grid-cols-[minmax(240px,1.6fr)_1fr_100px_90px_100px_90px_130px] md:items-center md:gap-4 md:px-5"
             >
               <div className="flex items-center gap-3">
                 <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[hsl(var(--secondary)/.3)] text-sm font-extrabold text-[hsl(var(--foreground))]">
@@ -484,10 +582,45 @@ function Products() {
                 >
                   <Pencil size={15} />
                 </button>
+                <button
+                  className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--destructive)/.12)] hover:text-[hsl(var(--destructive))]"
+                  onClick={() => setDeleteTarget(product)}
+                  title="Delete Product"
+                  data-testid={`button-delete-product-${product.id}`}
+                >
+                  <Trash2 size={15} />
+                </button>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {deleteTarget && (
+        <DialogFrame
+          title="Delete Product"
+          detail="Are you sure you want to delete or archive this product from the live catalog?"
+          onClose={() => setDeleteTarget(null)}
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--destructive)/.22)] bg-[hsl(var(--destructive)/.06)] p-3.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--destructive)/.15)] text-[hsl(var(--destructive))]">
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <div className="text-sm font-extrabold text-[hsl(var(--foreground))]">{deleteTarget.name}</div>
+                <div className="text-xs text-[hsl(var(--muted-foreground))]">{deleteTarget.category} · {money(deleteTarget.priceCents)}</div>
+              </div>
+            </div>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              This will remove the product from active storefront listings and update catalog inventory counts.
+            </p>
+            <div className="flex justify-end gap-2 border-t border-[hsl(var(--border))] pt-4">
+              <Button variant="quiet" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="danger" onClick={confirmDelete}>Delete Product</Button>
+            </div>
+          </div>
+        </DialogFrame>
       )}
 
       <ProductDialog
