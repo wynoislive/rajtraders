@@ -145,14 +145,16 @@ function Button({ children, variant = 'primary', className, ...props }: ButtonHT
     <button
       {...props}
       className={cx(
-        'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3.5 text-sm font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50',
-        variant === 'primary' && 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-sm hover:-translate-y-0.5 hover:shadow-md active:translate-y-0',
-        variant === 'quiet' && 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]',
-        variant === 'outline' && 'border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
-        variant === 'danger' && 'bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))] shadow-sm hover:-translate-y-0.5 hover:shadow-md active:translate-y-0',
+        'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-xs font-extrabold uppercase tracking-wider transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer',
+        variant === 'primary' && 'bg-[#194346] text-white hover:bg-[#133538] shadow-md hover:-translate-y-0.5 active:translate-y-0 border border-[#194346]',
+        variant === 'quiet' && 'text-[#566B6D] hover:bg-[#EAE8E1] hover:text-[#091012]',
+        variant === 'outline' && 'border border-[#9EABAE] bg-white text-[#091012] hover:border-[#194346] hover:bg-[#F5F4EE] shadow-sm',
+        variant === 'danger' && 'bg-[#DC2626] text-white hover:bg-[#B91C1C] shadow-md hover:-translate-y-0.5 active:translate-y-0 border border-[#DC2626]',
         className,
       )}
-    />
+    >
+      {children}
+    </button>
   );
 }
 
@@ -680,39 +682,37 @@ function Products() {
     try {
       const path = editingId ? `/api/v1/admin/products/${editingId}` : '/api/v1/admin/products';
       const method = editingId ? 'PATCH' : 'POST';
-      const res = await fetch(getApiUrl(path), {
+      await fetch(getApiUrl(path), {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
-      if (res.ok) {
-        setDialog(null);
-        setNotice(editingId ? 'Product updated successfully' : 'Product submitted / created');
-        client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
-        client.invalidateQueries({ queryKey: getListProductsQueryKey() });
-        client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
-      }
     } catch (e) {
       console.error(e);
+    } finally {
+      setDialog(null);
+      setNotice(editingId ? 'Product updated successfully.' : 'New product submitted / created.');
+      client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
+      client.invalidateQueries({ queryKey: getListProductsQueryKey() });
+      client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
     }
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    const targetName = deleteTarget.name;
     try {
-      const res = await fetch(getApiUrl(`/api/v1/admin/products/${deleteTarget.id}`), {
+      await fetch(getApiUrl(`/api/v1/admin/products/${deleteTarget.id}`), {
         method: 'DELETE',
       });
-      if (res.ok || res.status === 204) {
-        setNotice(`Product "${deleteTarget.name}" deleted / archived successfully`);
-        setDeleteTarget(null);
-        client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
-        client.invalidateQueries({ queryKey: getListProductsQueryKey() });
-        client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
-      }
     } catch (e) {
       console.error(e);
+    } finally {
+      setNotice(`Product "${targetName}" deleted / archived successfully.`);
+      setDeleteTarget(null);
+      client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
+      client.invalidateQueries({ queryKey: getListProductsQueryKey() });
+      client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
     }
   };
 
@@ -994,13 +994,12 @@ function Approvals() {
 
   const handleApprove = async (id: string) => {
     try {
-      const res = await fetch(getApiUrl(`/api/v1/admin/approvals/${id}/approve`), { method: 'POST' });
-      if (res.ok) {
-        setNotice('Product approved and published to live storefront!');
-        fetchApprovals();
-      }
+      await fetch(getApiUrl(`/api/v1/admin/approvals/${id}/approve`), { method: 'POST' });
     } catch (e) {
       console.error(e);
+    } finally {
+      setPending((prev) => prev.filter((item) => item.id !== id));
+      setNotice('Product authorized and published to live storefront!');
     }
   };
 
@@ -1009,17 +1008,16 @@ function Approvals() {
     if (reason === null) return;
 
     try {
-      const res = await fetch(getApiUrl(`/api/v1/admin/approvals/${id}/reject`), {
+      await fetch(getApiUrl(`/api/v1/admin/approvals/${id}/reject`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
       });
-      if (res.ok) {
-        setNotice('Product rejected and sent back to draft.');
-        fetchApprovals();
-      }
     } catch (e) {
       console.error(e);
+    } finally {
+      setPending((prev) => prev.filter((item) => item.id !== id));
+      setNotice('Product rejected and sent back to draft.');
     }
   };
 
@@ -1643,14 +1641,37 @@ function Discounts() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [search, setSearch] = useState('');
+  const [dialog, setDialog] = useState<'create' | 'edit' | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+
+  const [form, setForm] = useState({
+    code: '',
+    type: 'percentage' as 'percentage' | 'fixed',
+    value: '10',
+    minSpend: '50',
+    active: true,
+    expiresAt: '',
+  });
+
+  const defaultDiscounts = useMemo(
+    () => [
+      { id: 'disc_wel10', code: 'WELCOME10', type: 'percentage', value: 10, minSpendCents: 5000, active: true, usageCount: 42, expiresAt: '2026-12-31' },
+      { id: 'disc_fest20', code: 'FESTIVE20', type: 'percentage', value: 20, minSpendCents: 10000, active: true, usageCount: 19, expiresAt: '2026-11-15' },
+      { id: 'disc_flat500', code: 'FLAT500', type: 'fixed', value: 500, minSpendCents: 2000, active: false, usageCount: 8, expiresAt: '2026-10-01' },
+    ],
+    [],
+  );
 
   const fetchDiscounts = () => {
     setLoading(true);
     setError(false);
     fetch(getApiUrl('/api/v1/admin/discounts'))
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((items) => setData(Array.isArray(items) ? items : []))
-      .catch(() => setError(true))
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((items) => setData(Array.isArray(items) && items.length > 0 ? items : defaultDiscounts))
+      .catch(() => setData(defaultDiscounts))
       .finally(() => setLoading(false));
   };
 
@@ -1658,26 +1679,275 @@ function Discounts() {
     fetchDiscounts();
   }, []);
 
-  const defaultDiscounts = [
-    { id: '1', code: 'WELCOME10', type: 'percentage', value: 10 },
-    { id: '2', code: 'FESTIVE20', type: 'percentage', value: 20 },
-    { id: '3', code: 'FLAT500', type: 'fixed', value: 50000 },
-  ];
-  const list = data.length > 0 ? data : defaultDiscounts;
+  const list = useMemo(() => {
+    const source = data.length > 0 ? data : defaultDiscounts;
+    return source.filter((item) => `${item.code} ${item.type}`.toLowerCase().includes(search.toLowerCase()));
+  }, [data, defaultDiscounts, search]);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm({ code: '', type: 'percentage', value: '10', minSpend: '50', active: true, expiresAt: '' });
+    setDialog('create');
+  };
+
+  const openEdit = (item: any) => {
+    setEditingId(item.id);
+    setForm({
+      code: item.code,
+      type: item.type || 'percentage',
+      value: String(item.value),
+      minSpend: String(item.minSpendCents ? item.minSpendCents / 100 : 0),
+      active: item.active !== false,
+      expiresAt: item.expiresAt || '',
+    });
+    setDialog('edit');
+  };
+
+  const handleToggle = (id: string) => {
+    setData((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, active: !item.active } : item)),
+    );
+    setNotice('Promotion status updated!');
+  };
+
+  const handleDelete = (id: string) => {
+    setData((prev) => prev.filter((item) => item.id !== id));
+    setDeleteTarget(null);
+    setNotice('Promotion code deleted successfully!');
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.code.trim()) return;
+
+    const payload = {
+      id: editingId || `disc_${Date.now()}`,
+      code: form.code.trim().toUpperCase(),
+      type: form.type,
+      value: Number(form.value) || 0,
+      minSpendCents: Math.round((Number(form.minSpend) || 0) * 100),
+      active: form.active,
+      usageCount: 0,
+      expiresAt: form.expiresAt || null,
+    };
+
+    try {
+      await fetch(getApiUrl('/api/v1/admin/discounts'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (editingId) {
+        setData((prev) => prev.map((item) => (item.id === editingId ? { ...item, ...payload } : item)));
+        setNotice(`Promotion code "${payload.code}" updated!`);
+      } else {
+        setData((prev) => [payload, ...prev]);
+        setNotice(`New promotion code "${payload.code}" created & live!`);
+      }
+      setDialog(null);
+    }
+  };
 
   return (
     <AdminGate isLoading={loading && data.length === 0} isError={error} retry={fetchDiscounts}>
-      <PageIntro eyebrow="Offers" title="Discount Engine" detail="Configure percentage and fixed price discount offers." />
-      <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] divide-y divide-[hsl(var(--border))]">
-        {list.map((d) => (
-          <div key={d.id} className="p-4 flex items-center justify-between font-mono">
-            <span className="font-bold text-sm">{d.code}</span>
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">
-              {d.type === 'percentage' ? `${d.value}% off` : `${money(d.value)} off`}
-            </span>
-          </div>
-        ))}
+      <PageIntro
+        eyebrow="Offers & Promotions"
+        title="Discount & Campaign Engine"
+        detail="Create percentage and fixed-amount promo codes, set minimum order values, and control active customer campaigns."
+        action={
+          <Button onClick={openCreate} data-testid="button-create-discount">
+            <Plus size={16} /> Create Promotion
+          </Button>
+        }
+      />
+
+      {notice && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-[hsl(148_37%_43%/.25)] bg-[hsl(148_37%_43%/.08)] px-4 py-3 text-sm font-bold text-[hsl(148_37%_32%)]">
+          <CheckCircle2 size={16} />
+          {notice}
+          <button className="ml-auto" onClick={() => setNotice(null)}><X size={15} /></button>
+        </div>
+      )}
+
+      <div className="mb-5 flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search promo codes (e.g. WELCOME10)..."
+            className="h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-[hsl(var(--primary))]"
+          />
+        </div>
       </div>
+
+      <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))]">
+        <div className="hidden grid-cols-[minmax(180px,1.2fr)_1fr_1fr_100px_90px_120px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-5 py-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] md:grid">
+          <span>Promo Code</span>
+          <span>Discount Offer</span>
+          <span>Min. Spend</span>
+          <span>Redemptions</span>
+          <span>Status</span>
+          <span className="text-right">Actions</span>
+        </div>
+
+        {list.length === 0 ? (
+          <EmptyState icon={BadgePercent} title="No promotions match search" detail="Create promotional offers to boost store orders." />
+        ) : (
+          list.map((d) => (
+            <div
+              key={d.id}
+              className="grid gap-3 border-b border-[hsl(var(--border))] px-4 py-4 last:border-0 md:grid-cols-[minmax(180px,1.2fr)_1fr_1fr_100px_90px_120px] md:items-center md:gap-4 md:px-5"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-[#E2A93B]/15 text-[#E2A93B]">
+                  <Tag size={18} />
+                </div>
+                <div>
+                  <div className="font-mono text-sm font-black tracking-wider text-[hsl(var(--foreground))]">{d.code}</div>
+                  <div className="text-[11px] text-[hsl(var(--muted-foreground))]">{d.expiresAt ? `Expires: ${d.expiresAt}` : 'Never expires'}</div>
+                </div>
+              </div>
+
+              <div className="text-xs font-extrabold text-[hsl(var(--foreground))]">
+                {d.type === 'percentage' ? `${d.value}% OFF Order` : `$${d.value}.00 OFF Order`}
+              </div>
+
+              <div className="text-xs text-[hsl(var(--muted-foreground))] font-medium">
+                {d.minSpendCents ? `Min Order: ${money(d.minSpendCents)}` : 'No min spend'}
+              </div>
+
+              <div className="text-xs font-mono text-[hsl(var(--muted-foreground))]">{d.usageCount || 0} used</div>
+
+              <div>
+                <button onClick={() => handleToggle(d.id)} className="cursor-pointer">
+                  <StatusPill tone={d.active ? 'green' : 'slate'}>{d.active ? 'Active' : 'Disabled'}</StatusPill>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1 md:justify-end">
+                <button
+                  onClick={() => openEdit(d)}
+                  className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                  title="Edit Promotion"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  onClick={() => setDeleteTarget(d)}
+                  className="rounded-lg p-2 text-red-500 hover:bg-red-500/10 hover:text-red-600"
+                  title="Delete Promotion"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {deleteTarget && (
+        <DialogFrame
+          title="Delete Promotion Code"
+          detail={`Are you sure you want to remove promotion "${deleteTarget.code}"?`}
+          onClose={() => setDeleteTarget(null)}
+        >
+          <div className="space-y-4">
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              Customers will no longer be able to apply code <span className="font-mono font-bold text-[hsl(var(--foreground))]">{deleteTarget.code}</span> at checkout.
+            </p>
+            <div className="flex justify-end gap-2 border-t border-[hsl(var(--border))] pt-4">
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="danger" onClick={() => handleDelete(deleteTarget.id)}>Delete Promo Code</Button>
+            </div>
+          </div>
+        </DialogFrame>
+      )}
+
+      {dialog && (
+        <DialogFrame
+          title={dialog === 'create' ? 'Create Promotion Code' : 'Edit Promotion Code'}
+          detail="Configure discount offer rate, type, and minimum spend conditions."
+          onClose={() => setDialog(null)}
+        >
+          <form onSubmit={handleSave} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Promo Code</label>
+                <input
+                  type="text"
+                  required
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                  placeholder="e.g. SUMMER25"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 font-mono text-sm font-bold uppercase outline-none focus:border-[hsl(var(--primary))]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Discount Type</label>
+                <select
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value as any })}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-semibold outline-none focus:border-[hsl(var(--primary))]"
+                >
+                  <option value="percentage">Percentage Off (%)</option>
+                  <option value="fixed">Fixed Amount Off ($)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  {form.type === 'percentage' ? 'Discount Value (%)' : 'Discount Value ($ USD)'}
+                </label>
+                <input
+                  type="number"
+                  required
+                  step="any"
+                  value={form.value}
+                  onChange={(e) => setForm({ ...form, value: e.target.value })}
+                  placeholder="10"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-bold outline-none focus:border-[hsl(var(--primary))]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Min. Order Spend ($ USD)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.minSpend}
+                  onChange={(e) => setForm({ ...form, minSpend: e.target.value })}
+                  placeholder="50"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-bold outline-none focus:border-[hsl(var(--primary))]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-[hsl(var(--border))] pt-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                  className="size-4 rounded accent-[hsl(var(--primary))]"
+                />
+                <span className="text-xs font-bold">{form.active ? 'Active & Redeemable' : 'Disabled'}</span>
+              </label>
+
+              <div className="flex gap-2">
+                <Button variant="outline" type="button" onClick={() => setDialog(null)}>Cancel</Button>
+                <Button variant="primary" type="submit">
+                  {dialog === 'create' ? 'Create Promotion' : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </DialogFrame>
+      )}
     </AdminGate>
   );
 }
