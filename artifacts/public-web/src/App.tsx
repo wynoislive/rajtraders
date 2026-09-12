@@ -361,7 +361,7 @@ export default function App() {
       <header className="sticky top-0 z-30 bg-white border-b border-[#0E3D42]/10 backdrop-blur-md bg-white/90 px-4 sm:px-8 py-3.5 shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3">
-            <div className="size-10 rounded-xl bg-[#0E3D42] text-[#E2A93B] flex items-center justify-center font-extrabold shadow-md">RT</div>
+            <img src="/RAJTRADERS-LOGO.png" alt="RAJ TRADERS" className="size-10 object-contain rounded-xl shadow-md border border-[#E2A93B]/30" />
             <div>
               <div className="text-lg font-black tracking-tight text-[#0E3D42]">RAJ TRADERS</div>
               <div className="text-[10px] font-bold uppercase tracking-widest text-[#0E3D42]/60">Gourmet Bakery & Artisanal Store</div>
