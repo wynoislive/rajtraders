@@ -28568,17 +28568,7 @@ var require_multistream = __commonJS({
 // node_modules/.pnpm/pino@9.14.0/node_modules/pino/pino.js
 var require_pino = __commonJS({
   "node_modules/.pnpm/pino@9.14.0/node_modules/pino/pino.js"(exports, module) {
-    function pinoBundlerAbsolutePath(p) {
-      try {
-        const path2 = __require("path");
-        const outputDir = "C:\\Users\\Administrator\\Desktop\\RAJ_TRADERS_Full_Codebase\\RAJ_TRADERS_Full_Codebase\\artifacts\\api-server\\dist";
-        return path2.resolve(outputDir, p.replace(/^\.\//, ""));
-      } catch (e) {
-        const f = new Function("p", "return new URL(p, import.meta.url).pathname");
-        return f(p);
-      }
-    }
-    globalThis.__bundlerPathsOverrides = { ...globalThis.__bundlerPathsOverrides || {}, "thread-stream-worker": pinoBundlerAbsolutePath("./thread-stream-worker.mjs"), "pino-worker": pinoBundlerAbsolutePath("./pino-worker.mjs"), "pino/file": pinoBundlerAbsolutePath("./pino-file.mjs"), "pino-pretty": pinoBundlerAbsolutePath("./pino-pretty.mjs") };
+    "use strict";
     var os = __require("node:os");
     var stdSerializers = require_pino_std_serializers();
     var caller = require_caller();
@@ -61411,20 +61401,13 @@ import Redis from "ioredis";
 
 // artifacts/api-server/src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
-var isProduction = process.env.NODE_ENV === "production";
 var logger2 = (0, import_pino.default)({
   level: process.env.LOG_LEVEL ?? "info",
   redact: [
     "req.headers.authorization",
     "req.headers.cookie",
     "res.headers['set-cookie']"
-  ],
-  ...isProduction ? {} : {
-    transport: {
-      target: "pino-pretty",
-      options: { colorize: true }
-    }
-  }
+  ]
 });
 
 // artifacts/api-server/src/lib/redis.ts
@@ -61477,7 +61460,7 @@ function envBool(key, fallback) {
 function envStr(key, fallback) {
   return process.env[key]?.trim() || fallback;
 }
-var isProduction2 = process.env.NODE_ENV === "production";
+var isProduction = process.env.NODE_ENV === "production";
 var securityConfig = {
   /** Global rate limit — requests per minute per IP */
   rateLimitGlobal: envInt("RATE_LIMIT_GLOBAL", 120),
@@ -61494,11 +61477,11 @@ var securityConfig = {
   /** Maximum request body size (Express body-parser format, e.g. "1mb") */
   bodySizeLimit: envStr("BODY_SIZE_LIMIT", "1mb"),
   /** Whether to enable HSTS header (default: true in production) */
-  hstsEnabled: envBool("HSTS_ENABLED", isProduction2),
+  hstsEnabled: envBool("HSTS_ENABLED", isProduction),
   /** HSTS max-age in seconds (default: 1 year) */
   hstsMaxAge: envInt("HSTS_MAX_AGE", 31536e3),
   /** Whether to enable Content-Security-Policy header (default: true in production) */
-  cspEnabled: envBool("CSP_ENABLED", isProduction2),
+  cspEnabled: envBool("CSP_ENABLED", isProduction),
   /** Session TTL in days */
   sessionTtlDays: envInt("SESSION_TTL_DAYS", 30),
   /** Session TTL in milliseconds (derived) */
@@ -64116,7 +64099,7 @@ async function getTransporter() {
   const smtpFrom = envFrom || settings?.smtpFrom || `${shopName} <${smtpUser}>`;
   let transporter;
   if (smtpUser && smtpPass && smtpHost) {
-    const isProduction3 = process.env.NODE_ENV === "production";
+    const isProduction2 = process.env.NODE_ENV === "production";
     transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
@@ -64126,7 +64109,7 @@ async function getTransporter() {
         pass: smtpPass
       },
       tls: {
-        rejectUnauthorized: isProduction3
+        rejectUnauthorized: isProduction2
         // enforce cert validation in production
       }
     });
@@ -67587,7 +67570,7 @@ var AppError = class extends Error {
 };
 var globalErrorHandler = (err, req, res, _next) => {
   const requestId = req.id ?? "unknown";
-  const isProduction3 = process.env.NODE_ENV === "production";
+  const isProduction2 = process.env.NODE_ENV === "production";
   if (err instanceof ZodError) {
     const details = err.errors.map((e) => ({
       path: e.path.join("."),
@@ -67627,7 +67610,7 @@ var globalErrorHandler = (err, req, res, _next) => {
     error: {
       code: "INTERNAL_ERROR",
       message: err?.message ?? "An unexpected error occurred. Please try again later.",
-      ...isProduction3 ? {} : { stack: err?.stack }
+      ...isProduction2 ? {} : { stack: err?.stack }
     },
     requestId
   });
