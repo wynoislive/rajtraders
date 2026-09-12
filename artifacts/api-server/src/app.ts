@@ -71,7 +71,21 @@ if (process.env.CLERK_SECRET_KEY) {
 app.use(express.json({ limit: securityConfig.bodySizeLimit }));
 app.use(express.urlencoded({ limit: securityConfig.bodySizeLimit, extended: true }));
 
-// ── API routes ──────────────────────────────────────────────
+// ── Root & API routes ───────────────────────────────────────
+app.get("/", (_req, res) => {
+  res.json({
+    status: "ok",
+    service: "RAJ TRADERS API Server",
+    version: "1.0.0",
+    endpoints: {
+      health: "/api/health",
+      auth: "/api/v1/auth",
+      checkout: "/api/v1/checkout",
+      admin: "/api/v1/admin",
+    },
+  });
+});
+
 app.use("/api", router);
 
 // ── Global error handler (MUST be last) ─────────────────────
