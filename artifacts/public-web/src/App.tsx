@@ -48,7 +48,8 @@ export default function App() {
   const [cart, setCart] = useState<Array<{ product: any; quantity: number }>>([]);
   const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot_password' | 'reset_password'>('login');
+  const [resetToken, setResetToken] = useState('');
 
   // Customer Auth Session
   const [user, setUser] = useState<any>(() => {
@@ -72,6 +73,20 @@ export default function App() {
     }
     return () => clearInterval(timer);
   }, [otpRequired, resendCooldown]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlToken = searchParams.get('token');
+      const urlEmail = searchParams.get('email');
+      if (urlToken || window.location.pathname.startsWith('/reset-password')) {
+        setShowAuthModal(true);
+        setAuthMode('reset_password');
+        if (urlEmail) setPendingEmail(urlEmail);
+        if (urlToken) setResetToken(urlToken);
+      }
+    }
+  }, []);
 
   // Shipping & Checkout
   const [shippingAddress, setShippingAddress] = useState(`PIN: ${pincode}, ${city}`);
@@ -282,6 +297,66 @@ export default function App() {
         setAuthError(data.error || 'Failed to resend code.');
       }
     } catch (err) {
+      setAuthError('Server connection error.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: any) => {
+    e.preventDefault();
+    const email = e.target.email.value;
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await fetch(getApiUrl('/api/v1/auth/forgot-password'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPendingEmail(email);
+        setAuthMode('reset_password');
+        setAuthError(null);
+        alert(`A 60-minute password reset link and OTP token code have been sent to ${email}`);
+      } else {
+        setAuthError(data.error || 'Failed to request password recovery.');
+      }
+    } catch {
+      setAuthError('Server connection error.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: any) => {
+    e.preventDefault();
+    const email = e.target.email.value;
+    const token = e.target.token.value;
+    const newPassword = e.target.newPassword.value;
+    const confirmPassword = e.target.confirmPassword.value;
+    if (newPassword !== confirmPassword) {
+      setAuthError('Passwords do not match.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await fetch(getApiUrl('/api/v1/auth/reset-password'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, token, newPassword, confirmPassword }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAuthMode('login');
+        setAuthError(null);
+        alert('Password reset successful! You can now sign in with your new password.');
+      } else {
+        setAuthError(data.error || 'Failed to reset password. Please verify your token.');
+      }
+    } catch {
       setAuthError('Server connection error.');
     } finally {
       setAuthLoading(false);
@@ -667,7 +742,7 @@ export default function App() {
                     <ArrowLeft size={20} />
                   </button>
                 )}
-                <h2 className="text-xl font-black text-[#0E3D42]">{otpRequired ? 'Email Verification' : authMode === 'login' ? 'Sign In' : 'Create Account'}</h2>
+                <h2 className="text-xl font-black text-[#0E3D42]">{otpRequired ? 'Email Verification' : authMode === 'login' ? 'Sign In' : authMode === 'register' ? 'Create Account' : authMode === 'forgot_password' ? 'Forgot Password' : 'Reset Password'}</h2>
               </div>
               <button onClick={() => { setShowAuthModal(false); setOtpRequired(false); setAuthError(null); }} className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
             </div>
@@ -700,10 +775,51 @@ export default function App() {
             ) : authMode === 'login' ? (
               <form onSubmit={handleLogin} className="space-y-4">
                 <input required type="email" name="email" placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
-                <input required type="password" name="password" placeholder="Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                <div>
+                  <input required type="password" name="password" placeholder="Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                  <div className="flex justify-end mt-1.5">
+                    <button type="button" onClick={() => { setAuthMode('forgot_password'); setAuthError(null); }} className="text-xs font-extrabold text-[#0E3D42] hover:underline">
+                      Forgot Password?
+                    </button>
+                  </div>
+                </div>
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Signing in...' : 'Sign In'}</button>
                 <div className="text-center text-xs font-bold text-[#0E3D42]/70">
-                  Don't have an account? <button type="button" onClick={() => setAuthMode('register')} className="underline text-[#0E3D42]">Register</button>
+                  Don't have an account? <button type="button" onClick={() => { setAuthMode('register'); setAuthError(null); }} className="underline text-[#0E3D42]">Register</button>
+                </div>
+              </form>
+            ) : authMode === 'forgot_password' ? (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                  Enter your account email. We will send a 60-minute password reset link and OTP recovery token directly to your inbox.
+                </p>
+                <input required type="email" name="email" defaultValue={pendingEmail} placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">
+                  {authLoading ? 'Sending Reset Link...' : 'Send Reset Link & OTP Token'}
+                </button>
+                <div className="flex justify-between text-xs font-bold text-[#0E3D42]/70 pt-1">
+                  <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">
+                    Back to Sign In
+                  </button>
+                  <button type="button" onClick={() => { setAuthMode('reset_password'); setAuthError(null); }} className="underline text-[#0E3D42]">
+                    Have a Reset Token? Reset
+                  </button>
+                </div>
+              </form>
+            ) : authMode === 'reset_password' ? (
+              <form onSubmit={handleResetPassword} className="space-y-3">
+                <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                  Enter the reset code/token sent to your email along with your new password. (Token is valid for 60 minutes).
+                </p>
+                <input required type="email" name="email" defaultValue={pendingEmail} placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                <input required type="text" name="token" defaultValue={resetToken} placeholder="Reset Token / OTP Code (from Email)" autoComplete="off" className="w-full p-3 text-sm font-mono font-bold tracking-wide rounded-xl border border-gray-300" />
+                <input required type="password" name="newPassword" placeholder="New Password (min 6 chars)" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                <input required type="password" name="confirmPassword" placeholder="Confirm New Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">
+                  {authLoading ? 'Updating Password...' : 'Update Password'}
+                </button>
+                <div className="text-center text-xs font-bold text-[#0E3D42]/70 pt-1">
+                  Remembered your password? <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">Sign In</button>
                 </div>
               </form>
             ) : (
@@ -716,7 +832,7 @@ export default function App() {
                 <input required type="password" name="confirmPassword" placeholder="Confirm Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Registering...' : 'Register Account'}</button>
                 <div className="text-center text-xs font-bold text-[#0E3D42]/70">
-                  Already have an account? <button type="button" onClick={() => setAuthMode('login')} className="underline text-[#0E3D42]">Sign In</button>
+                  Already have an account? <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">Sign In</button>
                 </div>
               </form>
             )}
