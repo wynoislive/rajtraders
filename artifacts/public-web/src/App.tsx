@@ -58,11 +58,19 @@ export default function App() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('raj_token'));
 
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [otpRequired, setOtpRequired] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [resendCooldown, setResendCooldown] = useState(45);
+
+  // Toast Notification State
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => {
     let timer: any;
@@ -131,7 +139,7 @@ export default function App() {
   const handleCheckPincode = async (targetPin: string) => {
     const clean = targetPin.trim();
     if (!/^[1-9][0-9]{5}$/.test(clean)) {
-      alert('Please enter a valid 6-digit Indian PIN code.');
+      showToast('Please enter a valid 6-digit Indian PIN code.', 'error');
       return;
     }
     setPincodeChecking(true);
@@ -170,7 +178,7 @@ export default function App() {
   const shareProduct = (product: any) => {
     const url = `https://sundarvan.xyz/products/${product.slug}`;
     navigator.clipboard.writeText(url);
-    alert(`Product link copied to clipboard!\n${url}`);
+    showToast('Product link copied to clipboard!', 'success');
   };
 
   const handleLogin = async (e: any) => {
@@ -290,9 +298,9 @@ export default function App() {
       const data = await res.json();
       if (res.ok) {
         setAuthError(null);
+        setAuthSuccess(`New verification OTP code sent to ${pendingEmail}`);
         setOtpCode('');
         setResendCooldown(45);
-        alert(`New verification OTP code sent to ${pendingEmail}`);
       } else {
         setAuthError(data.error || 'Failed to resend code.');
       }
@@ -308,6 +316,7 @@ export default function App() {
     const email = e.target.email.value;
     setAuthLoading(true);
     setAuthError(null);
+    setAuthSuccess(null);
     try {
       const res = await fetch(getApiUrl('/api/v1/auth/forgot-password'), {
         method: 'POST',
@@ -319,7 +328,7 @@ export default function App() {
         setPendingEmail(email);
         setAuthMode('reset_password');
         setAuthError(null);
-        alert(`A 60-minute password reset link and OTP token code have been sent to ${email}`);
+        setAuthSuccess(`A 60-minute password reset link and OTP token code have been sent to ${email}`);
       } else {
         setAuthError(data.error || 'Failed to request password recovery.');
       }
@@ -342,6 +351,7 @@ export default function App() {
     }
     setAuthLoading(true);
     setAuthError(null);
+    setAuthSuccess(null);
     try {
       const res = await fetch(getApiUrl('/api/v1/auth/reset-password'), {
         method: 'POST',
@@ -352,7 +362,7 @@ export default function App() {
       if (res.ok && data.success) {
         setAuthMode('login');
         setAuthError(null);
-        alert('Password reset successful! You can now sign in with your new password.');
+        setAuthSuccess('Password reset successful! You can now sign in with your new password.');
       } else {
         setAuthError(data.error || 'Failed to reset password. Please verify your token.');
       }
@@ -385,7 +395,7 @@ export default function App() {
       return;
     }
     if (!shippingAddress || shippingAddress.length < 5) {
-      alert('Please enter a valid shipping address.');
+      showToast('Please enter a valid shipping address.', 'error');
       return;
     }
     setIsCheckingOut(true);
@@ -419,11 +429,12 @@ export default function App() {
         setReceipt(receiptData);
         setCart([]);
         setShowCartDrawer(false);
+        showToast('Order placed successfully!', 'success');
       } else {
-        alert(orderData.error || 'Failed to place order.');
+        showToast(orderData.error || 'Failed to place order.', 'error');
       }
     } catch (err: any) {
-      alert('Checkout error: ' + err.message);
+      showToast('Checkout error: ' + err.message, 'error');
     } finally {
       setIsCheckingOut(false);
     }
@@ -736,10 +747,11 @@ export default function App() {
                 )}
                 <h2 className="text-xl font-black text-[#0E3D42]">{otpRequired ? 'Email Verification' : authMode === 'login' ? 'Sign In' : authMode === 'register' ? 'Create Account' : authMode === 'forgot_password' ? 'Forgot Password' : 'Reset Password'}</h2>
               </div>
-              <button onClick={() => { setShowAuthModal(false); setOtpRequired(false); setAuthError(null); }} className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+              <button onClick={() => { setShowAuthModal(false); setOtpRequired(false); setAuthError(null); setAuthSuccess(null); }} className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
             </div>
 
-            {authError && <div className="p-3 bg-red-100 text-red-700 text-xs font-bold rounded-xl">{authError}</div>}
+            {authError && <div className="p-3 bg-red-100 text-red-700 text-xs font-bold rounded-xl border border-red-200">{authError}</div>}
+            {authSuccess && <div className="p-3 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200 flex items-center gap-2"><CheckCircle2 size={16} className="shrink-0" />{authSuccess}</div>}
 
             {otpRequired ? (
               <form onSubmit={handleVerifyOtp} className="space-y-4">
@@ -874,6 +886,17 @@ export default function App() {
             <button onClick={() => setReceipt(null)} className="w-full py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow">
               Continue Shopping
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modern Floating Toast Notification */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-50 animate-bounce-in max-w-sm">
+          <div className={`p-4 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs font-bold border transition-all ${toast.type === 'success' ? 'bg-[#0E3D42] text-white border-emerald-500/50' : toast.type === 'error' ? 'bg-red-900 text-white border-red-500/50' : 'bg-[#0E3D42] text-white border-[#E2A93B]/50'}`}>
+            <CheckCircle2 size={18} className={toast.type === 'success' ? 'text-emerald-400' : 'text-[#E2A93B]'} />
+            <span className="flex-1">{toast.message}</span>
+            <button onClick={() => setToast(null)} className="p-1 hover:bg-white/20 rounded-md transition"><X size={14} /></button>
           </div>
         </div>
       )}
