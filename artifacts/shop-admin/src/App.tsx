@@ -119,7 +119,7 @@ function Button({ children, variant = 'primary', className, ...props }: ButtonHT
         variant === 'primary' && 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-sm hover:-translate-y-0.5 hover:shadow-md active:translate-y-0',
         variant === 'quiet' && 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]',
         variant === 'outline' && 'border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
-        variant === 'danger' && 'border border-[hsl(var(--destructive)/.22)] bg-[hsl(var(--destructive)/.08)] text-[hsl(var(--destructive))] hover:bg-[hsl(var(--destructive)/.14)]',
+        variant === 'danger' && 'bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))] shadow-sm hover:-translate-y-0.5 hover:shadow-md active:translate-y-0',
         className,
       )}
     />
@@ -616,7 +616,7 @@ function Products() {
               This will remove the product from active storefront listings and update catalog inventory counts.
             </p>
             <div className="flex justify-end gap-2 border-t border-[hsl(var(--border))] pt-4">
-              <Button variant="quiet" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
               <Button variant="danger" onClick={confirmDelete}>Delete Product</Button>
             </div>
           </div>
