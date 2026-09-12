@@ -180,7 +180,9 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   smtp_user TEXT DEFAULT 'notifications.rajtraders@gmail.com',
   smtp_pass TEXT DEFAULT 'NOTIFICATIONS@RAJ',
   smtp_from TEXT DEFAULT 'RAJ TRADERS <notifications.rajtraders@gmail.com>',
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  hostinger_api_token TEXT DEFAULT '',
+  hostinger_mailbox_resource_id TEXT DEFAULT '',
+  updatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 INSERT INTO shop_settings (id, shop_name, shop_domain, shop_address, latitude, longitude, delivery_radius_km, is_delivery_enabled, razorpay_key_id, razorpay_key_secret, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
@@ -242,6 +244,8 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS support_email TEXT DEFAULT 'support@sundarvan.xyz';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS contact_email TEXT DEFAULT 'contact@sundarvan.xyz';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS orders_email TEXT DEFAULT 'orders@sundarvan.xyz';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS hostinger_api_token TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS hostinger_mailbox_resource_id TEXT DEFAULT '';
 
 `;
 
@@ -263,6 +267,8 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
   if (process.env.SUPPORT_EMAIL) updates.supportEmail = process.env.SUPPORT_EMAIL;
   if (process.env.CONTACT_EMAIL) updates.contactEmail = process.env.CONTACT_EMAIL;
   if (process.env.ORDERS_EMAIL) updates.ordersEmail = process.env.ORDERS_EMAIL;
+  if (process.env.HOSTINGER_API_TOKEN) updates.hostingerApiToken = process.env.HOSTINGER_API_TOKEN;
+  if (process.env.HOSTINGER_MAILBOX_RESOURCE_ID) updates.hostingerMailboxResourceId = process.env.HOSTINGER_MAILBOX_RESOURCE_ID;
   if (process.env.R2_ACCOUNT_ID) updates.r2AccountId = process.env.R2_ACCOUNT_ID;
   if (process.env.R2_ACCESS_KEY_ID) updates.r2AccessKeyId = process.env.R2_ACCESS_KEY_ID;
   if (process.env.R2_SECRET_ACCESS_KEY) updates.r2SecretAccessKey = process.env.R2_SECRET_ACCESS_KEY;

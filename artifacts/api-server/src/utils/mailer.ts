@@ -80,62 +80,93 @@ async function sendViaHostingerApi(
   to: string,
   subject: string,
   htmlContent: string,
-): Promise<{ success: boolean }> {
-  const apiToken = process.env.HOSTINGER_API_TOKEN;
-  const senderEmail = process.env.HOSTINGER_SENDER_EMAIL;
-
-  if (!apiToken || !senderEmail) return { success: false };
-
+): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch("https://api.mail.hostinger.com/api/v1/emails", {
+    const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+    const apiToken = settings?.hostingerApiToken || process.env.HOSTINGER_API_TOKEN;
+    let resourceId = settings?.hostingerMailboxResourceId || process.env.HOSTINGER_MAILBOX_RESOURCE_ID;
+    const shopName = settings?.shopName || process.env.SHOP_NAME || "RAJ TRADERS";
+    const senderEmail = settings?.smtpUser || process.env.SMTP_USER || "wyno@justbuyme.in";
+
+    if (!apiToken) {
+      return { success: false, error: "Hostinger API token not configured" };
+    }
+
+    // Auto-discover resourceId from /api/v1/me if missing
+    if (!resourceId) {
+      try {
+        const meRes = await fetch("https://api.mail.hostinger.com/api/v1/me", {
+          headers: { "Authorization": `Bearer ${apiToken}` }
+        });
+        if (meRes.ok) {
+          const meData = await meRes.json() as any;
+          const mailboxes = meData?.data?.mailboxes || [];
+          const match = mailboxes.find((m: any) => m.address?.toLowerCase() === senderEmail.toLowerCase()) || mailboxes[0];
+          if (match?.resourceId) {
+            resourceId = match.resourceId;
+            logger.info({ resourceId, address: match.address }, "Auto-discovered Hostinger Mailbox Resource ID");
+          }
+        }
+      } catch (e) {
+        logger.warn({ err: e }, "Failed to auto-discover Hostinger Mailbox Resource ID");
+      }
+    }
+
+    if (!resourceId) {
+      return { success: false, error: "Mailbox Resource ID could not be determined" };
+    }
+
+    const response = await fetch(`https://api.mail.hostinger.com/api/v1/mailboxes/${resourceId}/send`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: { email: senderEmail, name: process.env.SHOP_NAME || "RAJ TRADERS" },
-        to: [{ email: to }],
+        to: [to],
+        displayName: shopName,
         subject,
         html: htmlContent,
       }),
     });
 
-    if (response.ok) {
-      logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Hostinger API");
+    if (response.status === 204 || response.ok) {
+      logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Hostinger REST API");
       return { success: true };
     }
 
     const errText = await response.text();
-    logger.warn({ to, status: response.status, errText }, "Hostinger API email failed, falling back to SMTP");
-    return { success: false };
-  } catch (err) {
-    logger.warn({ err, to }, "Hostinger API error, falling back to SMTP");
-    return { success: false };
+    logger.warn({ to, status: response.status, errText }, "Hostinger REST API failed, falling back to SMTP");
+    return { success: false, error: `Hostinger API ${response.status}: ${errText}` };
+  } catch (err: any) {
+    logger.warn({ err, to }, "Hostinger REST API error, falling back to SMTP");
+    return { success: false, error: err.message || "Hostinger API Exception" };
   }
 }
 
 // ── Shared email sending logic (Hostinger → SMTP fallback) ──
 
-async function sendEmail(
+export async function sendEmail(
   to: string,
   subject: string,
   htmlContent: string,
-): Promise<{ success: boolean; previewUrl?: string }> {
+): Promise<{ success: boolean; provider?: "hostinger_rest" | "smtp"; previewUrl?: string; error?: string }> {
   // Try Hostinger API first
   const hostingerResult = await sendViaHostingerApi(to, subject, htmlContent);
-  if (hostingerResult.success) return { success: true };
+  if (hostingerResult.success) {
+    return { success: true, provider: "hostinger_rest" };
+  }
 
   // Fall back to Nodemailer SMTP
   try {
     const { transporter, from } = await getTransporter();
     const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
     const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
-    logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via SMTP");
-    return { success: true, previewUrl: previewUrl ? previewUrl.toString() : undefined };
-  } catch (err) {
+    logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Nodemailer SMTP");
+    return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : undefined };
+  } catch (err: any) {
     logger.error({ err, to }, "SMTP email send failed");
-    return { success: false };
+    return { success: false, error: err.message || "SMTP Send Failed", hostingerError: hostingerResult.error } as any;
   }
 }
 

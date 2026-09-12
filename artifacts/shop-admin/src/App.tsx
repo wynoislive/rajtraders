@@ -1289,9 +1289,33 @@ function StoreSettings() {
     supportEmail: 'support@sundarvan.xyz',
     contactEmail: 'contact@sundarvan.xyz',
     ordersEmail: 'orders@sundarvan.xyz',
+    hostingerApiToken: '',
+    hostingerMailboxResourceId: '',
   });
 
   const [showSecret, setShowSecret] = useState(false);
+  const [testRecipient, setTestRecipient] = useState('dcwynolive@gmail.com');
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState<{ success?: boolean; provider?: string; error?: string; hostingerError?: string } | null>(null);
+
+  const handleSendTestEmail = async () => {
+    if (!testRecipient) return;
+    setTestingEmail(true);
+    setTestEmailResult(null);
+    try {
+      const res = await fetch(getApiUrl('/api/v1/admin/test-email'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toEmail: testRecipient }),
+      });
+      const data = await res.json();
+      setTestEmailResult(data);
+    } catch (e: any) {
+      setTestEmailResult({ success: false, error: 'Network error while triggering test email.' });
+    } finally {
+      setTestingEmail(false);
+    }
+  };
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -1474,23 +1498,47 @@ function StoreSettings() {
             </div>
           </div>
 
-          {/* Hostinger SMTP & Multi-Mailbox Settings */}
+          {/* Hostinger REST API, SMTP & Multi-Mailbox Settings */}
           <div className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-6 space-y-6">
             <div className="flex items-center justify-between border-b pb-4 border-[hsl(var(--border))]">
               <div className="flex items-center gap-3">
                 <div className="flex size-9 items-center justify-center rounded-xl bg-[hsl(148_37%_43%/.13)] text-[hsl(148_37%_32%)]"><Mail size={20} /></div>
                 <div>
-                  <h3 className="text-base font-extrabold">Hostinger Email & Multi-Mailbox Management</h3>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Configure outbound SMTP transport (wyno@justbuyme.in) and dedicated mailboxes for support, contact, and orders.</p>
+                  <h3 className="text-base font-extrabold">Hostinger Mail Gateway & Multi-Mailbox System</h3>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Primary HTTPS REST API delivery with fallback to Nodemailer SMTP, and multi-mailbox address routing.</p>
                 </div>
               </div>
               <button type="button" onClick={() => setShowSecret(!showSecret)} className="text-xs font-bold text-[#0E3D42] hover:underline">
-                {showSecret ? 'Hide Password' : 'Show Password'}
+                {showSecret ? 'Hide Secrets' : 'Show Secrets'}
               </button>
             </div>
 
+            {/* 1. Hostinger REST API (Primary HTTPS Transport) */}
             <div>
-              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">1. Outbound SMTP Server & Authentication (wyno@justbuyme.in)</h4>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="rounded bg-[hsl(148_37%_43%/.2)] px-2 py-0.5 text-[10px] font-black uppercase text-[hsl(148_37%_32%)]">Primary Transport</span>
+                <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)]">1. Hostinger REST Mail API Credentials (HTTPS Port 445 Bypass)</h4>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Hostinger API Bearer Token</label>
+                  <input type={showSecret ? 'text' : 'password'} value={form.hostingerApiToken} onChange={(e) => setForm({ ...form, hostingerApiToken: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="Paste Hostinger Panel API Token" />
+                  <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Generated in Hostinger Panel → Email → API Tokens.</p>
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Mailbox Resource ID (Optional)</label>
+                  <input type="text" value={form.hostingerMailboxResourceId} onChange={(e) => setForm({ ...form, hostingerMailboxResourceId: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="e.g. AC1a2b3c4d5e6f7g (Auto-discovered if left blank)" />
+                  <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Auto-discovered via GET /api/v1/me for wyno@justbuyme.in if empty.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Nodemailer Hostinger SMTP (Secondary Transport) */}
+            <div className="pt-4 border-t border-[hsl(var(--border))]">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="rounded bg-[hsl(var(--secondary)/.3)] px-2 py-0.5 text-[10px] font-black uppercase text-[hsl(32_73%_31%)]">Secondary Fallback</span>
+                <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)]">2. Outbound Nodemailer SMTP Configuration (wyno@justbuyme.in)</h4>
+              </div>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP Host</label>
@@ -1505,7 +1553,7 @@ function StoreSettings() {
                   <input type="text" value={form.smtpFrom} onChange={(e) => setForm({ ...form, smtpFrom: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm" placeholder="RAJ TRADERS <wyno@justbuyme.in>" />
                 </div>
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP Mailbox Email</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Sender Mailbox Email</label>
                   <input type="email" value={form.smtpUser} onChange={(e) => setForm({ ...form, smtpUser: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="wyno@justbuyme.in" />
                 </div>
                 <div>
@@ -1515,8 +1563,9 @@ function StoreSettings() {
               </div>
             </div>
 
+            {/* 3. Multi-Mailbox Routing */}
             <div className="pt-4 border-t border-[hsl(var(--border))]">
-              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">2. Dedicated Business Mailboxes</h4>
+              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">3. Dedicated Business Mailboxes</h4>
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Customer Support Email</label>
@@ -1530,6 +1579,45 @@ function StoreSettings() {
                   <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Orders & Invoices Email</label>
                   <input type="email" value={form.ordersEmail} onChange={(e) => setForm({ ...form, ordersEmail: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="orders@sundarvan.xyz" />
                 </div>
+              </div>
+            </div>
+
+            {/* 4. Live 1-Click Test Email Diagnostics */}
+            <div className="pt-4 border-t border-[hsl(var(--border))]">
+              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">4. 1-Click Live Email Gateway Tester</h4>
+              <div className="rounded-xl bg-[hsl(var(--background))] p-4 border border-[hsl(var(--border))] space-y-3">
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Send a test email to verify live delivery via Hostinger REST API / SMTP.</p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="email"
+                    value={testRecipient}
+                    onChange={(e) => setTestRecipient(e.target.value)}
+                    className="flex-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-sm font-mono"
+                    placeholder="dcwynolive@gmail.com"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendTestEmail}
+                    disabled={testingEmail || !testRecipient}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E3D42] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#0A2E32] disabled:opacity-50 transition-colors"
+                  >
+                    <Mail size={16} className={testingEmail ? 'animate-spin' : ''} />
+                    {testingEmail ? 'Sending Test Email...' : 'Send Live Test Email'}
+                  </button>
+                </div>
+
+                {testEmailResult && (
+                  <div className={`mt-3 rounded-xl p-3.5 text-xs font-mono border ${testEmailResult.success ? 'bg-[hsl(148_37%_43%/.1)] border-[hsl(148_37%_43%/.3)] text-[hsl(148_37%_25%)]' : 'bg-[hsl(var(--destructive)/.1)] border-[hsl(var(--destructive)/.3)] text-[hsl(var(--destructive))]'}`}>
+                    <div className="font-bold text-sm mb-1">
+                      {testEmailResult.success ? '✅ Test Email Delivered Successfully!' : '❌ Test Email Delivery Failed'}
+                    </div>
+                    {testEmailResult.provider && (
+                      <p>Transport Provider: <strong>{testEmailResult.provider === 'hostinger_rest' ? 'Hostinger REST API (Primary)' : 'Nodemailer SMTP (Secondary Fallback)'}</strong></p>
+                    )}
+                    {testEmailResult.error && <p className="mt-1">Error: {testEmailResult.error}</p>}
+                    {testEmailResult.hostingerError && <p className="mt-1">Hostinger REST Error: {testEmailResult.hostingerError}</p>}
+                  </div>
+                )}
               </div>
             </div>
           </div>

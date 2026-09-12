@@ -27,6 +27,9 @@ export const shopSettingsTable = pgTable("shop_settings", {
   supportEmail: text("support_email").default("support@sundarvan.xyz"),
   contactEmail: text("contact_email").default("contact@sundarvan.xyz"),
   ordersEmail: text("orders_email").default("orders@sundarvan.xyz"),
+  // Hostinger Mail REST API Config (Primary HTTPS Sender)
+  hostingerApiToken: text("hostinger_api_token").default(""),
+  hostingerMailboxResourceId: text("hostinger_mailbox_resource_id").default(""),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
