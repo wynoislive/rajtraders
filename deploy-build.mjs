@@ -88,17 +88,18 @@ execSync("npm install --omit=dev --ignore-scripts", {
   stdio: "inherit",
 });
 
-// ── Step 4: Build Admin Console (Static) ─────────────────────
-console.log("4️⃣  Building Admin Console (static files for Cloudflare Pages)...");
+// ── Step 4: Build Public Web Storefront & Admin Console ─────
+console.log("4️⃣  Building Public Web Storefront & Admin Console...");
 try {
-  const shopAdminDir = path.join(ROOT, "artifacts/shop-admin");
-  const targetAdminDir = path.join(DEPLOY_DIR, "admin");
-  execSync(`npx vite build --outDir "${targetAdminDir}"`, {
-    cwd: shopAdminDir,
-    stdio: "inherit",
-  });
+  mkdirSync(path.join(DEPLOY_DIR, "web"), { recursive: true });
+  execSync("pnpm --filter @workspace/public-web build", { cwd: ROOT, stdio: "inherit" });
+  cpSync(path.join(ROOT, "artifacts/public-web/dist/public"), path.join(DEPLOY_DIR, "web"), { recursive: true });
+
+  mkdirSync(path.join(DEPLOY_DIR, "admin"), { recursive: true });
+  execSync("pnpm --filter @workspace/shop-admin build", { cwd: ROOT, stdio: "inherit" });
+  cpSync(path.join(ROOT, "artifacts/shop-admin/dist/public"), path.join(DEPLOY_DIR, "admin"), { recursive: true });
 } catch (e) {
-  console.warn("⚠️  Admin console build failed:", e.message);
+  console.warn("⚠️  Frontend builds failed:", e.message);
 }
 
 // ── Step 5: Create deployment README ─────────────────────────

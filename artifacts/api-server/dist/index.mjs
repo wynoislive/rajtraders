@@ -67704,8 +67704,10 @@ app.get("/", (_req, res) => {
   });
 });
 app.use("/api", routes_default);
-var staticPath = path.resolve(__dirname, "../../shop-admin/dist/public");
-if (fs.existsSync(staticPath)) {
+var publicWebPath = path.resolve(__dirname, "../../public-web/dist/public");
+var adminPath = path.resolve(__dirname, "../../shop-admin/dist/public");
+var staticPath = fs.existsSync(publicWebPath) ? publicWebPath : fs.existsSync(adminPath) ? adminPath : null;
+if (staticPath) {
   app.use(import_express12.default.static(staticPath));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api") || req.path.startsWith("/v1") || req.path.startsWith("/health")) {
