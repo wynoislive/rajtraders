@@ -263,7 +263,7 @@ if (process.env.DATABASE_URL) {
     process.env.NOW_REGION ||
     process.env.NODE_ENV === "production"
   );
-  const dataDir = isServerless ? "memory://" : path.resolve(process.cwd(), ".local-db");
+  const dataDir = isServerless ? path.resolve("/tmp", ".local-db") : path.resolve(process.cwd(), ".local-db");
   pgliteInstance = new PGlite(dataDir);
   dbInstance = drizzlePglite(pgliteInstance, { schema });
 }
