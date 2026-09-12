@@ -17,12 +17,16 @@ export const shopSettingsTable = pgTable("shop_settings", {
   r2SecretAccessKey: text("r2_secret_access_key").default(""),
   r2BucketName: text("r2_bucket_name").default("rajtraders-products"),
   r2PublicUrl: text("r2_public_url").default("https://pub-r2.rajtraders.shop"),
-  // Nodemailer SMTP Config (Gmail Default, Admin-Configurable)
-  smtpHost: text("smtp_host").default("smtp.gmail.com"),
+  // Nodemailer Hostinger SMTP Config & Multi-Mailbox Setup
+  smtpHost: text("smtp_host").default("smtp.hostinger.com"),
   smtpPort: integer("smtp_port").default(465),
-  smtpUser: text("smtp_user").default("notifications.rajtraders@gmail.com"),
-  smtpPass: text("smtp_pass").default("NOTIFICATIONS@RAJ"),
-  smtpFrom: text("smtp_from").default("RAJ TRADERS <notifications.rajtraders@gmail.com>"),
+  smtpUser: text("smtp_user").default("wyno@justbuyme.in"),
+  smtpPass: text("smtp_pass").default(""),
+  smtpFrom: text("smtp_from").default("RAJ TRADERS <wyno@justbuyme.in>"),
+  // Multi-Mailbox Addresses (Admin Configurable)
+  supportEmail: text("support_email").default("support@sundarvan.xyz"),
+  contactEmail: text("contact_email").default("contact@sundarvan.xyz"),
+  ordersEmail: text("orders_email").default("orders@sundarvan.xyz"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

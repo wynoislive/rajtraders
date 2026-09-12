@@ -123610,12 +123610,16 @@ var shopSettingsTable = pgTable("shop_settings", {
   r2SecretAccessKey: text("r2_secret_access_key").default(""),
   r2BucketName: text("r2_bucket_name").default("rajtraders-products"),
   r2PublicUrl: text("r2_public_url").default("https://pub-r2.rajtraders.shop"),
-  // Nodemailer SMTP Config (Gmail Default, Admin-Configurable)
-  smtpHost: text("smtp_host").default("smtp.gmail.com"),
+  // Nodemailer Hostinger SMTP Config & Multi-Mailbox Setup
+  smtpHost: text("smtp_host").default("smtp.hostinger.com"),
   smtpPort: integer("smtp_port").default(465),
-  smtpUser: text("smtp_user").default("notifications.rajtraders@gmail.com"),
-  smtpPass: text("smtp_pass").default("NOTIFICATIONS@RAJ"),
-  smtpFrom: text("smtp_from").default("RAJ TRADERS <notifications.rajtraders@gmail.com>"),
+  smtpUser: text("smtp_user").default("wyno@justbuyme.in"),
+  smtpPass: text("smtp_pass").default(""),
+  smtpFrom: text("smtp_from").default("RAJ TRADERS <wyno@justbuyme.in>"),
+  // Multi-Mailbox Addresses (Admin Configurable)
+  supportEmail: text("support_email").default("support@sundarvan.xyz"),
+  contactEmail: text("contact_email").default("contact@sundarvan.xyz"),
+  ordersEmail: text("orders_email").default("orders@sundarvan.xyz"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -123946,6 +123950,9 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFA
 ALTER TABLE products ADD COLUMN IF NOT EXISTS submitted_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS approved_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS support_email TEXT DEFAULT 'support@sundarvan.xyz';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS contact_email TEXT DEFAULT 'contact@sundarvan.xyz';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS orders_email TEXT DEFAULT 'orders@sundarvan.xyz';
 
 `;
 async function syncEnvToShopSettings(db2) {
@@ -123957,6 +123964,9 @@ async function syncEnvToShopSettings(db2) {
   if (process.env.SMTP_USER) updates.smtpUser = process.env.SMTP_USER;
   if (process.env.SMTP_PASS) updates.smtpPass = process.env.SMTP_PASS;
   if (process.env.SMTP_FROM) updates.smtpFrom = process.env.SMTP_FROM;
+  if (process.env.SUPPORT_EMAIL) updates.supportEmail = process.env.SUPPORT_EMAIL;
+  if (process.env.CONTACT_EMAIL) updates.contactEmail = process.env.CONTACT_EMAIL;
+  if (process.env.ORDERS_EMAIL) updates.ordersEmail = process.env.ORDERS_EMAIL;
   if (process.env.R2_ACCOUNT_ID) updates.r2AccountId = process.env.R2_ACCOUNT_ID;
   if (process.env.R2_ACCESS_KEY_ID) updates.r2AccessKeyId = process.env.R2_ACCESS_KEY_ID;
   if (process.env.R2_SECRET_ACCESS_KEY) updates.r2SecretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
@@ -126364,6 +126374,300 @@ function filterOrders(orders, query) {
   );
 }
 
+// src/utils/mailer.ts
+var import_nodemailer = __toESM(require_nodemailer(), 1);
+
+// src/lib/email-queue.ts
+var import_bullmq = __toESM(require_cjs(), 1);
+var emailQueueInstance = null;
+function getEmailQueue() {
+  if (emailQueueInstance) return emailQueueInstance;
+  const redis = getRedisClient();
+  if (!redis) {
+    logger2.warn("Redis unavailable \u2014 email queue disabled, emails will be sent synchronously");
+    return null;
+  }
+  try {
+    emailQueueInstance = new import_bullmq.Queue("email", {
+      connection: {
+        host: redis.options.host,
+        port: redis.options.port,
+        password: redis.options.password,
+        username: redis.options.username ?? "default",
+        tls: redis.options.tls ? {} : void 0
+      },
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: "exponential",
+          delay: 1e3
+          // 1s → 4s → 16s
+        },
+        removeOnComplete: { count: 100 },
+        // keep last 100 completed
+        removeOnFail: { count: 500 }
+        // keep last 500 failed for inspection
+      }
+    });
+    logger2.info("BullMQ email queue initialised");
+    return emailQueueInstance;
+  } catch (err) {
+    logger2.error({ err }, "Failed to create BullMQ email queue");
+    return null;
+  }
+}
+async function enqueueEmail(data) {
+  const queue = getEmailQueue();
+  if (!queue) return false;
+  try {
+    await queue.add(data.type, data, {
+      jobId: `${data.type}_${data.to}_${Date.now()}`
+    });
+    logger2.info({ type: data.type, to: data.to }, "Email job enqueued");
+    return true;
+  } catch (err) {
+    logger2.error({ err, type: data.type, to: data.to }, "Failed to enqueue email job");
+    return false;
+  }
+}
+
+// src/utils/mailer.ts
+var testAccountCache = null;
+var transporterCache = null;
+function clearTransporterCache() {
+  transporterCache = null;
+}
+async function getTransporter() {
+  if (transporterCache) return transporterCache;
+  const envHost = process.env.SMTP_HOST;
+  const envUser = process.env.SMTP_USER;
+  const envPass = process.env.SMTP_PASS;
+  const envPort = parseInt(process.env.SMTP_PORT || "587", 10);
+  const envFrom = process.env.SMTP_FROM || "";
+  const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+  const shopName = settings?.shopName || process.env.SHOP_NAME || "My Shop";
+  const smtpHost = envHost || settings?.smtpHost || "smtp.hostinger.com";
+  const smtpUser = envUser || settings?.smtpUser || "";
+  const smtpPass = envPass || settings?.smtpPass || "";
+  const smtpPort = envPort !== void 0 ? envPort : settings?.smtpPort || 465;
+  const smtpFrom = envFrom || settings?.smtpFrom || `${shopName} <${smtpUser}>`;
+  let transporter;
+  if (smtpUser && smtpPass && smtpHost) {
+    const isProduction2 = process.env.NODE_ENV === "production";
+    transporter = import_nodemailer.default.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      },
+      tls: {
+        rejectUnauthorized: isProduction2
+        // enforce cert validation in production
+      }
+    });
+  } else {
+    try {
+      if (!testAccountCache) {
+        testAccountCache = await import_nodemailer.default.createTestAccount();
+      }
+      transporter = import_nodemailer.default.createTransport({
+        host: "smtp.ethereal.email",
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccountCache.user,
+          pass: testAccountCache.pass
+        }
+      });
+    } catch (e) {
+      logger2.warn({ err: e }, "Ethereal test transport creation failed, falling back to JSON logger transport");
+      transporter = import_nodemailer.default.createTransport({
+        jsonTransport: true
+      });
+    }
+  }
+  transporterCache = { transporter, from: smtpFrom, shopName };
+  return transporterCache;
+}
+async function sendViaHostingerApi(to, subject, htmlContent) {
+  const apiToken = process.env.HOSTINGER_API_TOKEN;
+  const senderEmail = process.env.HOSTINGER_SENDER_EMAIL;
+  if (!apiToken || !senderEmail) return { success: false };
+  try {
+    const response = await fetch("https://api.mail.hostinger.com/api/v1/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: { email: senderEmail, name: process.env.SHOP_NAME || "RAJ TRADERS" },
+        to: [{ email: to }],
+        subject,
+        html: htmlContent
+      })
+    });
+    if (response.ok) {
+      logger2.info({ to, subject: subject.slice(0, 50) }, "Email sent via Hostinger API");
+      return { success: true };
+    }
+    const errText = await response.text();
+    logger2.warn({ to, status: response.status, errText }, "Hostinger API email failed, falling back to SMTP");
+    return { success: false };
+  } catch (err) {
+    logger2.warn({ err, to }, "Hostinger API error, falling back to SMTP");
+    return { success: false };
+  }
+}
+async function sendEmail(to, subject, htmlContent) {
+  const hostingerResult = await sendViaHostingerApi(to, subject, htmlContent);
+  if (hostingerResult.success) return { success: true };
+  try {
+    const { transporter, from } = await getTransporter();
+    const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
+    const previewUrl = import_nodemailer.default.getTestMessageUrl(info) || void 0;
+    logger2.info({ to, subject: subject.slice(0, 50) }, "Email sent via SMTP");
+    return { success: true, previewUrl: previewUrl ? previewUrl.toString() : void 0 };
+  } catch (err) {
+    logger2.error({ err, to }, "SMTP email send failed");
+    return { success: false };
+  }
+}
+async function sendVerificationOtpEmail(toEmail, userName, otpCode) {
+  try {
+    const queued = await enqueueEmail({
+      type: "verification-otp",
+      to: toEmail,
+      userName,
+      otpCode
+    });
+    if (queued) return { success: true };
+    const { shopName } = await getTransporter();
+    const formattedCode = `${otpCode.slice(0, 3)} ${otpCode.slice(3)}`;
+    const subject = `Your ${shopName} Verification Code: ${otpCode} (Valid 10 mins)`;
+    const htmlContent = buildOtpHtml(shopName, userName, formattedCode);
+    return await sendEmail(toEmail, subject, htmlContent);
+  } catch (err) {
+    logger2.error({ err, toEmail }, "Failed to send verification OTP email");
+    return { success: false };
+  }
+}
+async function sendPasswordRecoveryEmail(toEmail, userName, resetToken, resetUrl) {
+  try {
+    const queued = await enqueueEmail({
+      type: "password-recovery",
+      to: toEmail,
+      userName,
+      resetToken,
+      resetUrl
+    });
+    if (queued) return { success: true };
+    const { shopName } = await getTransporter();
+    const subject = `Action Required: Reset your ${shopName} password (valid 60 mins)`;
+    const htmlContent = buildRecoveryHtml(shopName, userName, resetToken, resetUrl);
+    return await sendEmail(toEmail, subject, htmlContent);
+  } catch (err) {
+    logger2.error({ err, toEmail }, "Failed to send password recovery email");
+    return { success: false };
+  }
+}
+function buildOtpHtml(shopName, userName, formattedCode) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #F7F2EA; margin: 0; padding: 20px; }
+        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+        .header { background: #0E3D42; color: #ffffff; padding: 32px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; }
+        .content { padding: 32px 28px; color: #2D3748; line-height: 1.6; text-align: center; }
+        .otp-badge { display: inline-block; background: #FAF5EE; border: 2px dashed #0E3D42; color: #0E3D42; font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; padding: 18px 36px; border-radius: 12px; margin: 24px 0; }
+        .notice { font-size: 13px; color: #4A5568; margin-top: 15px; }
+        .footer { background: #FAF5EE; padding: 20px; text-align: center; font-size: 12px; color: #718096; border-top: 1px solid #E2E8F0; }
+        .warning { background: #FFFBEB; border-left: 4px solid #D97706; padding: 12px; margin-top: 24px; font-size: 13px; color: #92400E; text-align: left; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>${shopName}</h1>
+          <p style="margin: 6px 0 0; opacity: 0.8; font-size: 13px;">Wholesale & Retail Artisanal Goods</p>
+        </div>
+        <div class="content">
+          <h2 style="margin-top: 0; color: #0E3D42;">Your Verification Code</h2>
+          <p style="color: #4A5568;">Hello ${userName || "Valued Customer"},</p>
+          <p style="color: #4A5568;">Use the 6-digit verification code below to verify your ${shopName} account:</p>
+          <div class="otp-badge">${formattedCode}</div>
+          <p class="notice">This single-use code is valid for <strong>10 minutes</strong>.</p>
+          <div class="warning">
+            <strong>Security Notice:</strong><br>
+            \u2022 Never share this code with anyone. ${shopName} staff will never ask for your verification code.<br>
+            \u2022 If you did not attempt to log in, please reset your password immediately.
+          </div>
+        </div>
+        <div class="footer">
+          <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} ${shopName}. All rights reserved.</p>
+          <p>End-to-End Encrypted Login Security</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+function buildRecoveryHtml(shopName, userName, resetToken, resetUrl) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #F7F2EA; margin: 0; padding: 20px; }
+        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+        .header { background: #0E3D42; color: #ffffff; padding: 32px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; }
+        .content { padding: 32px 28px; color: #2D3748; line-height: 1.6; }
+        .button { display: inline-block; background: #0E3D42; color: #ffffff !important; padding: 14px 28px; border-radius: 10px; font-weight: bold; text-decoration: none; margin: 20px 0; font-size: 15px; }
+        .token-box { background: #F7F2EA; border: 1px dashed #0E3D42; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 14px; margin: 15px 0; text-align: center; word-break: break-all; }
+        .footer { background: #FAF5EE; padding: 20px; text-align: center; font-size: 12px; color: #718096; border-top: 1px solid #E2E8F0; }
+        .warning { background: #FFF5F5; border-left: 4px solid #E53E3E; padding: 12px; margin-top: 20px; font-size: 13px; color: #C53030; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>${shopName}</h1>
+          <p style="margin: 6px 0 0; opacity: 0.8; font-size: 13px;">Wholesale & Retail Artisanal Goods</p>
+        </div>
+        <div class="content">
+          <h2 style="margin-top: 0; color: #0E3D42;">Password Recovery Request</h2>
+          <p>Hello ${userName || "Valued Customer"},</p>
+          <p>We received a request to reset the password for your ${shopName} account. Click the button below to choose a new password:</p>
+          <div style="text-align: center;">
+            <a href="${resetUrl}" class="button">Reset My Password</a>
+          </div>
+          <p style="font-size: 13px; color: #4A5568;">Or use your secure reset code directly in the app:</p>
+          <div class="token-box">${resetToken}</div>
+          <div class="warning">
+            <strong>Important Security Details:</strong><br>
+            \u2022 This recovery link is valid for <strong>exactly 60 minutes</strong>.<br>
+            \u2022 Once used, a 15-minute security cooldown is enacted to protect your account against unauthorized requests.<br>
+            \u2022 If you did not request this, you can safely ignore this email.
+          </div>
+        </div>
+        <div class="footer">
+          <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} ${shopName}. All rights reserved.</p>
+          <p>End-to-End Encrypted Account Verification System</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
 // src/routes/admin.ts
 var router4 = (0, import_express5.Router)();
 router4.use("/v1/admin", requireAdmin);
@@ -126819,11 +127123,15 @@ router4.put("/v1/admin/shop-settings", async (req, res) => {
     if (r2BucketName !== void 0) updateData.r2BucketName = r2BucketName.trim();
     if (r2PublicUrl !== void 0) updateData.r2PublicUrl = r2PublicUrl.trim();
     if (smtpHost !== void 0) updateData.smtpHost = smtpHost.trim();
-    if (smtpPort !== void 0) updateData.smtpPort = Number(smtpPort) || 587;
+    if (smtpPort !== void 0) updateData.smtpPort = Number(smtpPort) || 465;
     if (smtpUser !== void 0) updateData.smtpUser = smtpUser.trim();
     if (smtpPass !== void 0) updateData.smtpPass = smtpPass.trim();
     if (smtpFrom !== void 0) updateData.smtpFrom = smtpFrom.trim();
+    if (req.body.supportEmail !== void 0) updateData.supportEmail = req.body.supportEmail.trim();
+    if (req.body.contactEmail !== void 0) updateData.contactEmail = req.body.contactEmail.trim();
+    if (req.body.ordersEmail !== void 0) updateData.ordersEmail = req.body.ordersEmail.trim();
     await db.update(shopSettingsTable).set(updateData).where(eq(shopSettingsTable.id, "default_shop"));
+    clearTransporterCache();
     const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     res.json({ success: true, settings: updated });
   } catch (err) {
@@ -126893,297 +127201,6 @@ function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
 // src/routes/customer-auth.ts
 var import_express6 = __toESM(require_express2(), 1);
 import { randomBytes as randomBytes5, scryptSync as scryptSync3, timingSafeEqual as timingSafeEqual5, randomUUID as randomUUID11, createHash as createHash2, randomInt as randomInt2 } from "node:crypto";
-
-// src/utils/mailer.ts
-var import_nodemailer = __toESM(require_nodemailer(), 1);
-
-// src/lib/email-queue.ts
-var import_bullmq = __toESM(require_cjs(), 1);
-var emailQueueInstance = null;
-function getEmailQueue() {
-  if (emailQueueInstance) return emailQueueInstance;
-  const redis = getRedisClient();
-  if (!redis) {
-    logger2.warn("Redis unavailable \u2014 email queue disabled, emails will be sent synchronously");
-    return null;
-  }
-  try {
-    emailQueueInstance = new import_bullmq.Queue("email", {
-      connection: {
-        host: redis.options.host,
-        port: redis.options.port,
-        password: redis.options.password,
-        username: redis.options.username ?? "default",
-        tls: redis.options.tls ? {} : void 0
-      },
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 1e3
-          // 1s → 4s → 16s
-        },
-        removeOnComplete: { count: 100 },
-        // keep last 100 completed
-        removeOnFail: { count: 500 }
-        // keep last 500 failed for inspection
-      }
-    });
-    logger2.info("BullMQ email queue initialised");
-    return emailQueueInstance;
-  } catch (err) {
-    logger2.error({ err }, "Failed to create BullMQ email queue");
-    return null;
-  }
-}
-async function enqueueEmail(data) {
-  const queue = getEmailQueue();
-  if (!queue) return false;
-  try {
-    await queue.add(data.type, data, {
-      jobId: `${data.type}_${data.to}_${Date.now()}`
-    });
-    logger2.info({ type: data.type, to: data.to }, "Email job enqueued");
-    return true;
-  } catch (err) {
-    logger2.error({ err, type: data.type, to: data.to }, "Failed to enqueue email job");
-    return false;
-  }
-}
-
-// src/utils/mailer.ts
-var testAccountCache = null;
-var transporterCache = null;
-async function getTransporter() {
-  if (transporterCache) return transporterCache;
-  const envHost = process.env.SMTP_HOST;
-  const envUser = process.env.SMTP_USER;
-  const envPass = process.env.SMTP_PASS;
-  const envPort = parseInt(process.env.SMTP_PORT || "587", 10);
-  const envFrom = process.env.SMTP_FROM || "";
-  const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-  const shopName = settings?.shopName || process.env.SHOP_NAME || "My Shop";
-  const smtpHost = envHost || settings?.smtpHost || "smtp.hostinger.com";
-  const smtpUser = envUser || settings?.smtpUser || "";
-  const smtpPass = envPass || settings?.smtpPass || "";
-  const smtpPort = envPort !== void 0 ? envPort : settings?.smtpPort || 465;
-  const smtpFrom = envFrom || settings?.smtpFrom || `${shopName} <${smtpUser}>`;
-  let transporter;
-  if (smtpUser && smtpPass && smtpHost) {
-    const isProduction2 = process.env.NODE_ENV === "production";
-    transporter = import_nodemailer.default.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      },
-      tls: {
-        rejectUnauthorized: isProduction2
-        // enforce cert validation in production
-      }
-    });
-  } else {
-    try {
-      if (!testAccountCache) {
-        testAccountCache = await import_nodemailer.default.createTestAccount();
-      }
-      transporter = import_nodemailer.default.createTransport({
-        host: "smtp.ethereal.email",
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccountCache.user,
-          pass: testAccountCache.pass
-        }
-      });
-    } catch (e) {
-      logger2.warn({ err: e }, "Ethereal test transport creation failed, falling back to JSON logger transport");
-      transporter = import_nodemailer.default.createTransport({
-        jsonTransport: true
-      });
-    }
-  }
-  transporterCache = { transporter, from: smtpFrom, shopName };
-  return transporterCache;
-}
-async function sendViaHostingerApi(to, subject, htmlContent) {
-  const apiToken = process.env.HOSTINGER_API_TOKEN;
-  const senderEmail = process.env.HOSTINGER_SENDER_EMAIL;
-  if (!apiToken || !senderEmail) return { success: false };
-  try {
-    const response = await fetch("https://api.mail.hostinger.com/api/v1/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiToken}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        from: { email: senderEmail, name: process.env.SHOP_NAME || "RAJ TRADERS" },
-        to: [{ email: to }],
-        subject,
-        html: htmlContent
-      })
-    });
-    if (response.ok) {
-      logger2.info({ to, subject: subject.slice(0, 50) }, "Email sent via Hostinger API");
-      return { success: true };
-    }
-    const errText = await response.text();
-    logger2.warn({ to, status: response.status, errText }, "Hostinger API email failed, falling back to SMTP");
-    return { success: false };
-  } catch (err) {
-    logger2.warn({ err, to }, "Hostinger API error, falling back to SMTP");
-    return { success: false };
-  }
-}
-async function sendEmail(to, subject, htmlContent) {
-  const hostingerResult = await sendViaHostingerApi(to, subject, htmlContent);
-  if (hostingerResult.success) return { success: true };
-  try {
-    const { transporter, from } = await getTransporter();
-    const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
-    const previewUrl = import_nodemailer.default.getTestMessageUrl(info) || void 0;
-    logger2.info({ to, subject: subject.slice(0, 50) }, "Email sent via SMTP");
-    return { success: true, previewUrl: previewUrl ? previewUrl.toString() : void 0 };
-  } catch (err) {
-    logger2.error({ err, to }, "SMTP email send failed");
-    return { success: false };
-  }
-}
-async function sendVerificationOtpEmail(toEmail, userName, otpCode) {
-  try {
-    const queued = await enqueueEmail({
-      type: "verification-otp",
-      to: toEmail,
-      userName,
-      otpCode
-    });
-    if (queued) return { success: true };
-    const { shopName } = await getTransporter();
-    const formattedCode = `${otpCode.slice(0, 3)} ${otpCode.slice(3)}`;
-    const subject = `Your ${shopName} Verification Code: ${otpCode} (Valid 10 mins)`;
-    const htmlContent = buildOtpHtml(shopName, userName, formattedCode);
-    return await sendEmail(toEmail, subject, htmlContent);
-  } catch (err) {
-    logger2.error({ err, toEmail }, "Failed to send verification OTP email");
-    return { success: false };
-  }
-}
-async function sendPasswordRecoveryEmail(toEmail, userName, resetToken, resetUrl) {
-  try {
-    const queued = await enqueueEmail({
-      type: "password-recovery",
-      to: toEmail,
-      userName,
-      resetToken,
-      resetUrl
-    });
-    if (queued) return { success: true };
-    const { shopName } = await getTransporter();
-    const subject = `Action Required: Reset your ${shopName} password (valid 60 mins)`;
-    const htmlContent = buildRecoveryHtml(shopName, userName, resetToken, resetUrl);
-    return await sendEmail(toEmail, subject, htmlContent);
-  } catch (err) {
-    logger2.error({ err, toEmail }, "Failed to send password recovery email");
-    return { success: false };
-  }
-}
-function buildOtpHtml(shopName, userName, formattedCode) {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #F7F2EA; margin: 0; padding: 20px; }
-        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
-        .header { background: #0E3D42; color: #ffffff; padding: 32px 24px; text-align: center; }
-        .header h1 { margin: 0; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; }
-        .content { padding: 32px 28px; color: #2D3748; line-height: 1.6; text-align: center; }
-        .otp-badge { display: inline-block; background: #FAF5EE; border: 2px dashed #0E3D42; color: #0E3D42; font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; padding: 18px 36px; border-radius: 12px; margin: 24px 0; }
-        .notice { font-size: 13px; color: #4A5568; margin-top: 15px; }
-        .footer { background: #FAF5EE; padding: 20px; text-align: center; font-size: 12px; color: #718096; border-top: 1px solid #E2E8F0; }
-        .warning { background: #FFFBEB; border-left: 4px solid #D97706; padding: 12px; margin-top: 24px; font-size: 13px; color: #92400E; text-align: left; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>${shopName}</h1>
-          <p style="margin: 6px 0 0; opacity: 0.8; font-size: 13px;">Wholesale & Retail Artisanal Goods</p>
-        </div>
-        <div class="content">
-          <h2 style="margin-top: 0; color: #0E3D42;">Your Verification Code</h2>
-          <p style="color: #4A5568;">Hello ${userName || "Valued Customer"},</p>
-          <p style="color: #4A5568;">Use the 6-digit verification code below to verify your ${shopName} account:</p>
-          <div class="otp-badge">${formattedCode}</div>
-          <p class="notice">This single-use code is valid for <strong>10 minutes</strong>.</p>
-          <div class="warning">
-            <strong>Security Notice:</strong><br>
-            \u2022 Never share this code with anyone. ${shopName} staff will never ask for your verification code.<br>
-            \u2022 If you did not attempt to log in, please reset your password immediately.
-          </div>
-        </div>
-        <div class="footer">
-          <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} ${shopName}. All rights reserved.</p>
-          <p>End-to-End Encrypted Login Security</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-}
-function buildRecoveryHtml(shopName, userName, resetToken, resetUrl) {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #F7F2EA; margin: 0; padding: 20px; }
-        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
-        .header { background: #0E3D42; color: #ffffff; padding: 32px 24px; text-align: center; }
-        .header h1 { margin: 0; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; }
-        .content { padding: 32px 28px; color: #2D3748; line-height: 1.6; }
-        .button { display: inline-block; background: #0E3D42; color: #ffffff !important; padding: 14px 28px; border-radius: 10px; font-weight: bold; text-decoration: none; margin: 20px 0; font-size: 15px; }
-        .token-box { background: #F7F2EA; border: 1px dashed #0E3D42; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 14px; margin: 15px 0; text-align: center; word-break: break-all; }
-        .footer { background: #FAF5EE; padding: 20px; text-align: center; font-size: 12px; color: #718096; border-top: 1px solid #E2E8F0; }
-        .warning { background: #FFF5F5; border-left: 4px solid #E53E3E; padding: 12px; margin-top: 20px; font-size: 13px; color: #C53030; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>${shopName}</h1>
-          <p style="margin: 6px 0 0; opacity: 0.8; font-size: 13px;">Wholesale & Retail Artisanal Goods</p>
-        </div>
-        <div class="content">
-          <h2 style="margin-top: 0; color: #0E3D42;">Password Recovery Request</h2>
-          <p>Hello ${userName || "Valued Customer"},</p>
-          <p>We received a request to reset the password for your ${shopName} account. Click the button below to choose a new password:</p>
-          <div style="text-align: center;">
-            <a href="${resetUrl}" class="button">Reset My Password</a>
-          </div>
-          <p style="font-size: 13px; color: #4A5568;">Or use your secure reset code directly in the app:</p>
-          <div class="token-box">${resetToken}</div>
-          <div class="warning">
-            <strong>Important Security Details:</strong><br>
-            \u2022 This recovery link is valid for <strong>exactly 60 minutes</strong>.<br>
-            \u2022 Once used, a 15-minute security cooldown is enacted to protect your account against unauthorized requests.<br>
-            \u2022 If you did not request this, you can safely ignore this email.
-          </div>
-        </div>
-        <div class="footer">
-          <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} ${shopName}. All rights reserved.</p>
-          <p>End-to-End Encrypted Account Verification System</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-}
 
 // src/lib/totp.ts
 import { createCipheriv, createDecipheriv, randomBytes as randomBytes4, scryptSync as scryptSync2, timingSafeEqual as timingSafeEqual4, randomInt } from "node:crypto";

@@ -7,6 +7,10 @@ import { enqueueEmail, type EmailJobData } from "../lib/email-queue";
 let testAccountCache: nodemailer.TestAccount | null = null;
 let transporterCache: { transporter: nodemailer.Transporter; from: string; shopName: string } | null = null;
 
+export function clearTransporterCache(): void {
+  transporterCache = null;
+}
+
 async function getTransporter(): Promise<{ transporter: nodemailer.Transporter; from: string; shopName: string }> {
   if (transporterCache) return transporterCache;
 

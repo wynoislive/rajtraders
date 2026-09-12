@@ -239,6 +239,9 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFA
 ALTER TABLE products ADD COLUMN IF NOT EXISTS submitted_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS approved_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS support_email TEXT DEFAULT 'support@sundarvan.xyz';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS contact_email TEXT DEFAULT 'contact@sundarvan.xyz';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS orders_email TEXT DEFAULT 'orders@sundarvan.xyz';
 
 `;
 
@@ -257,6 +260,9 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
   if (process.env.SMTP_USER) updates.smtpUser = process.env.SMTP_USER;
   if (process.env.SMTP_PASS) updates.smtpPass = process.env.SMTP_PASS;
   if (process.env.SMTP_FROM) updates.smtpFrom = process.env.SMTP_FROM;
+  if (process.env.SUPPORT_EMAIL) updates.supportEmail = process.env.SUPPORT_EMAIL;
+  if (process.env.CONTACT_EMAIL) updates.contactEmail = process.env.CONTACT_EMAIL;
+  if (process.env.ORDERS_EMAIL) updates.ordersEmail = process.env.ORDERS_EMAIL;
   if (process.env.R2_ACCOUNT_ID) updates.r2AccountId = process.env.R2_ACCOUNT_ID;
   if (process.env.R2_ACCESS_KEY_ID) updates.r2AccessKeyId = process.env.R2_ACCESS_KEY_ID;
   if (process.env.R2_SECRET_ACCESS_KEY) updates.r2SecretAccessKey = process.env.R2_SECRET_ACCESS_KEY;

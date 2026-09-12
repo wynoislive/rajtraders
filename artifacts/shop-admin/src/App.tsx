@@ -1281,12 +1281,14 @@ function StoreSettings() {
     r2AccessKeyId: '',
     r2SecretAccessKey: '',
     r2BucketName: 'rajtraders-products',
-    r2PublicUrl: '',
-    smtpHost: 'smtp.gmail.com',
+    smtpHost: 'smtp.hostinger.com',
     smtpPort: 465,
-    smtpUser: 'notifications.rajtraders@gmail.com',
-    smtpPass: 'NOTIFICATIONS@RAJ',
-    smtpFrom: 'RAJ TRADERS <notifications.rajtraders@gmail.com>',
+    smtpUser: 'wyno@justbuyme.in',
+    smtpPass: '',
+    smtpFrom: 'RAJ TRADERS <wyno@justbuyme.in>',
+    supportEmail: 'support@sundarvan.xyz',
+    contactEmail: 'contact@sundarvan.xyz',
+    ordersEmail: 'orders@sundarvan.xyz',
   });
 
   const [showSecret, setShowSecret] = useState(false);
@@ -1472,36 +1474,62 @@ function StoreSettings() {
             </div>
           </div>
 
-          {/* Nodemailer SMTP Settings */}
-          <div className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-[hsl(148_37%_43%/.13)] text-[hsl(148_37%_32%)]"><Mail size={20} /></div>
-              <div>
-                <h3 className="text-base font-extrabold">Nodemailer SMTP (Password Recovery)</h3>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">Configures outbound email transport for 60-minute password recovery links.</p>
+          {/* Hostinger SMTP & Multi-Mailbox Settings */}
+          <div className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-6 space-y-6">
+            <div className="flex items-center justify-between border-b pb-4 border-[hsl(var(--border))]">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-[hsl(148_37%_43%/.13)] text-[hsl(148_37%_32%)]"><Mail size={20} /></div>
+                <div>
+                  <h3 className="text-base font-extrabold">Hostinger Email & Multi-Mailbox Management</h3>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Configure outbound SMTP transport (wyno@justbuyme.in) and dedicated mailboxes for support, contact, and orders.</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowSecret(!showSecret)} className="text-xs font-bold text-[#0E3D42] hover:underline">
+                {showSecret ? 'Hide Password' : 'Show Password'}
+              </button>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">1. Outbound SMTP Server & Authentication (wyno@justbuyme.in)</h4>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP Host</label>
+                  <input type="text" value={form.smtpHost} onChange={(e) => setForm({ ...form, smtpHost: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="smtp.hostinger.com" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP Port</label>
+                  <input type="number" value={form.smtpPort} onChange={(e) => setForm({ ...form, smtpPort: parseInt(e.target.value) || 465 })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="465 (SSL) or 587 (TLS)" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">From Display Name / Header</label>
+                  <input type="text" value={form.smtpFrom} onChange={(e) => setForm({ ...form, smtpFrom: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm" placeholder="RAJ TRADERS <wyno@justbuyme.in>" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP Mailbox Email</label>
+                  <input type="email" value={form.smtpUser} onChange={(e) => setForm({ ...form, smtpUser: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="wyno@justbuyme.in" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP Password</label>
+                  <input type={showSecret ? 'text' : 'password'} value={form.smtpPass} onChange={(e) => setForm({ ...form, smtpPass: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="Enter Hostinger Email Password" />
+                </div>
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP Host</label>
-                <input type="text" value={form.smtpHost} onChange={(e) => setForm({ ...form, smtpHost: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="smtp.gmail.com" />
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP Port</label>
-                <input type="number" value={form.smtpPort} onChange={(e) => setForm({ ...form, smtpPort: parseInt(e.target.value) || 465 })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="465 (SSL) or 587 (TLS)" />
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">From Address</label>
-                <input type="text" value={form.smtpFrom} onChange={(e) => setForm({ ...form, smtpFrom: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm" placeholder="My Shop <notifications@...>" />
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP User / Email</label>
-                <input type="email" value={form.smtpUser} onChange={(e) => setForm({ ...form, smtpUser: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="notifications.rajtraders@gmail.com" />
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">SMTP Password / App Password</label>
-                <input type={showSecret ? 'text' : 'password'} value={form.smtpPass} onChange={(e) => setForm({ ...form, smtpPass: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="Password / App Password" />
+            <div className="pt-4 border-t border-[hsl(var(--border))]">
+              <h4 className="text-xs font-black uppercase tracking-wider text-[hsl(148_37%_32%)] mb-3">2. Dedicated Business Mailboxes</h4>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Customer Support Email</label>
+                  <input type="email" value={form.supportEmail} onChange={(e) => setForm({ ...form, supportEmail: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="support@sundarvan.xyz" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">General Contact & Sales Email</label>
+                  <input type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="contact@sundarvan.xyz" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Orders & Invoices Email</label>
+                  <input type="email" value={form.ordersEmail} onChange={(e) => setForm({ ...form, ordersEmail: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="orders@sundarvan.xyz" />
+                </div>
               </div>
             </div>
           </div>

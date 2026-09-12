@@ -18,6 +18,7 @@ import { requireAdmin } from "../middlewares/auth";
 import { discountResponse } from "./storefront";
 import { getStaffFromToken } from "./staff-admin";
 import { filterOrders } from "../utils/order-filters";
+import { clearTransporterCache } from "../utils/mailer";
 
 const router: IRouter = Router();
 router.use("/v1/admin", requireAdmin);
@@ -521,12 +522,18 @@ router.put("/v1/admin/shop-settings", async (req, res): Promise<void> => {
 
     // Nodemailer SMTP
     if (smtpHost !== undefined) updateData.smtpHost = smtpHost.trim();
-    if (smtpPort !== undefined) updateData.smtpPort = Number(smtpPort) || 587;
+    if (smtpPort !== undefined) updateData.smtpPort = Number(smtpPort) || 465;
     if (smtpUser !== undefined) updateData.smtpUser = smtpUser.trim();
     if (smtpPass !== undefined) updateData.smtpPass = smtpPass.trim();
     if (smtpFrom !== undefined) updateData.smtpFrom = smtpFrom.trim();
 
+    // Multi-Mailbox Config
+    if (req.body.supportEmail !== undefined) updateData.supportEmail = req.body.supportEmail.trim();
+    if (req.body.contactEmail !== undefined) updateData.contactEmail = req.body.contactEmail.trim();
+    if (req.body.ordersEmail !== undefined) updateData.ordersEmail = req.body.ordersEmail.trim();
+
     await db.update(shopSettingsTable).set(updateData).where(eq(shopSettingsTable.id, "default_shop"));
+    clearTransporterCache();
 
     const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     res.json({ success: true, settings: updated });

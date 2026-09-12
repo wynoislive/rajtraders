@@ -14,7 +14,8 @@ import {
   Package,
   Clock,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  ArrowLeft
 } from 'lucide-react';
 
 function getApiUrl(path: string): string {
@@ -387,7 +388,7 @@ export default function App() {
                 <button onClick={() => { setUser(null); setToken(null); localStorage.removeItem('raj_user'); localStorage.removeItem('raj_token'); }} className="text-xs font-bold text-red-600 hover:underline">Logout</button>
               </div>
             ) : (
-              <button onClick={() => { setAuthMode('login'); setShowAuthModal(true); }} className="px-4 py-2 rounded-xl text-xs font-extrabold border border-[#0E3D42] text-[#0E3D42] hover:bg-[#0E3D42] hover:text-white transition">
+              <button onClick={() => { setAuthMode('login'); setOtpRequired(false); setOtpCode(''); setAuthError(null); setShowAuthModal(true); }} className="px-4 py-2 rounded-xl text-xs font-extrabold border border-[#0E3D42] text-[#0E3D42] hover:bg-[#0E3D42] hover:text-white transition">
                 Sign In / Register
               </button>
             )}
@@ -624,20 +625,30 @@ export default function App() {
 
       {/* Customer Auth Modal (Sign In / Register) */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === e.currentTarget) { setShowAuthModal(false); setOtpRequired(false); setAuthError(null); } }}>
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-6 relative">
             <div className="flex items-center justify-between border-b pb-4">
-              <h2 className="text-xl font-black text-[#0E3D42]">{otpRequired ? 'Email Verification' : authMode === 'login' ? 'Sign In' : 'Create Account'}</h2>
-              <button onClick={() => setShowAuthModal(false)} className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+              <div className="flex items-center gap-2.5">
+                {otpRequired && (
+                  <button type="button" onClick={() => { setOtpRequired(false); setAuthError(null); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-[#0E3D42]" title="Go back">
+                    <ArrowLeft size={20} />
+                  </button>
+                )}
+                <h2 className="text-xl font-black text-[#0E3D42]">{otpRequired ? 'Email Verification' : authMode === 'login' ? 'Sign In' : 'Create Account'}</h2>
+              </div>
+              <button onClick={() => { setShowAuthModal(false); setOtpRequired(false); setAuthError(null); }} className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
             </div>
 
             {authError && <div className="p-3 bg-red-100 text-red-700 text-xs font-bold rounded-xl">{authError}</div>}
 
             {otpRequired ? (
               <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <p className="text-xs text-gray-500 font-medium">A 6-digit verification code was sent to {pendingEmail}</p>
+                <p className="text-xs text-gray-500 font-medium">A 6-digit verification code was sent to <strong className="text-[#0E3D42]">{pendingEmail}</strong></p>
                 <input required type="text" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="6-Digit OTP" className="w-full p-3 text-center tracking-widest text-xl font-bold rounded-xl border border-gray-300" />
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Verifying...' : 'Verify OTP'}</button>
+                <button type="button" onClick={() => { setOtpRequired(false); setAuthError(null); }} className="w-full text-center text-xs font-bold text-[#0E3D42]/70 hover:underline">
+                  Change Email / Return to {authMode === 'login' ? 'Sign In' : 'Register'}
+                </button>
               </form>
             ) : authMode === 'login' ? (
               <form onSubmit={handleLogin} className="space-y-4">
