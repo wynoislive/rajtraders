@@ -61,6 +61,17 @@ export default function App() {
   const [otpRequired, setOtpRequired] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(45);
+
+  useEffect(() => {
+    let timer: any;
+    if (otpRequired && resendCooldown > 0) {
+      timer = setInterval(() => {
+        setResendCooldown((prev) => Math.max(0, prev - 1));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpRequired, resendCooldown]);
 
   // Shipping & Checkout
   const [shippingAddress, setShippingAddress] = useState(`PIN: ${pincode}, ${city}`);
@@ -194,6 +205,7 @@ export default function App() {
       if (data.requiresVerification) {
         setOtpRequired(true);
         setPendingEmail(email);
+        setResendCooldown(45);
       } else if (data.token && data.user) {
         setToken(data.token);
         setUser(data.user);
@@ -234,6 +246,7 @@ export default function App() {
       if (data.requiresVerification) {
         setOtpRequired(true);
         setPendingEmail(email);
+        setResendCooldown(45);
       } else if (data.token && data.user) {
         setToken(data.token);
         setUser(data.user);
@@ -278,6 +291,7 @@ export default function App() {
   };
 
   const handleResendOtp = async () => {
+    if (resendCooldown > 0 || authLoading) return;
     setAuthLoading(true);
     setAuthError(null);
     try {
@@ -289,6 +303,7 @@ export default function App() {
       const data = await res.json();
       if (res.ok) {
         setAuthError(null);
+        setResendCooldown(45);
         alert(`New verification OTP code sent to ${pendingEmail}`);
       } else {
         setAuthError(data.error || 'Failed to resend code.');
@@ -669,11 +684,20 @@ export default function App() {
                 <p className="text-xs text-gray-500 font-medium">A 6-digit verification code was sent to <strong className="text-[#0E3D42]">{pendingEmail}</strong></p>
                 <input required type="text" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="6-Digit OTP" className="w-full p-3 text-center tracking-widest text-xl font-bold rounded-xl border border-gray-300" />
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Verifying...' : 'Verify OTP'}</button>
-                <div className="flex justify-between text-xs font-bold text-[#0E3D42]/80">
-                  <button type="button" onClick={handleResendOtp} disabled={authLoading} className="hover:underline text-[#0E3D42]">
-                    Didn't receive code? Resend OTP
+                <div className="flex justify-between items-center text-xs pt-1">
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resendCooldown > 0 || authLoading}
+                    className={`font-extrabold transition-colors ${resendCooldown > 0 || authLoading ? 'text-gray-400 cursor-not-allowed' : 'text-[#0E3D42] hover:underline cursor-pointer'}`}
+                  >
+                    {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : "Didn't receive code? Resend OTP"}
                   </button>
-                  <button type="button" onClick={() => { setOtpRequired(false); setAuthError(null); }} className="hover:underline">
+                  <button
+                    type="button"
+                    onClick={() => { setOtpRequired(false); setAuthError(null); }}
+                    className="hover:underline text-gray-500 font-semibold"
+                  >
                     Change Email
                   </button>
                 </div>
