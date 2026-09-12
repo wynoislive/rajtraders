@@ -1443,7 +1443,9 @@ function App() {
   const [shopInfo, setShopInfo] = useState({ shopName: 'RAJ TRADERS', shopDomain: 'sundarvan.xyz' });
 
   useEffect(() => {
-    fetch('/api/v1/admin/shop-settings')
+    const apiTarget = import.meta.env.VITE_API_TARGET || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? 'https://api.sundarvan.xyz' : '');
+    const url = apiTarget ? `${apiTarget.replace(/\/+$/, '')}/api/v1/admin/shop-settings` : '/api/v1/admin/shop-settings';
+    fetch(url)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data) setShopInfo({ shopName: data.shopName || 'RAJ TRADERS', shopDomain: data.shopDomain || 'sundarvan.xyz' });
