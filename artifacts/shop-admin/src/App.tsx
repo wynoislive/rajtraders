@@ -83,7 +83,7 @@ type Tone = 'teal' | 'yellow' | 'coral' | 'green' | 'slate';
 
 // Shared shop settings context for sidebar/overview to access shopName dynamically
 import { createContext, useContext } from 'react';
-const ShopContext = createContext<{ shopName: string; shopDomain: string }>({ shopName: 'My Shop', shopDomain: 'myshop.com' });
+const ShopContext = createContext<{ shopName: string; shopDomain: string }>({ shopName: 'RAJ TRADERS', shopDomain: 'sundarvan.xyz' });
 
 function money(cents = 0) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(cents / 100);
@@ -1440,13 +1440,13 @@ function Router() {
 }
 
 function App() {
-  const [shopInfo, setShopInfo] = useState({ shopName: 'My Shop', shopDomain: 'myshop.com' });
+  const [shopInfo, setShopInfo] = useState({ shopName: 'RAJ TRADERS', shopDomain: 'sundarvan.xyz' });
 
   useEffect(() => {
     fetch('/api/v1/admin/shop-settings')
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
-        if (data) setShopInfo({ shopName: data.shopName || 'My Shop', shopDomain: data.shopDomain || 'myshop.com' });
+        if (data) setShopInfo({ shopName: data.shopName || 'RAJ TRADERS', shopDomain: data.shopDomain || 'sundarvan.xyz' });
       })
       .catch(() => {});
   }, []);

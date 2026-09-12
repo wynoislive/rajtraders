@@ -60739,6 +60739,7 @@ async function syncEnvToShopSettings(db2) {
   if (process.env.R2_BUCKET_NAME) updates.r2BucketName = process.env.R2_BUCKET_NAME;
   if (process.env.R2_PUBLIC_URL) updates.r2PublicUrl = process.env.R2_PUBLIC_URL;
   if (process.env.SHOP_NAME) updates.shopName = process.env.SHOP_NAME;
+  if (process.env.SHOP_DOMAIN) updates.shopDomain = process.env.SHOP_DOMAIN;
   if (process.env.SHOP_ADDRESS) updates.shopAddress = process.env.SHOP_ADDRESS;
   if (process.env.SHOP_LATITUDE) updates.latitude = parseFloat(process.env.SHOP_LATITUDE);
   if (process.env.SHOP_LONGITUDE) updates.longitude = parseFloat(process.env.SHOP_LONGITUDE);
