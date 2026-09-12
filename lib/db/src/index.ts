@@ -273,7 +273,17 @@ export async function ensureDbReady(): Promise<any> {
     dbReadyPromise = (async () => {
       if (!process.env.DATABASE_URL && pgliteInstance) {
         await pgliteInstance.waitReady;
-        await pgliteInstance.exec(createTablesSql);
+        const statements = createTablesSql
+          .split(";")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        for (const stmt of statements) {
+          try {
+            await pgliteInstance.exec(stmt);
+          } catch (_err) {
+            // Ignore duplicate table / harmless migration errors
+          }
+        }
         await syncEnvToShopSettings(dbInstance);
       }
       return dbInstance;
