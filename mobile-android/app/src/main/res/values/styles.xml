@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.HarborLane" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#E2A93B</item>
+        <item name="android:navigationBarColor">#F7F2EA</item>
+        <item name="android:statusBarColor">#0E3D42</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

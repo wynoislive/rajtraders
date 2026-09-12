@@ -1,0 +1,1134 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 1.0.0
+  description: Versioned commerce API for the storefront and operations console
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: storefront
+    description: Public shopping experience
+  - name: admin
+    description: Protected operations console
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /v1/products:
+    get:
+      operationId: listProducts
+      tags: [storefront]
+      summary: List active products
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Category"
+      responses:
+        "200":
+          description: Active storefront products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+  /v1/products/{productId}:
+    get:
+      operationId: getProduct
+      tags: [storefront]
+      summary: Get a product
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/storefront/summary:
+    get:
+      operationId: getStorefrontSummary
+      tags: [storefront]
+      summary: Get storefront summary
+      description: Returns lightweight aggregate data for a polished home screen.
+      responses:
+        "200":
+          description: Storefront summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorefrontSummary"
+  /v1/registrations/eligibility:
+    post:
+      operationId: checkRegistrationEligibility
+      tags: [storefront]
+      summary: Check first-time registration eligibility
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrationEligibilityInput"
+      responses:
+        "200":
+          description: Eligibility result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationEligibility"
+  /v1/registrations/claim:
+    post:
+      operationId: claimRegistrationOffer
+      tags: [storefront]
+      summary: Claim the first-time registration offer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrationEligibilityInput"
+      responses:
+        "201":
+          description: Offer claim result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationClaim"
+  /v1/discounts/validate:
+    post:
+      operationId: validateDiscount
+      tags: [storefront]
+      summary: Validate a dynamic discount code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountValidationInput"
+      responses:
+        "200":
+          description: Discount validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscountValidation"
+  /v1/admin/summary:
+    get:
+      operationId: getAdminSummary
+      tags: [admin]
+      summary: Get operations summary
+      security:
+        - clerkSession: []
+      responses:
+        "200":
+          description: Operations summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/admin/products:
+    get:
+      operationId: listAdminProducts
+      tags: [admin]
+      summary: List products for management
+      security:
+        - clerkSession: []
+      responses:
+        "200":
+          description: Product catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [admin]
+      summary: Create a product
+      security:
+        - clerkSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        "201":
+          description: Created product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+  /v1/admin/products/{productId}:
+    patch:
+      operationId: updateProduct
+      tags: [admin]
+      summary: Update a product
+      security:
+        - clerkSession: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductUpdate"
+      responses:
+        "200":
+          description: Updated product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: archiveProduct
+      tags: [admin]
+      summary: Archive a product
+      security:
+        - clerkSession: []
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "204":
+          description: Product archived
+  /v1/admin/discounts:
+    get:
+      operationId: listDiscounts
+      tags: [admin]
+      summary: List dynamic discount codes
+      security:
+        - clerkSession: []
+      responses:
+        "200":
+          description: Discount codes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Discount"
+    post:
+      operationId: createDiscount
+      tags: [admin]
+      summary: Create a dynamic discount code
+      security:
+        - clerkSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountInput"
+      responses:
+        "201":
+          description: Created discount
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Discount"
+  /v1/admin/discounts/{discountId}:
+    patch:
+      operationId: updateDiscount
+      tags: [admin]
+      summary: Update a dynamic discount code
+      security:
+        - clerkSession: []
+      parameters:
+        - $ref: "#/components/parameters/DiscountId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountUpdate"
+      responses:
+        "200":
+          description: Updated discount
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Discount"
+  /v1/admin/registrations:
+    get:
+      operationId: listRegistrationPolicies
+      tags: [admin]
+      summary: List first-time registration policies
+      security:
+        - clerkSession: []
+      responses:
+        "200":
+          description: Registration policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RegistrationPolicy"
+    patch:
+      operationId: updateRegistrationPolicy
+      tags: [admin]
+      summary: Update first-time registration policy
+      security:
+        - clerkSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrationPolicyUpdate"
+      responses:
+        "200":
+          description: Updated policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistrationPolicy"
+
+  # ─── Checkout & Delivery (customer-facing) ───────────────────────────────
+  /v1/checkout/shop-info:
+    get:
+      operationId: getShopInfo
+      tags: [storefront]
+      summary: Public shop info (client Razorpay key id + delivery settings)
+      responses:
+        "200":
+          description: Shop info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shopLatitude: { type: number }
+                  shopLongitude: { type: number }
+                  deliveryRadiusKm: { type: number }
+                  isDeliveryEnabled: { type: boolean }
+                  razorpayKeyId: { type: string }
+  /v1/checkout/validate-delivery:
+    post:
+      operationId: validateDelivery
+      tags: [storefront]
+      summary: Check a delivery address against the shop radius
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude: { type: number }
+                longitude: { type: number }
+      responses:
+        "200":
+          description: Delivery validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allowed: { type: boolean }
+                  distanceKm: { type: number }
+                  radiusKm: { type: number }
+                  message: { type: string }
+  /v1/checkout/create-order:
+    post:
+      operationId: createCheckoutOrder
+      tags: [storefront]
+      summary: Create a checkout order (owner derived from the bearer token, not the body)
+      security:
+        - customerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idempotencyKey, items, shippingAddress]
+              properties:
+                idempotencyKey: { type: string }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      productId: { type: string }
+                      quantity: { type: number }
+                discountCode: { type: string }
+                customerEmail: { type: string }
+                customerName: { type: string }
+                customerMobile: { type: string }
+                shippingAddress: { type: string }
+                deliveryLatitude: { type: number }
+                deliveryLongitude: { type: number }
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderId: { type: string }
+                  razorpayOrderId: { type: string }
+                  amountCents: { type: number }
+                  currency: { type: string }
+                  keyId: { type: string }
+                  status: { type: string }
+                  idempotencyKey: { type: string }
+  /v1/checkout/verify-payment:
+    post:
+      operationId: verifyPayment
+      tags: [storefront]
+      summary: Verify a Razorpay payment signature and confirm the order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idempotencyKey, razorpayOrderId, razorpayPaymentId]
+              properties:
+                idempotencyKey: { type: string }
+                razorpayOrderId: { type: string }
+                razorpayPaymentId: { type: string }
+                razorpaySignature: { type: string }
+      responses:
+        "200":
+          description: Payment verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  orderId: { type: string }
+                  status: { type: string }
+  /v1/checkout/orders:
+    get:
+      operationId: listMyOrders
+      tags: [storefront]
+      summary: List the signed-in customer's own orders (scoped to the bearer token)
+      security:
+        - customerSession: []
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: duration, in: query, schema: { type: string } }
+        - { name: startDate, in: query, schema: { type: string } }
+        - { name: endDate, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Order history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+  /v1/checkout/orders/{id}/cancel:
+    post:
+      operationId: cancelMyOrder
+      tags: [storefront]
+      summary: Cancel one of the signed-in customer's own pending orders
+      security:
+        - customerSession: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  # ─── Customer authentication (bearer-token sessions) ─────────────────────
+  /v1/auth/register:
+    post:
+      operationId: registerCustomer
+      tags: [storefront]
+      summary: Register a new customer (issues an email OTP challenge)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, mobileNumber, email, password]
+              properties:
+                firstName: { type: string }
+                lastName: { type: string }
+                mobileNumber: { type: string }
+                email: { type: string }
+                password: { type: string }
+                confirmPassword: { type: string }
+      responses:
+        "200":
+          description: Registration accepted; verification required
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/auth/login:
+    post:
+      operationId: loginCustomer
+      tags: [storefront]
+      summary: Log in (issues an email OTP challenge; no bypass)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Login accepted; verification required
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/auth/verify-login-otp:
+    post:
+      operationId: verifyLoginOtp
+      tags: [storefront]
+      summary: Verify the email OTP and receive a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otpCode]
+              properties:
+                email: { type: string }
+                otpCode: { type: string }
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/auth/resend-login-otp:
+    post:
+      operationId: resendLoginOtp
+      tags: [storefront]
+      summary: Resend the email OTP (rate limited)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        "200":
+          description: OTP resent
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/auth/me:
+    get:
+      operationId: getMyProfile
+      tags: [storefront]
+      summary: Current customer profile
+      security:
+        - customerSession: []
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/auth/profile:
+    put:
+      operationId: updateMyProfile
+      tags: [storefront]
+      summary: Update the current customer's profile
+      security:
+        - customerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName: { type: string }
+                lastName: { type: string }
+                mobileNumber: { type: string }
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/auth/delete-account:
+    delete:
+      operationId: deleteMyAccount
+      tags: [storefront]
+      summary: Delete the current customer's account (15-day re-registration penalty)
+      security:
+        - customerSession: []
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [storefront]
+      summary: Request a password recovery email (rate limited)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        "200":
+          description: Recovery email queued
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [storefront]
+      summary: Reset a password using a recovery token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, newPassword]
+              properties:
+                email: { type: string }
+                token: { type: string }
+                newPassword: { type: string }
+                confirmPassword: { type: string }
+      responses:
+        "200":
+          description: Password reset
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  # ─── Admin order ledger (Clerk-protected) ────────────────────────────────
+  /v1/admin/orders:
+    get:
+      operationId: listAdminOrders
+      tags: [admin]
+      summary: List all orders (operations console)
+      security:
+        - clerkSession: []
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: duration, in: query, schema: { type: string } }
+        - { name: startDate, in: query, schema: { type: string } }
+        - { name: endDate, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Order ledger
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+  /v1/admin/orders/stats:
+    get:
+      operationId: getAdminOrderStats
+      tags: [admin]
+      summary: Aggregate order stats (operations console)
+      security:
+        - clerkSession: []
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalOrders: { type: number }
+                  successfulOrders: { type: number }
+                  pendingOrders: { type: number }
+                  cancelledOrders: { type: number }
+                  totalRevenueCents: { type: number }
+  /v1/admin/orders/{id}/cancel:
+    post:
+      operationId: cancelAdminOrder
+      tags: [admin]
+      summary: Cancel any pending order (operations console)
+      security:
+        - clerkSession: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/admin/shop-settings:
+    get:
+      operationId: getShopSettings
+      tags: [admin]
+      summary: Read shop settings
+      security:
+        - clerkSession: []
+      responses:
+        "200":
+          description: Shop settings
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    put:
+      operationId: updateShopSettings
+      tags: [admin]
+      summary: Update shop settings
+      security:
+        - clerkSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  # ─── Staff RBAC (Clerk-protected; login is open) ─────────────────────────
+  /v1/admin/staff/login:
+    post:
+      operationId: staffLogin
+      tags: [admin]
+      summary: Staff credential login (issues a staff bearer token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/admin/staff:
+    get:
+      operationId: listStaff
+      tags: [admin]
+      summary: List staff accounts
+      security:
+        - clerkSession: []
+      responses:
+        "200":
+          description: Staff list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+    post:
+      operationId: createStaff
+      tags: [admin]
+      summary: Create a staff account
+      security:
+        - clerkSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name: { type: string }
+                email: { type: string }
+                password: { type: string }
+                role: { type: string }
+                expiresAtHours: { type: number }
+                expiresAtDate: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/admin/staff/{id}:
+    put:
+      operationId: updateStaff
+      tags: [admin]
+      summary: Update a staff account
+      security:
+        - clerkSession: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    delete:
+      operationId: deleteStaff
+      tags: [admin]
+      summary: Delete a staff account
+      security:
+        - clerkSession: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  # ─── Product approvals & storage (Clerk-protected) ───────────────────────
+  /v1/admin/approvals:
+    get:
+      operationId: listApprovals
+      tags: [admin]
+      summary: List products awaiting approval
+      security:
+        - clerkSession: []
+      responses:
+        "200":
+          description: Pending products
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+  /v1/admin/approvals/{productId}/approve:
+    post:
+      operationId: approveProduct
+      tags: [admin]
+      summary: Approve and publish a product
+      security:
+        - clerkSession: []
+      parameters:
+        - { name: productId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/admin/approvals/{productId}/reject:
+    post:
+      operationId: rejectProduct
+      tags: [admin]
+      summary: Reject a product with a reason
+      security:
+        - clerkSession: []
+      parameters:
+        - { name: productId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /v1/admin/storage/upload:
+    post:
+      operationId: uploadProductImage
+      tags: [admin]
+      summary: Upload a product image
+      security:
+        - clerkSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename: { type: string }
+                contentType: { type: string }
+                base64Data: { type: string }
+                imageUrl: { type: string }
+      responses:
+        "200":
+          description: Uploaded
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+components:
+  securitySchemes:
+    clerkSession:
+      type: http
+      scheme: bearer
+      bearerFormat: Clerk
+    customerSession:
+      type: http
+      scheme: bearer
+      bearerFormat: Opaque
+    staffSession:
+      type: http
+      scheme: bearer
+      bearerFormat: Opaque
+  parameters:
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: string
+    DiscountId:
+      name: discountId
+      in: path
+      required: true
+      schema:
+        type: string
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+    Category:
+      name: category
+      in: query
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    Product:
+      type: object
+      required: [id, name, slug, description, priceCents, category, imageUrl, status, featured, inventory, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        priceCents: { type: number, minimum: 0 }
+        compareAtPriceCents: { type: ["number", "null"], minimum: 0 }
+        category: { type: string }
+        imageUrl: { type: string }
+        status: { type: string, enum: [active, draft, archived] }
+        featured: { type: boolean }
+        inventory: { type: number, minimum: 0 }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    ProductInput:
+      type: object
+      required: [name, description, priceCents, category, imageUrl, inventory]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        priceCents: { type: number, minimum: 0 }
+        compareAtPriceCents: { type: ["number", "null"], minimum: 0 }
+        category: { type: string }
+        imageUrl: { type: string }
+        status: { type: string, enum: [active, draft] }
+        featured: { type: boolean }
+        inventory: { type: number, minimum: 0 }
+    ProductUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        priceCents: { type: number, minimum: 0 }
+        compareAtPriceCents: { type: ["number", "null"], minimum: 0 }
+        category: { type: string }
+        imageUrl: { type: string }
+        status: { type: string, enum: [active, draft, archived] }
+        featured: { type: boolean }
+        inventory: { type: number, minimum: 0 }
+    Discount:
+      type: object
+      required: [id, code, type, value, minimumSubtotalCents, usageLimit, usageCount, startsAt, expiresAt, active, firstOrderOnly]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        type: { type: string, enum: [percentage, fixed] }
+        value: { type: number, minimum: 0 }
+        minimumSubtotalCents: { type: number, minimum: 0 }
+        usageLimit: { type: ["number", "null"], minimum: 0 }
+        usageCount: { type: number, minimum: 0 }
+        startsAt: { type: string }
+        expiresAt: { type: ["string", "null"] }
+        active: { type: boolean }
+        firstOrderOnly: { type: boolean }
+    DiscountInput:
+      type: object
+      required: [code, type, value, minimumSubtotalCents, startsAt, firstOrderOnly]
+      properties:
+        code: { type: string, minLength: 3 }
+        type: { type: string, enum: [percentage, fixed] }
+        value: { type: number, minimum: 0 }
+        minimumSubtotalCents: { type: number, minimum: 0 }
+        usageLimit: { type: ["number", "null"], minimum: 0 }
+        startsAt: { type: string }
+        expiresAt: { type: ["string", "null"] }
+        active: { type: boolean }
+        firstOrderOnly: { type: boolean }
+    DiscountUpdate:
+      type: object
+      properties:
+        value: { type: number, minimum: 0 }
+        minimumSubtotalCents: { type: number, minimum: 0 }
+        usageLimit: { type: ["number", "null"], minimum: 0 }
+        startsAt: { type: string }
+        expiresAt: { type: ["string", "null"] }
+        active: { type: boolean }
+        firstOrderOnly: { type: boolean }
+    RegistrationEligibilityInput:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, minLength: 3 }
+    RegistrationEligibility:
+      type: object
+      required: [eligible, reason, offerCode]
+      properties:
+        eligible: { type: boolean }
+        reason: { type: string }
+        offerCode: { type: ["string", "null"] }
+    RegistrationClaim:
+      type: object
+      required: [claimed, offerCode, message]
+      properties:
+        claimed: { type: boolean }
+        offerCode: { type: ["string", "null"] }
+        message: { type: string }
+    DiscountValidationInput:
+      type: object
+      required: [code, subtotalCents, isFirstOrder]
+      properties:
+        code: { type: string }
+        subtotalCents: { type: number, minimum: 0 }
+        isFirstOrder: { type: boolean }
+    DiscountValidation:
+      type: object
+      required: [valid, code, discountCents, message]
+      properties:
+        valid: { type: boolean }
+        code: { type: string }
+        discountCents: { type: number, minimum: 0 }
+        message: { type: string }
+    StorefrontSummary:
+      type: object
+      required: [shopName, featuredCount, categories, firstOrderOffer, updatedAt]
+      properties:
+        shopName: { type: string }
+        featuredCount: { type: number }
+        categories:
+          type: array
+          items: { type: string }
+        firstOrderOffer: { type: string }
+        updatedAt: { type: string }
+    AdminSummary:
+      type: object
+      required: [activeProducts, draftProducts, liveDiscounts, firstOrderRegistrations, inventoryValueCents, recentActivity]
+      properties:
+        activeProducts: { type: number }
+        draftProducts: { type: number }
+        liveDiscounts: { type: number }
+        firstOrderRegistrations: { type: number }
+        inventoryValueCents: { type: number }
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/Activity"
+    Activity:
+      type: object
+      required: [id, label, detail, timestamp]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        detail: { type: string }
+        timestamp: { type: string }
+    RegistrationPolicy:
+      type: object
+      required: [id, name, description, offerCode, active, windowDays, registrationsCount]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        offerCode: { type: string }
+        active: { type: boolean }
+        windowDays: { type: number, minimum: 0 }
+        registrationsCount: { type: number, minimum: 0 }
+    RegistrationPolicyUpdate:
+      type: object
+      properties:
+        active: { type: boolean }
+        offerCode: { type: string }
+        windowDays: { type: number, minimum: 0 }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
