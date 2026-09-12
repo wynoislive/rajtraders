@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run build --workspace=@workspace/api-server",
+  "buildCommand": "pnpm --filter @workspace/api-server... build",
   "rewrites": [
     {
       "source": "/(.*)",
