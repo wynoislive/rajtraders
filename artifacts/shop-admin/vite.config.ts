@@ -36,7 +36,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_TARGET || 'https://rajtraders-api-server.vercel.app',
+        target: process.env.VITE_API_TARGET || 'https://api.sundarvan.xyz',
         changeOrigin: true,
         secure: false,
       },
@@ -51,7 +51,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_TARGET || 'https://rajtraders-api-server.vercel.app',
+        target: process.env.VITE_API_TARGET || 'https://api.sundarvan.xyz',
         changeOrigin: true,
         secure: false,
       },
