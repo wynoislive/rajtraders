@@ -281,6 +281,8 @@ if (process.env.DATABASE_URL) {
   dbInstance = drizzlePglite(pgliteInstance, { schema });
 }
 
+let lastDbError: string | null = null;
+
 export async function ensureDbReady(): Promise<any> {
   if (!dbReadyPromise) {
     dbReadyPromise = (async () => {
@@ -291,9 +293,9 @@ export async function ensureDbReady(): Promise<any> {
           await syncEnvToShopSettings(dbInstance);
         }
       } catch (err: any) {
+        lastDbError = err?.stack || err?.message || String(err);
         console.error("ensureDbReady initialization error:", err);
-        dbReadyPromise = null;
-        throw err;
+        throw new Error(`DB Init Failed: ${lastDbError}`);
       }
       return dbInstance;
     })();
