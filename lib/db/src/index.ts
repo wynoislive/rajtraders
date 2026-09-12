@@ -281,6 +281,7 @@ if (process.env.DATABASE_URL) {
   );
   const dataDir = isServerless ? "memory://" : path.resolve(process.cwd(), ".local-db");
   const pglite = new PGlite(dataDir);
+  await pglite.waitReady;
   await pglite.exec(createTablesSql);
   dbInstance = drizzlePglite(pglite, { schema });
   // Sync .env overrides using parameterised Drizzle calls (SQL-injection-safe)
