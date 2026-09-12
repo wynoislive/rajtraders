@@ -61127,7 +61127,11 @@ var pgliteInstance = null;
 var DEFAULT_SUPABASE_URL = "postgresql://postgres:jooPR0L9GDu6R7sM@db.hbwwbapappmsbdsjaasm.supabase.co:5432/postgres";
 var rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : void 0);
 if (rawDbUrl) {
-  poolInstance = new Pool2({ connectionString: rawDbUrl });
+  const isCloudPg = rawDbUrl.includes("supabase.co") || rawDbUrl.includes("sslmode=") || !!process.env.VERCEL;
+  poolInstance = new Pool2({
+    connectionString: rawDbUrl,
+    ...isCloudPg ? { ssl: { rejectUnauthorized: false } } : {}
+  });
   dbInstance = drizzle(poolInstance, { schema: schema_exports });
 } else {
   try {

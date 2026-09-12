@@ -285,7 +285,11 @@ const DEFAULT_SUPABASE_URL = "postgresql://postgres:jooPR0L9GDu6R7sM@db.hbwwbapa
 const rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : undefined);
 
 if (rawDbUrl) {
-  poolInstance = new Pool({ connectionString: rawDbUrl });
+  const isCloudPg = rawDbUrl.includes("supabase.co") || rawDbUrl.includes("sslmode=") || !!process.env.VERCEL;
+  poolInstance = new Pool({
+    connectionString: rawDbUrl,
+    ...(isCloudPg ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
   dbInstance = drizzlePg(poolInstance, { schema });
 } else {
   try {
