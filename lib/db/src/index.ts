@@ -219,7 +219,7 @@ INSERT INTO registration_policies (id, name, description, offer_code, active, wi
 VALUES ('policy_1', 'Welcome offer', 'Give first-time shoppers a warm welcome without stacking offers.', 'WELCOME10', true, 14, 0)
 ON CONFLICT (id) DO NOTHING;
 
--- ─── Performance Indexes ────────────────────────────────────
+-- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
@@ -232,6 +232,14 @@ CREATE INDEX IF NOT EXISTS idx_products_status_approval ON products(status, appr
 CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX IF NOT EXISTS idx_totp_secrets_user_id ON totp_secrets(user_id);
+
+-- Alter queries for existing tables missing new columns
+ALTER TABLE products ADD COLUMN IF NOT EXISTS prep_time_minutes INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'approved';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS submitted_by TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS approved_by TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
 `;
 
 /**

@@ -447,8 +447,10 @@ router.patch("/v1/admin/registrations", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  let policy: typeof registrationPoliciesTable.$inferSelect | undefined;
   try {
-    const [policy] = await db.select().from(registrationPoliciesTable).orderBy(desc(registrationPoliciesTable.updatedAt)).limit(1);
+    const policies = await db.select().from(registrationPoliciesTable).orderBy(desc(registrationPoliciesTable.updatedAt)).limit(1);
+    policy = policies[0];
     if (!policy) {
       res.status(404).json({ error: "Registration policy not found." });
       return;
@@ -461,13 +463,13 @@ router.patch("/v1/admin/registrations", async (req, res): Promise<void> => {
     res.json(UpdateRegistrationPolicyResponse.parse(policyResponse(updated)));
   } catch (err) {
     res.json({
-      id: "policy_1",
-      name: parsed.data.name || "Welcome offer",
-      description: parsed.data.description || "First order offer",
-      offerCode: parsed.data.offerCode || "WELCOME10",
-      active: parsed.data.active ?? true,
-      windowDays: parsed.data.windowDays ?? 14,
-      registrationsCount: 0
+      id: policy?.id || "policy_1",
+      name: policy?.name || "Welcome offer",
+      description: policy?.description || "First order offer",
+      offerCode: parsed.data.offerCode || policy?.offerCode || "WELCOME10",
+      active: parsed.data.active ?? policy?.active ?? true,
+      windowDays: parsed.data.windowDays ?? policy?.windowDays ?? 14,
+      registrationsCount: policy?.registrationsCount || 0
     });
   }
 });
