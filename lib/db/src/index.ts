@@ -271,20 +271,16 @@ if (process.env.DATABASE_URL) {
 export async function ensureDbReady(): Promise<any> {
   if (!dbReadyPromise) {
     dbReadyPromise = (async () => {
-      if (!process.env.DATABASE_URL && pgliteInstance) {
-        await pgliteInstance.waitReady;
-        const statements = createTablesSql
-          .split(";")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        for (const stmt of statements) {
-          try {
-            await pgliteInstance.exec(stmt);
-          } catch (err: any) {
-            console.error(`DDL statement failed: ${stmt.slice(0, 50)}... -> ${err?.message}`);
-          }
+      try {
+        if (!process.env.DATABASE_URL && pgliteInstance) {
+          await pgliteInstance.waitReady;
+          await pgliteInstance.exec(createTablesSql);
+          await syncEnvToShopSettings(dbInstance);
         }
-        await syncEnvToShopSettings(dbInstance);
+      } catch (err: any) {
+        console.error("ensureDbReady initialization error:", err);
+        dbReadyPromise = null;
+        throw err;
       }
       return dbInstance;
     })();
