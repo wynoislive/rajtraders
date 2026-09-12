@@ -61134,35 +61134,34 @@ async function syncEnvToShopSettings(db2) {
   }
 }
 var pgliteInstance = null;
-var rawDbUrl = process.env.DATABASE_URL?.trim();
 if (rawDbUrl) {
   poolInstance = new Pool2({ connectionString: rawDbUrl });
   dbInstance = drizzle(poolInstance, { schema: schema_exports });
 } else {
-  const dataDir = "memory://";
-  pgliteInstance = new PGlite2(dataDir);
-  dbInstance = drizzle2(pgliteInstance, { schema: schema_exports });
+  try {
+    const dataDir = "memory://";
+    pgliteInstance = new PGlite2(dataDir);
+    dbInstance = drizzle2(pgliteInstance, { schema: schema_exports });
+  } catch (e) {
+    console.warn("PGlite initialization warning (ignoring in serverless runtime):", e);
+  }
 }
 async function ensureDbReady() {
-  if (rawDbUrl && poolInstance) {
-    try {
+  try {
+    if (rawDbUrl && poolInstance) {
       await poolInstance.query(createTablesSql);
-      await syncEnvToShopSettings(dbInstance);
-    } catch (err) {
-      console.error("ensureDbReady (PostgreSQL) error:", err);
-    }
-  } else if (!rawDbUrl && pgliteInstance) {
-    try {
+      if (dbInstance) await syncEnvToShopSettings(dbInstance);
+    } else if (pgliteInstance) {
       await pgliteInstance.waitReady;
       await pgliteInstance.exec(createTablesSql);
-      await syncEnvToShopSettings(dbInstance);
-    } catch (err) {
-      console.error("ensureDbReady (PGlite) error:", err);
+      if (dbInstance) await syncEnvToShopSettings(dbInstance);
     }
+  } catch (err) {
+    console.error("ensureDbReady error:", err);
   }
   return dbInstance;
 }
-ensureDbReady();
+ensureDbReady().catch((e) => console.warn("ensureDbReady startup error:", e));
 var db = dbInstance;
 
 // artifacts/api-server/src/utils/discounts.ts
