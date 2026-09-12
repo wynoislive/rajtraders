@@ -281,7 +281,8 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
 let dbReadyPromise: Promise<any> | null = null;
 let pgliteInstance: any = null;
 
-const rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const DEFAULT_SUPABASE_URL = "postgresql://postgres:jooPR0L9GDu6R7sM@db.hbwwbapappmsbdsjaasm.supabase.co:5432/postgres";
+const rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : undefined);
 
 if (rawDbUrl) {
   poolInstance = new Pool({ connectionString: rawDbUrl });

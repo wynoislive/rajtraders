@@ -61124,7 +61124,8 @@ async function syncEnvToShopSettings(db2) {
   }
 }
 var pgliteInstance = null;
-var rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+var DEFAULT_SUPABASE_URL = "postgresql://postgres:jooPR0L9GDu6R7sM@db.hbwwbapappmsbdsjaasm.supabase.co:5432/postgres";
+var rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : void 0);
 if (rawDbUrl) {
   poolInstance = new Pool2({ connectionString: rawDbUrl });
   dbInstance = drizzle(poolInstance, { schema: schema_exports });
