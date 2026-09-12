@@ -128109,8 +128109,9 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
       res.status(400).json({ error: "An account with this email or mobile number already exists. Please log in." });
       return;
     }
+    const causeMsg = err?.cause?.message || err?.cause?.code || err?.cause || err?.stack || err?.message;
     req.log.error({ err }, "Registration error");
-    res.status(500).json({ error: "Failed to register user. Please try again.", details: err?.message || String(err) });
+    res.status(500).json({ error: "Failed to register user. Please try again.", details: err?.message || String(err), cause: String(causeMsg) });
   }
 });
 router5.post("/login", authLimiter, validate({ body: LoginBodySchema }), async (req, res) => {
