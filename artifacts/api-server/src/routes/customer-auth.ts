@@ -296,9 +296,8 @@ router.post("/register", authLimiter, validate({ body: RegisterBodySchema }), as
       res.status(400).json({ error: "An account with this email or mobile number already exists. Please log in." });
       return;
     }
-    const causeMsg = err?.cause?.message || err?.cause?.code || err?.cause || err?.stack || err?.message;
     req.log.error({ err }, "Registration error");
-    res.status(500).json({ error: "Failed to register user. Please try again.", details: err?.message || String(err), cause: String(causeMsg) });
+    res.status(500).json({ error: "Failed to register user. Please try again." });
   }
 });
 
@@ -337,7 +336,7 @@ router.post("/login", authLimiter, validate({ body: LoginBodySchema }), async (r
     await issueVerificationOtp(req, res, user, cleanEmail);
   } catch (err: any) {
     req.log.error({ err }, "Login error");
-    res.status(500).json({ error: "Failed to authenticate. Please try again.", details: err?.message || String(err) });
+    res.status(500).json({ error: "Failed to authenticate. Please try again." });
   }
 });
 
