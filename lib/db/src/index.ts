@@ -268,27 +268,45 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
   }
 }
 
-if (process.env.DATABASE_URL) {
-  poolInstance = new Pool({ connectionString: process.env.DATABASE_URL });
-  dbInstance = drizzlePg(poolInstance, { schema });
-} else {
-  const isServerless = Boolean(
-    process.env.VERCEL ||
-    process.env.VERCEL_ENV ||
-    process.env.AWS_LAMBDA_FUNCTION_NAME ||
-    process.env.NOW_REGION ||
-    process.env.NODE_ENV === "production"
-  );
-  const dataDir = isServerless ? "memory://" : path.resolve(process.cwd(), ".local-db");
-  const pglite = new PGlite(dataDir);
-  await pglite.waitReady;
-  await pglite.exec(createTablesSql);
-  dbInstance = drizzlePglite(pglite, { schema });
-  // Sync .env overrides using parameterised Drizzle calls (SQL-injection-safe)
-  await syncEnvToShopSettings(dbInstance);
+let dbReadyPromise: Promise<any> | null = null;
+
+export async function ensureDbReady(): Promise<any> {
+  if (!dbReadyPromise) {
+    dbReadyPromise = (async () => {
+      if (process.env.DATABASE_URL) {
+        poolInstance = new Pool({ connectionString: process.env.DATABASE_URL });
+        dbInstance = drizzlePg(poolInstance, { schema });
+      } else {
+        const isServerless = Boolean(
+          process.env.VERCEL ||
+          process.env.VERCEL_ENV ||
+          process.env.AWS_LAMBDA_FUNCTION_NAME ||
+          process.env.NOW_REGION ||
+          process.env.NODE_ENV === "production"
+        );
+        const dataDir = isServerless ? "memory://" : path.resolve(process.cwd(), ".local-db");
+        const pglite = new PGlite(dataDir);
+        await pglite.waitReady;
+        await pglite.exec(createTablesSql);
+        dbInstance = drizzlePglite(pglite, { schema });
+        await syncEnvToShopSettings(dbInstance);
+      }
+      return dbInstance;
+    })();
+  }
+  return dbReadyPromise;
 }
 
+// Trigger initialization on module load
+ensureDbReady();
+
 export const pool = poolInstance;
-export const db = dbInstance;
+export const db = new Proxy({} as any, {
+  get(_target, prop) {
+    const target = dbInstance || {};
+    const val = target[prop];
+    return typeof val === "function" ? val.bind(target) : val;
+  },
+});
 
 export * from "./schema";

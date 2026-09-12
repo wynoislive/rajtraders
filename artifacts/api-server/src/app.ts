@@ -10,8 +10,19 @@ import { CLERK_PROXY_PATH, clerkProxyMiddleware, getClerkProxyHost } from "./mid
 import { isAllowedOrigin, secureGateway } from "./middlewares/security";
 import { requestIdMiddleware } from "./middlewares/request-id";
 import { globalErrorHandler } from "./middlewares/error-handler";
+import { ensureDbReady } from "@workspace/db";
 
 const app: Express = express();
+
+// ── Database readiness gate ──
+app.use(async (_req, _res, next) => {
+  try {
+    await ensureDbReady();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ── Request ID (first, so every log line and error response has it) ──
 app.use(requestIdMiddleware);
