@@ -255,7 +255,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     }
 
     fun login(email: String, password: String) {
-        val cleanEmail = email.trim().toLowerCase()
+        val cleanEmail = email.trim().lowercase()
         viewModelScope.launch {
             _uiState.update { it.copy(isAuthenticating = true, authError = null) }
             runCatching {
