@@ -10,23 +10,23 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@tailwindcss/vite": "catalog:",
-    "@tanstack/react-query": "catalog:",
-    "clsx": "catalog:",
-    "framer-motion": "catalog:",
-    "lucide-react": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "tailwind-merge": "catalog:",
-    "tailwindcss": "catalog:",
-    "vite": "catalog:",
+    "@tailwindcss/vite": "^4.1.14",
+    "@tanstack/react-query": "^5.90.21",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.23.24",
+    "lucide-react": "^0.545.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss": "^4.1.14",
+    "vite": "^7.3.2",
     "wouter": "^3.3.5"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
-    "@vitejs/plugin-react": "catalog:",
+    "@types/node": "^25.3.3",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^5.0.4",
     "typescript": "^5.0.0"
   }
 }

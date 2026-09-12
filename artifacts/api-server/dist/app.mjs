@@ -101496,7 +101496,7 @@ var import_express12 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/underscore.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/underscore.mjs
 function snakeToCamel(str) {
   return str ? str.replace(/([-_][a-z])/g, (match2) => match2.toUpperCase().replace(/-|_/, "")) : "";
 }
@@ -101539,7 +101539,7 @@ function isTruthy(value) {
   return false;
 }
 
-// node_modules/.pnpm/@clerk+express@2.1.64_express@5.2.1/node_modules/@clerk/express/dist/utils-C86a0e6e.mjs
+// node_modules/.pnpm/@clerk+express@2.1.64_expre_bdce793b465a4147e26a111b44a16f51/node_modules/@clerk/express/dist/utils-C86a0e6e.mjs
 import { Readable } from "stream";
 var clerkAuthBrand = /* @__PURE__ */ Symbol.for("@clerk/express.auth");
 var brandRequestAuth = (authHandler) => Object.assign(authHandler, { [clerkAuthBrand]: true });
@@ -101609,7 +101609,7 @@ var requestToProxyRequest = (req) => {
   });
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/_chunks/runtimeEnvironment-CTVGzENl.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/_chunks/runtimeEnvironment-CTVGzENl.mjs
 var automatedEnvironmentVariables = [
   "CI",
   "CONTINUOUS_INTEGRATION",
@@ -101643,7 +101643,7 @@ var isProductionEnvironment = () => {
   return false;
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/deprecated.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/deprecated.mjs
 var displayedWarnings = /* @__PURE__ */ new Set();
 var deprecated = (fnName, warning, key) => {
   const hideWarning = isTestEnvironment() || isProductionEnvironment();
@@ -101654,7 +101654,7 @@ var deprecated = (fnName, warning, key) => {
 ${warning}`);
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/constants.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/constants.mjs
 var LEGACY_DEV_INSTANCE_SUFFIXES = [
   ".lcl.dev",
   ".lclstage.dev",
@@ -101688,21 +101688,21 @@ var STAGING_FAPI_URL = "https://frontend-api.clerkstage.dev";
 var PROD_FAPI_URL = "https://frontend-api.clerk.dev";
 var DEFAULT_PROXY_PATH = "/__clerk";
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/isomorphicAtob.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/isomorphicAtob.mjs
 var isomorphicAtob = (data) => {
   if (typeof atob !== "undefined" && typeof atob === "function") return atob(data);
   else if (typeof globalThis.Buffer !== "undefined") return globalThis.Buffer.from(data, "base64").toString();
   return data;
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/isomorphicBtoa.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/isomorphicBtoa.mjs
 var isomorphicBtoa = (data) => {
   if (typeof btoa !== "undefined" && typeof btoa === "function") return btoa(data);
   else if (typeof globalThis.Buffer !== "undefined") return globalThis.Buffer.from(data).toString("base64");
   return data;
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/keys.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/keys.mjs
 var PUBLISHABLE_KEY_LIVE_PREFIX = "pk_live_";
 var PUBLISHABLE_KEY_TEST_PREFIX = "pk_test_";
 var PUBLISHABLE_FRONTEND_API_DEV_REGEX = /^(([a-z]+)-){2}([0-9]{1,2})\.clerk\.accounts([a-z.]*)(dev|com)$/i;
@@ -101806,7 +101806,7 @@ var getSuffixedCookieName = (cookieName, cookieSuffix) => {
   return `${cookieName}_${cookieSuffix}`;
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/retry.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/retry.mjs
 var defaultOptions = {
   initialDelay: 125,
   maxDelayBetweenRetries: 0,
@@ -101857,7 +101857,7 @@ var retry = async (callback, options = {}) => {
   }
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/url.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/url.mjs
 function isLegacyDevAccountPortalOrigin(host) {
   return LEGACY_DEV_INSTANCE_SUFFIXES.some((legacyDevSuffix) => {
     return host.startsWith("accounts.") && host.endsWith(legacyDevSuffix);
@@ -101869,7 +101869,7 @@ function isCurrentDevAccountPortalOrigin(host) {
   });
 }
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/_chunks/clerkRuntimeError-DlesLWqO.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/_chunks/clerkRuntimeError-DlesLWqO.mjs
 function createErrorTypeGuard(ErrorClass) {
   function typeGuard(error) {
     const target = error ?? this;
@@ -101934,7 +101934,7 @@ var ClerkRuntimeError = class ClerkRuntimeError2 extends ClerkError {
 };
 var isClerkRuntimeError = createErrorTypeGuard(ClerkRuntimeError);
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/_chunks/error-CYyD2kei.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/_chunks/error-CYyD2kei.mjs
 var ClerkAPIError = class {
   static kind = "ClerkAPIError";
   code;
@@ -102072,11 +102072,11 @@ function buildErrorThrower({ packageName, customMessages }) {
   };
 }
 
-// node_modules/.pnpm/@clerk+backend@3.16.13/node_modules/@clerk/backend/dist/chunk-YBVFDYDR.mjs
+// node_modules/.pnpm/@clerk+backend@3.16.13_reac_b67a5f72563cca67bfd3f443994ca793/node_modules/@clerk/backend/dist/chunk-YBVFDYDR.mjs
 var errorThrower = buildErrorThrower({ packageName: "@clerk/backend" });
 var { isDevOrStagingUrl } = createDevOrStagingUrlCache();
 
-// node_modules/.pnpm/@clerk+backend@3.16.13/node_modules/@clerk/backend/dist/chunk-RZ7A7F6X.mjs
+// node_modules/.pnpm/@clerk+backend@3.16.13_reac_b67a5f72563cca67bfd3f443994ca793/node_modules/@clerk/backend/dist/chunk-RZ7A7F6X.mjs
 var TokenVerificationErrorCode = {
   InvalidSecretKey: "clerk_key_invalid"
 };
@@ -102149,10 +102149,10 @@ var _MachineTokenVerificationError = class _MachineTokenVerificationError2 exten
 _MachineTokenVerificationError.kind = "MachineTokenVerificationError";
 var MachineTokenVerificationError = _MachineTokenVerificationError;
 
-// node_modules/.pnpm/@clerk+backend@3.16.13/node_modules/@clerk/backend/dist/runtime/node/crypto.mjs
+// node_modules/.pnpm/@clerk+backend@3.16.13_reac_b67a5f72563cca67bfd3f443994ca793/node_modules/@clerk/backend/dist/runtime/node/crypto.mjs
 import { webcrypto } from "node:crypto";
 
-// node_modules/.pnpm/@clerk+backend@3.16.13/node_modules/@clerk/backend/dist/chunk-QOX5XVDR.mjs
+// node_modules/.pnpm/@clerk+backend@3.16.13_reac_b67a5f72563cca67bfd3f443994ca793/node_modules/@clerk/backend/dist/chunk-QOX5XVDR.mjs
 var globalFetch = fetch.bind(globalThis);
 var runtime = {
   crypto: webcrypto,
@@ -102538,7 +102538,7 @@ async function verifyJwt(token, options) {
   return { data: payload };
 }
 
-// node_modules/.pnpm/@clerk+backend@3.16.13/node_modules/@clerk/backend/dist/chunk-TOROEX6P.mjs
+// node_modules/.pnpm/@clerk+backend@3.16.13_reac_b67a5f72563cca67bfd3f443994ca793/node_modules/@clerk/backend/dist/chunk-TOROEX6P.mjs
 var __create2 = Object.create;
 var __defProp2 = Object.defineProperty;
 var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
@@ -102573,13 +102573,13 @@ var __privateAdd = (obj, member, value) => member.has(obj) ? __typeError("Cannot
 var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value);
 var __privateMethod = (obj, member, method) => (__accessCheck(obj, member, "access private method"), method);
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/buildAccountsBaseUrl.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/buildAccountsBaseUrl.mjs
 function buildAccountsBaseUrl(frontendApi) {
   if (!frontendApi) return "";
   return `https://${frontendApi.replace(/clerk\.accountsstage\./, "accountsstage.").replace(/clerk\.accounts\.|clerk\./, "accounts.")}`;
 }
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/logger.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/logger.mjs
 var loggedMessages = /* @__PURE__ */ new Set();
 var logger = {
   /**
@@ -102598,7 +102598,7 @@ var logger = {
   }
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/proxy.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/proxy.mjs
 function isValidProxyUrl(key) {
   if (!key) return true;
   return isHttpOrHttps(key) || isProxyUrlRelative(key);
@@ -102637,7 +102637,7 @@ function getAutoProxyUrlFromEnvironment({ publishableKey, hasDomain = false, has
   return AUTO_PROXY_PATH;
 }
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/authorization.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/authorization.mjs
 var TYPES_TO_OBJECTS = {
   strict_mfa: {
     afterMinutes: 10,
@@ -102807,7 +102807,7 @@ var createCheckAuthorization = (options) => {
   };
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/jwtPayloadParser.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/jwtPayloadParser.mjs
 var decimalToBinaryBits = (decimal, minimumLength) => {
   if (!/^\d+$/.test(decimal)) return;
   let remaining = decimal.replace(/^0+/, "") || "0";
@@ -102897,7 +102897,7 @@ var __experimental_JWTPayloadToAuthObjectProperties = (claims) => {
   };
 };
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/_chunks/pathToRegexp-C-7qTA7_.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/_chunks/pathToRegexp-C-7qTA7_.mjs
 function _(r) {
   for (var n = [], e = 0; e < r.length; ) {
     var a = r[e];
@@ -103134,7 +103134,7 @@ ${e.message}`);
   }
 }
 
-// node_modules/.pnpm/@clerk+backend@3.16.13/node_modules/@clerk/backend/dist/chunk-UHYAW5J6.mjs
+// node_modules/.pnpm/@clerk+backend@3.16.13_reac_b67a5f72563cca67bfd3f443994ca793/node_modules/@clerk/backend/dist/chunk-UHYAW5J6.mjs
 var require_dist3 = __commonJS2({
   "../../node_modules/.pnpm/cookie@1.1.1/node_modules/cookie/dist/index.js"(exports) {
     "use strict";
@@ -110437,7 +110437,7 @@ function createAuthenticateRequest(params) {
   };
 }
 
-// node_modules/.pnpm/@clerk+backend@3.16.13/node_modules/@clerk/backend/dist/chunk-P263NW7Z.mjs
+// node_modules/.pnpm/@clerk+backend@3.16.13_reac_b67a5f72563cca67bfd3f443994ca793/node_modules/@clerk/backend/dist/chunk-P263NW7Z.mjs
 function withLegacyReturn(cb) {
   return async (...args) => {
     const { data, errors } = await cb(...args);
@@ -110448,7 +110448,7 @@ function withLegacyReturn(cb) {
   };
 }
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/_chunks/telemetry-9C6N5ppw.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/_chunks/telemetry-9C6N5ppw.mjs
 var PROCESS_FLAG = /* @__PURE__ */ Symbol.for("@clerk/shared.telemetryNoticeShown");
 var NOTICE_LINES = [
   "Attention: Clerk collects telemetry data from its SDKs when connected to development instances.",
@@ -110809,7 +110809,7 @@ var TelemetryCollector = class {
   }
 };
 
-// node_modules/.pnpm/@clerk+backend@3.16.13/node_modules/@clerk/backend/dist/index.mjs
+// node_modules/.pnpm/@clerk+backend@3.16.13_reac_b67a5f72563cca67bfd3f443994ca793/node_modules/@clerk/backend/dist/index.mjs
 var verifyToken2 = withLegacyReturn(verifyToken);
 function createClerkClient(options) {
   const opts = { ...options };
@@ -110829,10 +110829,10 @@ function createClerkClient(options) {
   };
 }
 
-// node_modules/.pnpm/@clerk+express@2.1.64_express@5.2.1/node_modules/@clerk/express/dist/index.mjs
+// node_modules/.pnpm/@clerk+express@2.1.64_expre_bdce793b465a4147e26a111b44a16f51/node_modules/@clerk/express/dist/index.mjs
 import { Readable as Readable2 } from "stream";
 
-// node_modules/.pnpm/@clerk+backend@3.16.13/node_modules/@clerk/backend/dist/proxy.mjs
+// node_modules/.pnpm/@clerk+backend@3.16.13_reac_b67a5f72563cca67bfd3f443994ca793/node_modules/@clerk/backend/dist/proxy.mjs
 var HOP_BY_HOP_HEADERS = /* @__PURE__ */ new Set([
   "connection",
   "keep-alive",
@@ -111035,14 +111035,14 @@ async function clerkFrontendApiProxy(request2, options) {
   }
 }
 
-// node_modules/.pnpm/@clerk+shared@4.30.2_react-_8e521eb36131415259414567dba6c096/node_modules/@clerk/shared/dist/_chunks/handleValueOrFn-CKEDuW4I.mjs
+// node_modules/.pnpm/@clerk+shared@4.30.2_react-_3cb93c6d1de5e25b81bade5cc30ac260/node_modules/@clerk/shared/dist/_chunks/handleValueOrFn-CKEDuW4I.mjs
 function handleValueOrFn(value, url, defaultValue) {
   if (typeof value === "function") return value(url);
   if (typeof value !== "undefined") return value;
   if (typeof defaultValue !== "undefined") return defaultValue;
 }
 
-// node_modules/.pnpm/@clerk+express@2.1.64_express@5.2.1/node_modules/@clerk/express/dist/index.mjs
+// node_modules/.pnpm/@clerk+express@2.1.64_expre_bdce793b465a4147e26a111b44a16f51/node_modules/@clerk/express/dist/index.mjs
 var clerkClientSingleton = {};
 var clerkClient = new Proxy(clerkClientSingleton, {
   get(_target, property) {
