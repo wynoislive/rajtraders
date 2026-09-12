@@ -400,10 +400,6 @@ export default function App() {
                 </span>
               )}
             </button>
-
-            <a href="/admin" target="_blank" rel="noopener noreferrer" className="hidden lg:inline-flex items-center gap-1.5 text-xs font-bold text-[#0E3D42]/60 hover:text-[#0E3D42] ml-2">
-              Admin Portal <ArrowUpRight size={14} />
-            </a>
           </div>
         </div>
       </header>
