@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import pg from "pg";
 import path from "path";
 import { eq } from "drizzle-orm";
-import * as schema from "./schema";
+import * as schema from "./schema/index.js";
 
 const { Pool } = pg;
 
