@@ -14,6 +14,8 @@ async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
 
+  const { copyFile, readdir, mkdir } = await import("node:fs/promises");
+
   await esbuild({
     entryPoints: [
       path.resolve(artifactDir, "src/index.ts"),
@@ -126,6 +128,20 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  // Copy PGlite WASM assets into dist output directory for serverless deployment
+  const pgliteDist = path.resolve(artifactDir, "node_modules/@electric-sql/pglite/dist");
+  try {
+    const files = await readdir(pgliteDist);
+    for (const file of files) {
+      if (file.endsWith(".wasm")) {
+        await copyFile(path.resolve(pgliteDist, file), path.resolve(distDir, file));
+        console.log(`Copied ${file} to dist/`);
+      }
+    }
+  } catch (err) {
+    console.warn("Notice: PGlite WASM file copy skipped:", err.message);
+  }
 }
 
 buildAll().catch((err) => {

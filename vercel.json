@@ -4,7 +4,7 @@
   "outputDirectory": ".",
   "functions": {
     "api/*.js": {
-      "includeFiles": "artifacts/api-server/dist/**"
+      "includeFiles": "{artifacts/api-server/dist/**,node_modules/@electric-sql/pglite/**,node_modules/pg/**}"
     }
   },
   "rewrites": [
