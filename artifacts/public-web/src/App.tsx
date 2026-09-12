@@ -268,10 +268,33 @@ export default function App() {
         setShowAuthModal(false);
         setOtpRequired(false);
       } else {
-        setAuthError(data.error || 'Invalid OTP code.');
+        setAuthError(data.error || 'Verification failed.');
       }
-    } catch {
-      setAuthError('OTP verification failed.');
+    } catch (err: any) {
+      setAuthError('Server error verifying OTP.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const res = await fetch(getApiUrl('/api/v1/auth/resend-login-otp'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingEmail }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAuthError(null);
+        alert(`New verification OTP code sent to ${pendingEmail}`);
+      } else {
+        setAuthError(data.error || 'Failed to resend code.');
+      }
+    } catch (err) {
+      setAuthError('Server connection error.');
     } finally {
       setAuthLoading(false);
     }
@@ -646,9 +669,14 @@ export default function App() {
                 <p className="text-xs text-gray-500 font-medium">A 6-digit verification code was sent to <strong className="text-[#0E3D42]">{pendingEmail}</strong></p>
                 <input required type="text" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="6-Digit OTP" className="w-full p-3 text-center tracking-widest text-xl font-bold rounded-xl border border-gray-300" />
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Verifying...' : 'Verify OTP'}</button>
-                <button type="button" onClick={() => { setOtpRequired(false); setAuthError(null); }} className="w-full text-center text-xs font-bold text-[#0E3D42]/70 hover:underline">
-                  Change Email / Return to {authMode === 'login' ? 'Sign In' : 'Register'}
-                </button>
+                <div className="flex justify-between text-xs font-bold text-[#0E3D42]/80">
+                  <button type="button" onClick={handleResendOtp} disabled={authLoading} className="hover:underline text-[#0E3D42]">
+                    Didn't receive code? Resend OTP
+                  </button>
+                  <button type="button" onClick={() => { setOtpRequired(false); setAuthError(null); }} className="hover:underline">
+                    Change Email
+                  </button>
+                </div>
               </form>
             ) : authMode === 'login' ? (
               <form onSubmit={handleLogin} className="space-y-4">

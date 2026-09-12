@@ -233,24 +233,33 @@ export async function sendEmail(
     return { success: true, provider: "hostinger_rest" };
   }
 
-  // Fall back to Nodemailer SMTP
+  // Fall back 1: Hostinger Nodemailer SMTP
   try {
     const { transporter, from } = await getTransporter();
     const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
     const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
-    logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Nodemailer SMTP");
+    logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Hostinger Nodemailer SMTP");
     return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : undefined };
   } catch (err: any) {
-    logger.error({ err, to }, "SMTP email send failed");
-    return { success: false, error: err.message || "SMTP Send Failed", hostingerError: hostingerResult.error };
+    logger.warn({ err: err.message, to }, "Primary SMTP email send failed; trying Notification Gmail SMTP fallback");
+    // Fall back 2: System / Notification Gmail Nodemailer SMTP
+    try {
+      const { transporter, from } = await getNotificationTransporter();
+      const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
+      logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Notification Gmail Nodemailer SMTP (Fallback)");
+      return { success: true, provider: "gmail_notifications" };
+    } catch (notifErr: any) {
+      logger.error({ notifErr: notifErr.message, to }, "All email providers (Hostinger API, Hostinger SMTP, Gmail SMTP) failed");
+      return { success: false, error: notifErr.message || "All email senders failed", hostingerError: hostingerResult.error };
+    }
   }
 }
 
-// ── Public email functions (with queue support) ─────────────
+// ── Public email functions (synchronous delivery for serverless reliability) ─────────────
 
 /**
- * Send a 6-digit verification OTP email.
- * Tries BullMQ queue first → Hostinger API → Nodemailer SMTP.
+ * Send a 6-digit verification OTP email immediately.
+ * Direct dispatch: Hostinger API → Hostinger SMTP → Gmail Notifications SMTP.
  */
 export async function sendVerificationOtpEmail(
   toEmail: string,
@@ -258,16 +267,6 @@ export async function sendVerificationOtpEmail(
   otpCode: string,
 ): Promise<{ success: boolean; previewUrl?: string }> {
   try {
-    // Try queue first
-    const queued = await enqueueEmail({
-      type: "verification-otp",
-      to: toEmail,
-      userName,
-      otpCode,
-    });
-    if (queued) return { success: true };
-
-    // Direct send (queue unavailable)
     const { shopName } = await getTransporter();
     const formattedCode = `${otpCode.slice(0, 3)} ${otpCode.slice(3)}`;
     const subject = `Your ${shopName} Verification Code: ${otpCode} (Valid 10 mins)`;
@@ -280,8 +279,8 @@ export async function sendVerificationOtpEmail(
 }
 
 /**
- * Send a password recovery email with a 60-minute reset link.
- * Tries BullMQ queue first → Hostinger API → Nodemailer SMTP.
+ * Send a password recovery email with a 60-minute reset link immediately.
+ * Direct dispatch: Hostinger API → Hostinger SMTP → Gmail Notifications SMTP.
  */
 export async function sendPasswordRecoveryEmail(
   toEmail: string,
@@ -290,17 +289,6 @@ export async function sendPasswordRecoveryEmail(
   resetUrl: string,
 ): Promise<{ success: boolean; previewUrl?: string }> {
   try {
-    // Try queue first
-    const queued = await enqueueEmail({
-      type: "password-recovery",
-      to: toEmail,
-      userName,
-      resetToken,
-      resetUrl,
-    });
-    if (queued) return { success: true };
-
-    // Direct send (queue unavailable)
     const { shopName } = await getTransporter();
     const subject = `Action Required: Reset your ${shopName} password (valid 60 mins)`;
     const htmlContent = buildRecoveryHtml(shopName, userName, resetToken, resetUrl);
