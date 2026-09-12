@@ -280,6 +280,7 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
 
 let dbReadyPromise: Promise<any> | null = null;
 let pgliteInstance: any = null;
+let isInitialized = false;
 
 const DEFAULT_SUPABASE_URL = "postgresql://postgres:jooPR0L9GDu6R7sM@db.hbwwbapappmsbdsjaasm.supabase.co:5432/postgres";
 const rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : undefined);
@@ -288,6 +289,9 @@ if (rawDbUrl) {
   const isCloudPg = rawDbUrl.includes("supabase.co") || rawDbUrl.includes("sslmode=") || !!process.env.VERCEL;
   poolInstance = new Pool({
     connectionString: rawDbUrl,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
     ...(isCloudPg ? { ssl: { rejectUnauthorized: false } } : {}),
   });
   dbInstance = drizzlePg(poolInstance, { schema });
@@ -304,19 +308,26 @@ if (rawDbUrl) {
 let lastDbError: string | null = null;
 
 export async function ensureDbReady(): Promise<any> {
-  try {
-    if (rawDbUrl && poolInstance) {
-      await poolInstance.query(createTablesSql);
-      if (dbInstance) await syncEnvToShopSettings(dbInstance);
-    } else if (pgliteInstance) {
-      await pgliteInstance.waitReady;
-      await pgliteInstance.exec(createTablesSql);
-      if (dbInstance) await syncEnvToShopSettings(dbInstance);
-    }
-  } catch (err: any) {
-    console.error("ensureDbReady error:", err);
+  if (isInitialized) return dbInstance;
+  if (!dbReadyPromise) {
+    dbReadyPromise = (async () => {
+      try {
+        if (rawDbUrl && poolInstance) {
+          await poolInstance.query(createTablesSql);
+          if (dbInstance) await syncEnvToShopSettings(dbInstance);
+        } else if (pgliteInstance) {
+          await pgliteInstance.waitReady;
+          await pgliteInstance.exec(createTablesSql);
+          if (dbInstance) await syncEnvToShopSettings(dbInstance);
+        }
+        isInitialized = true;
+      } catch (err: any) {
+        console.error("ensureDbReady error:", err);
+      }
+      return dbInstance;
+    })();
   }
-  return dbInstance;
+  return dbReadyPromise;
 }
 
 // Safe initialization trigger

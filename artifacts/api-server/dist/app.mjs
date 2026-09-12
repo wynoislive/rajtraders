@@ -123597,13 +123597,18 @@ async function syncEnvToShopSettings(db2) {
     await db2.update(shopSettingsTable).set(updates).where(eq(shopSettingsTable.id, "default_shop"));
   }
 }
+var dbReadyPromise = null;
 var pgliteInstance = null;
+var isInitialized = false;
 var DEFAULT_SUPABASE_URL = "postgresql://postgres:jooPR0L9GDu6R7sM@db.hbwwbapappmsbdsjaasm.supabase.co:5432/postgres";
 var rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : void 0);
 if (rawDbUrl) {
   const isCloudPg = rawDbUrl.includes("supabase.co") || rawDbUrl.includes("sslmode=") || !!process.env.VERCEL;
   poolInstance = new Pool2({
     connectionString: rawDbUrl,
+    max: 10,
+    idleTimeoutMillis: 3e4,
+    connectionTimeoutMillis: 1e4,
     ...isCloudPg ? { ssl: { rejectUnauthorized: false } } : {}
   });
   dbInstance = drizzle(poolInstance, { schema: schema_exports });
@@ -123617,19 +123622,26 @@ if (rawDbUrl) {
   }
 }
 async function ensureDbReady() {
-  try {
-    if (rawDbUrl && poolInstance) {
-      await poolInstance.query(createTablesSql);
-      if (dbInstance) await syncEnvToShopSettings(dbInstance);
-    } else if (pgliteInstance) {
-      await pgliteInstance.waitReady;
-      await pgliteInstance.exec(createTablesSql);
-      if (dbInstance) await syncEnvToShopSettings(dbInstance);
-    }
-  } catch (err) {
-    console.error("ensureDbReady error:", err);
+  if (isInitialized) return dbInstance;
+  if (!dbReadyPromise) {
+    dbReadyPromise = (async () => {
+      try {
+        if (rawDbUrl && poolInstance) {
+          await poolInstance.query(createTablesSql);
+          if (dbInstance) await syncEnvToShopSettings(dbInstance);
+        } else if (pgliteInstance) {
+          await pgliteInstance.waitReady;
+          await pgliteInstance.exec(createTablesSql);
+          if (dbInstance) await syncEnvToShopSettings(dbInstance);
+        }
+        isInitialized = true;
+      } catch (err) {
+        console.error("ensureDbReady error:", err);
+      }
+      return dbInstance;
+    })();
   }
-  return dbInstance;
+  return dbReadyPromise;
 }
 ensureDbReady().catch((e) => console.warn("ensureDbReady startup error:", e));
 var db = dbInstance;
