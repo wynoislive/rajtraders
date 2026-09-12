@@ -123978,8 +123978,11 @@ var pgliteInstance = null;
 var isInitialized = false;
 var DEFAULT_SUPABASE_URL = "postgresql://postgres.hbwwbapappmsbdsjaasm:jooPR0L9GDu6R7sM@aws-0-ap-south-1.pooler.supabase.com:6543/postgres";
 var rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : void 0);
+if (rawDbUrl && (rawDbUrl.includes("supabase.co:5432") || rawDbUrl.includes("db.hbwwbapappmsbdsjaasm"))) {
+  rawDbUrl = rawDbUrl.replace(/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co:5432/, "postgres.$2:$1@aws-0-ap-south-1.pooler.supabase.com:6543");
+}
 if (rawDbUrl) {
-  const isCloudPg = rawDbUrl.includes("supabase.co") || rawDbUrl.includes("sslmode=") || !!process.env.VERCEL;
+  const isCloudPg = rawDbUrl.includes("supabase.co") || rawDbUrl.includes("pooler.supabase.com") || rawDbUrl.includes("sslmode=") || !!process.env.VERCEL;
   poolInstance = new Pool2({
     connectionString: rawDbUrl,
     max: 10,
