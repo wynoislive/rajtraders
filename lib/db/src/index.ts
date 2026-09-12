@@ -276,14 +276,7 @@ if (process.env.DATABASE_URL) {
   poolInstance = new Pool({ connectionString: process.env.DATABASE_URL });
   dbInstance = drizzlePg(poolInstance, { schema });
 } else {
-  const isServerless = Boolean(
-    process.env.VERCEL ||
-    process.env.VERCEL_ENV ||
-    process.env.AWS_LAMBDA_FUNCTION_NAME ||
-    process.env.NOW_REGION ||
-    process.env.NODE_ENV === "production"
-  );
-  const dataDir = isServerless ? path.resolve("/tmp", ".local-db") : path.resolve(process.cwd(), ".local-db");
+  const dataDir = "memory://";
   pgliteInstance = new PGlite(dataDir);
   dbInstance = drizzlePglite(pgliteInstance, { schema });
 }
