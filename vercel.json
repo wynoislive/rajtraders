@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "pnpm --filter @workspace/api-server... build && cd artifacts/public-web && npx vite build",
-  "outputDirectory": "artifacts/public-web/dist/public",
+  "buildCommand": "pnpm --filter @workspace/api-server... build && cd artifacts/shop-admin && npx vite build",
+  "outputDirectory": "artifacts/shop-admin/dist/public",
   "functions": {
     "api/*.js": {
       "includeFiles": "{artifacts/api-server/dist/**,node_modules/@electric-sql/pglite/**,node_modules/pg/**}"
