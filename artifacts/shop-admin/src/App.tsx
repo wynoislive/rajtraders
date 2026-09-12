@@ -70,6 +70,8 @@ import {
   useUpdateProduct,
   useUpdateRegistrationPolicy,
   useValidateDiscount,
+  setAuthTokenGetter,
+  setBaseUrl,
 } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -81,14 +83,36 @@ const queryClient = new QueryClient();
 
 type Tone = 'teal' | 'yellow' | 'coral' | 'green' | 'slate';
 
-// Shared shop settings context for sidebar/overview to access shopName dynamically
+// Shared contexts
 import { createContext, useContext } from 'react';
 const ShopContext = createContext<{ shopName: string; shopDomain: string }>({ shopName: 'RAJ TRADERS', shopDomain: 'sundarvan.xyz' });
+
+const AdminAuthContext = createContext<{
+  staffUser: any | null;
+  staffToken: string | null;
+  login: (token: string, user: any) => void;
+  logout: () => void;
+}>({
+  staffUser: null,
+  staffToken: null,
+  login: () => {},
+  logout: () => {},
+});
 
 function getApiUrl(path: string): string {
   const apiTarget = import.meta.env.VITE_API_TARGET || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? 'https://api.sundarvan.xyz' : '');
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return apiTarget ? `${apiTarget.replace(/\/+$/, '')}${cleanPath}` : cleanPath;
+}
+
+// Configure api-client-react base URL & token getter
+const initialApiTarget = import.meta.env.VITE_API_TARGET || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? 'https://api.sundarvan.xyz' : '');
+setBaseUrl(initialApiTarget || null);
+setAuthTokenGetter(() => localStorage.getItem('raj_staff_token'));
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('raj_staff_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 function money(cents = 0) {
@@ -192,6 +216,112 @@ const navItems = [
   { href: '/settings', label: 'Store & Delivery', icon: Settings2 },
 ];
 
+function AdminLoginPage({ onLoginSuccess }: { onLoginSuccess: (token: string, staff: any) => void }) {
+  const [email, setEmail] = useState('admin@rajtraders.com');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      setError('Please provide both staff email and password.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(getApiUrl('/api/v1/admin/staff/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token && data.staff) {
+        onLoginSuccess(data.token, data.staff);
+      } else {
+        setError(data.error || data.message || 'Invalid staff email or password.');
+      }
+    } catch {
+      setError('Connection failed. Please verify API backend service.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#091012] flex items-center justify-center p-4 text-[#E6F0F2] font-sans">
+      <div className="max-w-md w-full bg-[#111C1F] border border-[#E2A93B]/20 rounded-3xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.6)] space-y-6">
+        <div className="text-center space-y-3">
+          <img src="/RAJTRADERS-LOGO.png" alt="RAJ TRADERS" className="size-16 mx-auto object-contain rounded-2xl shadow-xl border border-[#E2A93B]/40 p-1 bg-black/40" />
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-white mt-2">RAJ TRADERS</h1>
+            <div className="text-[10px] font-bold text-[#E2A93B] uppercase tracking-[0.2em] mt-0.5">Master Operations Console</div>
+          </div>
+          <p className="text-xs text-[#8A9E9F] font-medium leading-relaxed max-w-xs mx-auto">
+            Protected Admin Area. Enter staff credentials to access operations, orders, and shop management.
+          </p>
+        </div>
+
+        {error && (
+          <div className="p-3.5 bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold rounded-xl flex items-center gap-2">
+            <ShieldAlert size={16} className="shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-[#A6C0C2] uppercase tracking-wider text-[10px]">Staff Email Address</label>
+            <div className="relative">
+              <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#566B6D]" />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@rajtraders.com"
+                className="w-full h-11 pl-10 pr-4 bg-[#0B1518] border border-[#1E2E32] focus:border-[#E2A93B] rounded-xl text-xs font-semibold text-white outline-none transition"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-[#A6C0C2] uppercase tracking-wider text-[10px]">Staff Security Password</label>
+            <div className="relative">
+              <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#566B6D]" />
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full h-11 pl-10 pr-4 bg-[#0B1518] border border-[#1E2E32] focus:border-[#E2A93B] rounded-xl text-xs font-semibold text-white outline-none transition"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full h-12 bg-[#E2A93B] hover:bg-[#E2A93B]/90 text-[#091012] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {loading ? <RefreshCw size={16} className="animate-spin" /> : <Key size={16} />}
+            {loading ? 'Authenticating...' : 'Unlock Ops Console'}
+          </button>
+        </form>
+
+        <div className="pt-2 border-t border-[#1E2E32] text-center">
+          <div className="text-[11px] font-semibold text-[#667C7E]">
+            Default Admin: <span className="font-mono text-white font-bold">admin@rajtraders.com</span>
+          </div>
+          <div className="text-[10px] text-[#526668] mt-0.5 font-mono">Password: Admin@123</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [mobileNav, setMobileNav] = useState(false);
@@ -203,6 +333,7 @@ function Shell({ children }: { children: ReactNode }) {
   ]);
   const active = navItems.find((item) => item.href === location)?.label ?? 'Shop Admin';
   const unreadCount = notifications.filter((n) => n.unread).length;
+  const { staffUser, logout } = useContext(AdminAuthContext);
 
   const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
   const clearNotifications = () => setNotifications([]);
@@ -228,10 +359,17 @@ function Shell({ children }: { children: ReactNode }) {
         </nav>
         <div className="mt-auto">
           <div className="mb-4 rounded-2xl border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-accent)/.7)] p-4">
-            <div className="flex items-center justify-between"><span className="font-mono text-[10px] uppercase tracking-[.15em] text-[hsl(var(--sidebar-foreground)/.56)]">Role: Main Admin</span><span className="relative flex size-2"><span className="absolute inline-flex size-full animate-ping rounded-full bg-[hsl(var(--sidebar-primary))] opacity-60" /><span className="relative inline-flex size-2 rounded-full bg-[hsl(var(--sidebar-primary))]" /></span></div>
-            <div className="mt-3 text-sm font-bold">{useContext(ShopContext).shopName}</div><div className="mt-1 text-xs text-[hsl(var(--sidebar-foreground)/.55)]">RBAC Authorized Session</div>
+            <div className="flex items-center justify-between"><span className="font-mono text-[10px] uppercase tracking-[.15em] text-[hsl(var(--sidebar-foreground)/.56)]">Role: {staffUser?.role || 'MAIN_ADMIN'}</span><span className="relative flex size-2"><span className="absolute inline-flex size-full animate-ping rounded-full bg-[hsl(var(--sidebar-primary))] opacity-60" /><span className="relative inline-flex size-2 rounded-full bg-[hsl(var(--sidebar-primary))]" /></span></div>
+            <div className="mt-3 text-sm font-bold truncate">{staffUser?.name || 'Master Administrator'}</div>
+            <div className="mt-0.5 text-xs text-[hsl(var(--sidebar-foreground)/.55)] truncate">{staffUser?.email || 'admin@rajtraders.com'}</div>
           </div>
-          <Link href="/settings" className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-[hsl(var(--sidebar-foreground)/.67)] transition hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]" data-testid="button-settings"><Settings2 size={17} /> Store & Delivery</Link>
+          <div className="space-y-1">
+            <Link href="/settings" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-bold text-[hsl(var(--sidebar-foreground)/.67)] transition hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]" data-testid="button-settings"><Settings2 size={17} /> Store & Delivery</Link>
+            <button onClick={logout} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition">
+              <span>Sign Out of Admin</span>
+              <Lock size={15} />
+            </button>
+          </div>
         </div>
       </aside>
       {mobileNav && <button className="fixed inset-0 z-30 bg-[hsl(var(--foreground)/.35)] lg:hidden" onClick={() => setMobileNav(false)} aria-label="Close navigation overlay" data-testid="button-nav-overlay" />}
@@ -1494,6 +1632,11 @@ const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 
 function Router() {
   const [location] = useLocation();
+  const { staffToken, login } = useContext(AdminAuthContext);
+
+  if (!staffToken) {
+    return <AdminLoginPage onLoginSuccess={(token, staff) => login(token, staff)} />;
+  }
 
   return (
     <ErrorBoundary resetKey={location}>
@@ -1518,6 +1661,25 @@ function Router() {
 function App() {
   const [shopInfo, setShopInfo] = useState({ shopName: 'RAJ TRADERS', shopDomain: 'sundarvan.xyz' });
 
+  const [staffToken, setStaffToken] = useState<string | null>(() => localStorage.getItem('raj_staff_token'));
+  const [staffUser, setStaffUser] = useState<any>(() => {
+    try { return JSON.parse(localStorage.getItem('raj_staff_user') || 'null'); } catch { return null; }
+  });
+
+  const login = (token: string, user: any) => {
+    setStaffToken(token);
+    setStaffUser(user);
+    localStorage.setItem('raj_staff_token', token);
+    localStorage.setItem('raj_staff_user', JSON.stringify(user));
+  };
+
+  const logout = () => {
+    setStaffToken(null);
+    setStaffUser(null);
+    localStorage.removeItem('raj_staff_token');
+    localStorage.removeItem('raj_staff_user');
+  };
+
   useEffect(() => {
     const apiTarget = import.meta.env.VITE_API_TARGET || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? 'https://api.sundarvan.xyz' : '');
     const url = apiTarget ? `${apiTarget.replace(/\/+$/, '')}/api/v1/admin/shop-settings` : '/api/v1/admin/shop-settings';
@@ -1532,11 +1694,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <ShopContext.Provider value={shopInfo}>
-          <WouterRouter base={basePath}>
-            <Router />
-          </WouterRouter>
-        </ShopContext.Provider>
+        <AdminAuthContext.Provider value={{ staffToken, staffUser, login, logout }}>
+          <ShopContext.Provider value={shopInfo}>
+            <WouterRouter base={basePath}>
+              <Router />
+            </WouterRouter>
+          </ShopContext.Provider>
+        </AdminAuthContext.Provider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
