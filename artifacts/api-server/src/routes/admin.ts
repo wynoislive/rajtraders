@@ -50,7 +50,9 @@ router.get("/v1/admin/summary", async (_req, res): Promise<void> => {
   ]);
   const activeDiscounts = discounts.filter((discount: any) => {
     const now = Date.now();
-    return discount.active && discount.startsAt.getTime() <= now && (!discount.expiresAt || discount.expiresAt.getTime() >= now);
+    const startsAtMs = discount.startsAt ? new Date(discount.startsAt).getTime() : 0;
+    const expiresAtMs = discount.expiresAt ? new Date(discount.expiresAt).getTime() : null;
+    return discount.active && startsAtMs <= now && (!expiresAtMs || expiresAtMs >= now);
   });
   const recentActivity = [
     ...products.map((product: any) => ({
@@ -66,7 +68,8 @@ router.get("/v1/admin/summary", async (_req, res): Promise<void> => {
       timestamp: iso(discount.startsAt) as string,
     })),
   ]
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .filter((a) => Boolean(a.timestamp))
+    .sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""))
     .slice(0, 6);
 
   res.json(
@@ -75,7 +78,7 @@ router.get("/v1/admin/summary", async (_req, res): Promise<void> => {
       draftProducts: products.filter((product: any) => product.status === "draft" || product.approvalStatus === "pending_approval").length,
       liveDiscounts: activeDiscounts.length,
       firstOrderRegistrations: claims.length,
-      inventoryValueCents: products.reduce((total: number, product: any) => total + product.priceCents * product.inventory, 0),
+      inventoryValueCents: products.reduce((total: number, product: any) => total + (product.priceCents || 0) * (product.inventory || 0), 0),
       recentActivity,
       policies,
     }),

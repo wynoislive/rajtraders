@@ -74,9 +74,7 @@ export const globalErrorHandler: ErrorRequestHandler = (err, req, res, _next) =>
   res.status(500).json({
     error: {
       code: "INTERNAL_ERROR",
-      message: isProduction
-        ? "An unexpected error occurred. Please try again later."
-        : err?.message ?? "Unknown error",
+      message: err?.message ?? "An unexpected error occurred. Please try again later.",
       ...(isProduction ? {} : { stack: err?.stack }),
     },
     requestId,
