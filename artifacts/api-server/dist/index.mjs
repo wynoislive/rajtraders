@@ -128098,7 +128098,7 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
       return;
     }
     req.log.error({ err }, "Registration error");
-    res.status(500).json({ error: "Failed to register user. Please try again." });
+    res.status(500).json({ error: "Failed to register user. Please try again.", details: err?.message || String(err) });
   }
 });
 router5.post("/login", authLimiter, validate({ body: LoginBodySchema }), async (req, res) => {
@@ -128127,7 +128127,7 @@ router5.post("/login", authLimiter, validate({ body: LoginBodySchema }), async (
     await issueVerificationOtp(req, res, user, cleanEmail);
   } catch (err) {
     req.log.error({ err }, "Login error");
-    res.status(500).json({ error: "Failed to authenticate. Please try again." });
+    res.status(500).json({ error: "Failed to authenticate. Please try again.", details: err?.message || String(err) });
   }
 });
 router5.post("/verify-login-otp", otpLimiter, validate({ body: VerifyOtpBodySchema }), async (req, res) => {

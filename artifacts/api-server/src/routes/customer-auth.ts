@@ -297,7 +297,7 @@ router.post("/register", authLimiter, validate({ body: RegisterBodySchema }), as
       return;
     }
     req.log.error({ err }, "Registration error");
-    res.status(500).json({ error: "Failed to register user. Please try again." });
+    res.status(500).json({ error: "Failed to register user. Please try again.", details: err?.message || String(err) });
   }
 });
 
@@ -336,7 +336,7 @@ router.post("/login", authLimiter, validate({ body: LoginBodySchema }), async (r
     await issueVerificationOtp(req, res, user, cleanEmail);
   } catch (err: any) {
     req.log.error({ err }, "Login error");
-    res.status(500).json({ error: "Failed to authenticate. Please try again." });
+    res.status(500).json({ error: "Failed to authenticate. Please try again.", details: err?.message || String(err) });
   }
 });
 
