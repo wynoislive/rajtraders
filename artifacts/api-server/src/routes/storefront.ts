@@ -75,7 +75,7 @@ router.get("/v1/products/share/:slugOrId", async (req, res): Promise<void> => {
 
   const p = products[0];
   const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-  const shopDomain = settings?.shopDomain || "myshop.com";
+  const shopDomain = settings?.shopDomain || "sundarvan.xyz";
   res.json({
     ...p,
     shareUrl: `https://${shopDomain}/products/${p.slug}`,
@@ -105,7 +105,7 @@ router.get("/v1/storefront/summary", async (_req, res): Promise<void> => {
       .where(and(eq(productsTable.status, "active"), eq(productsTable.approvalStatus, "approved")));
     const [policy] = await db.select().from(registrationPoliciesTable).where(eq(registrationPoliciesTable.active, true));
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-    const shopName = settings?.shopName || "My Shop";
+    const shopName = settings?.shopName || "RAJ TRADERS";
     res.json(
       GetStorefrontSummaryResponse.parse({
         shopName,
@@ -117,7 +117,7 @@ router.get("/v1/storefront/summary", async (_req, res): Promise<void> => {
     );
   } catch (err) {
     res.json({
-      shopName: "My Shop",
+      shopName: "RAJ TRADERS",
       featuredCount: 2,
       categories: ["Apparel", "Home"],
       firstOrderOffer: "WELCOME10",

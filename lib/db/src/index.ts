@@ -161,8 +161,8 @@ CREATE TABLE IF NOT EXISTS totp_secrets (
 
 CREATE TABLE IF NOT EXISTS shop_settings (
   id TEXT PRIMARY KEY,
-  shop_name TEXT NOT NULL DEFAULT 'My Shop',
-  shop_domain TEXT NOT NULL DEFAULT 'myshop.com',
+  shop_name TEXT NOT NULL DEFAULT 'RAJ TRADERS',
+  shop_domain TEXT NOT NULL DEFAULT 'sundarvan.xyz',
   shop_address TEXT NOT NULL DEFAULT '123 Baker Street, Mumbai',
   latitude REAL NOT NULL DEFAULT 19.0760,
   longitude REAL NOT NULL DEFAULT 72.8777,
@@ -173,18 +173,18 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   r2_account_id TEXT DEFAULT '',
   r2_access_key_id TEXT DEFAULT '',
   r2_secret_access_key TEXT DEFAULT '',
-  r2_bucket_name TEXT DEFAULT 'my-products',
+  r2_bucket_name TEXT DEFAULT 'rajtraders-products',
   r2_public_url TEXT DEFAULT '',
   smtp_host TEXT DEFAULT 'smtp.gmail.com',
   smtp_port INTEGER DEFAULT 465,
   smtp_user TEXT DEFAULT 'notifications.rajtraders@gmail.com',
   smtp_pass TEXT DEFAULT 'NOTIFICATIONS@RAJ',
-  smtp_from TEXT DEFAULT 'My Shop <notifications.rajtraders@gmail.com>',
+  smtp_from TEXT DEFAULT 'RAJ TRADERS <notifications.rajtraders@gmail.com>',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 INSERT INTO shop_settings (id, shop_name, shop_domain, shop_address, latitude, longitude, delivery_radius_km, is_delivery_enabled, razorpay_key_id, razorpay_key_secret, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
-VALUES ('default_shop', 'My Shop', 'myshop.com', '123 Baker Street, Mumbai', 19.0760, 72.8777, 15.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'My Shop <notifications.rajtraders@gmail.com>')
+VALUES ('default_shop', 'RAJ TRADERS', 'sundarvan.xyz', '123 Baker Street, Mumbai', 19.0760, 72.8777, 15.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'RAJ TRADERS <notifications.rajtraders@gmail.com>')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Default MAIN_ADMIN user

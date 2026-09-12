@@ -28,7 +28,7 @@ data class StorefrontUiState(
     val isLoading: Boolean = true,
     val products: List<Product> = emptyList(),
     val summary: StorefrontSummary? = null,
-    val shopName: String = "My Shop",
+    val shopName: String = "RAJ TRADERS",
     val cart: List<CartLine> = emptyList(),
     val search: String = "",
     val selectedCategory: String? = null,

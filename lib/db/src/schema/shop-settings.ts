@@ -2,8 +2,8 @@ import { boolean, pgTable, real, text, timestamp, integer } from "drizzle-orm/pg
 
 export const shopSettingsTable = pgTable("shop_settings", {
   id: text("id").primaryKey().$defaultFn(() => "default_shop"),
-  shopName: text("shop_name").notNull().default("My Shop"),
-  shopDomain: text("shop_domain").notNull().default("myshop.com"),
+  shopName: text("shop_name").notNull().default("RAJ TRADERS"),
+  shopDomain: text("shop_domain").notNull().default("sundarvan.xyz"),
   shopAddress: text("shop_address").notNull().default("123 Baker Street, Mumbai"),
   latitude: real("latitude").notNull().default(19.0760),
   longitude: real("longitude").notNull().default(72.8777),
@@ -22,7 +22,7 @@ export const shopSettingsTable = pgTable("shop_settings", {
   smtpPort: integer("smtp_port").default(465),
   smtpUser: text("smtp_user").default("notifications.rajtraders@gmail.com"),
   smtpPass: text("smtp_pass").default("NOTIFICATIONS@RAJ"),
-  smtpFrom: text("smtp_from").default("My Shop <notifications.rajtraders@gmail.com>"),
+  smtpFrom: text("smtp_from").default("RAJ TRADERS <notifications.rajtraders@gmail.com>"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -109,7 +109,7 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
 SMTP_USER=notifications.rajtraders@gmail.com
 SMTP_PASS=NOTIFICATIONS@RAJ
-SMTP_FROM=My Shop <notifications.rajtraders@gmail.com>
+SMTP_FROM=RAJ TRADERS <notifications.rajtraders@gmail.com>
 
 # ─── Razorpay Payment Gateway ────────────────────────────────
 RAZORPAY_KEY_ID=rzp_test_sandbox123456

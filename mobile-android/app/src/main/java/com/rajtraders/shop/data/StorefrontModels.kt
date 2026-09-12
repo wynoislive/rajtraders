@@ -18,7 +18,7 @@ data class Product(
 )
 
 data class StorefrontSummary(
-    val shopName: String = "My Shop",
+    val shopName: String = "RAJ TRADERS",
     val featuredCount: Int,
     val categories: List<String>,
     val firstOrderOffer: String,

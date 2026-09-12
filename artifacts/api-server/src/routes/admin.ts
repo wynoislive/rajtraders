@@ -480,7 +480,7 @@ router.get("/v1/admin/shop-settings", async (_req, res): Promise<void> => {
     if (!settings) {
       const [inserted] = await db
         .insert(shopSettingsTable)
-        .values({ id: "default_shop", shopName: "My Shop", shopDomain: "myshop.com", shopAddress: "123 Baker Street, Mumbai", latitude: 19.0760, longitude: 72.8777, deliveryRadiusKm: 15.0, isDeliveryEnabled: true })
+        .values({ id: "default_shop", shopName: "RAJ TRADERS", shopDomain: "sundarvan.xyz", shopAddress: "123 Baker Street, Mumbai", latitude: 19.0760, longitude: 72.8777, deliveryRadiusKm: 15.0, isDeliveryEnabled: true })
         .returning();
       settings = inserted;
     }
