@@ -287,16 +287,10 @@ export async function ensureDbReady(): Promise<any> {
   if (!process.env.DATABASE_URL && pgliteInstance) {
     try {
       await pgliteInstance.waitReady;
-      const check = await pgliteInstance.query(
-        "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename='products';"
-      );
-      if (check.rows.length === 0) {
-        await pgliteInstance.exec(createTablesSql);
-        await syncEnvToShopSettings(dbInstance);
-      }
+      await pgliteInstance.exec(createTablesSql);
+      await syncEnvToShopSettings(dbInstance);
     } catch (err: any) {
-      console.error("ensureDbReady self-healing error:", err);
-      throw err;
+      console.error("ensureDbReady error:", err);
     }
   }
   return dbInstance;
