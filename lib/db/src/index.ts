@@ -280,8 +280,8 @@ export async function ensureDbReady(): Promise<any> {
         for (const stmt of statements) {
           try {
             await pgliteInstance.exec(stmt);
-          } catch (_err) {
-            // Ignore duplicate table / harmless migration errors
+          } catch (err: any) {
+            console.error(`DDL statement failed: ${stmt.slice(0, 50)}... -> ${err?.message}`);
           }
         }
         await syncEnvToShopSettings(dbInstance);
