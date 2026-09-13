@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /products/
+Disallow: /account
+Disallow: /checkout
+Disallow: /admin
+
+Sitemap: https://sundarvan.xyz/sitemap.xml

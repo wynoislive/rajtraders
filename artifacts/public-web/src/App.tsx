@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, Link } from 'wouter';
+import { SeoHead } from './components/SeoHead';
 import {
   ShoppingBag,
   MapPin,
@@ -653,7 +654,53 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F7F2EA] text-[#0E3D42] font-sans flex flex-col justify-between">
+      {/* Dynamic SEO Head & Structured Data */}
+      {currentProduct ? (
+        <SeoHead
+          title={`${currentProduct.name} — RAJ TRADERS`}
+          description={currentProduct.description || `Buy ${currentProduct.name} online at RAJ TRADERS with fast delivery in ${shopSettings.availableInLocation || 'Birsingpur Pali'}.`}
+          image={currentProduct.imageUrl}
+          url={`https://${shopSettings.shopDomain || 'sundarvan.xyz'}/products/${currentProduct.slug}`}
+          type="product"
+          productData={{
+            name: currentProduct.name,
+            description: currentProduct.description,
+            image: currentProduct.imageUrl,
+            priceCents: currentProduct.priceCents,
+            slug: currentProduct.slug,
+            category: currentProduct.category,
+            inStock: currentProduct.inventory > 0,
+            prepTimeMinutes: currentProduct.prepTimeMinutes,
+          }}
+          breadcrumbs={[
+            { name: 'Home', item: `https://${shopSettings.shopDomain || 'sundarvan.xyz'}` },
+            { name: currentProduct.category, item: `https://${shopSettings.shopDomain || 'sundarvan.xyz'}/?category=${encodeURIComponent(currentProduct.category)}` },
+            { name: currentProduct.name, item: `https://${shopSettings.shopDomain || 'sundarvan.xyz'}/products/${currentProduct.slug}` }
+          ]}
+        />
+      ) : location === '/account' ? (
+        <SeoHead
+          title="Customer Account & Orders — RAJ TRADERS"
+          description="View past orders, track live deliveries, manage saved addresses, and update profile settings."
+          url={`https://${shopSettings.shopDomain || 'sundarvan.xyz'}/account`}
+          noIndex={true}
+        />
+      ) : selectedCategory ? (
+        <SeoHead
+          title={`${selectedCategory} Collection — RAJ TRADERS`}
+          description={`Browse our premium ${selectedCategory} selection. Small-batch artisanal quality delivered to your doorstep in ${shopSettings.availableInLocation || 'Birsingpur Pali'}.`}
+          url={`https://${shopSettings.shopDomain || 'sundarvan.xyz'}/?category=${encodeURIComponent(selectedCategory)}`}
+        />
+      ) : (
+        <SeoHead
+          title={`${shopSettings.shopName || 'RAJ TRADERS'} — Gourmet Bakery & Artisanal Products`}
+          description={shopSettings.aboutUsText || 'Small-batch artisanal cakes, organic bakes, party decorations & specialty items.'}
+          url={`https://${shopSettings.shopDomain || 'sundarvan.xyz'}`}
+        />
+      )}
+
       <div>
+
         {/* Top Store Open Status Alert Banner (if closed) */}
         {!shopSettings.isStoreOpen && (
           <div className="bg-amber-500 text-[#0E3D42] text-xs py-2 px-4 font-black flex items-center justify-center gap-2 shadow-sm">

@@ -288,5 +288,52 @@ router.post("/v1/discounts/validate", async (req, res): Promise<void> => {
   );
 });
 
+// Dynamic XML Sitemap for SEO Crawlers
+router.get("/sitemap.xml", async (_req, res): Promise<void> => {
+  try {
+    const products = await db
+      .select()
+      .from(productsTable)
+      .where(and(eq(productsTable.status, "active"), eq(productsTable.approvalStatus, "approved")));
+    
+    const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+    const baseUrl = `https://${settings?.shopDomain || "sundarvan.xyz"}`;
+
+    const categories = [...new Set(products.map((p: any) => p.category))];
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${baseUrl}/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/account</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  ${categories.map(cat => `
+  <url>
+    <loc>${baseUrl}/?category=${encodeURIComponent(cat)}</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>`).join('')}
+  ${products.map(p => `
+  <url>
+    <loc>${baseUrl}/products/${p.slug}</loc>
+    <lastmod>${new Date(p.updatedAt || Date.now()).toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>`).join('')}
+</urlset>`;
+
+    res.header("Content-Type", "application/xml");
+    res.send(xml);
+  } catch (err) {
+    res.status(500).send("Error generating sitemap");
+  }
+});
+
 export { discountResponse };
 export default router;
