@@ -125912,6 +125912,11 @@ var recoveryLimiter = createLimiter(
   securityConfig.rateLimitRecovery,
   "Too many password recovery attempts. Please wait a minute before trying again."
 );
+var changePasswordLimiter = createLimiter(
+  60 * 6e4,
+  5,
+  "Too many password change attempts. Security policy allows maximum 5 attempts per 60 minutes."
+);
 var checkoutLimiter = createLimiter(
   6e4,
   securityConfig.rateLimitCheckout,
@@ -127865,10 +127870,28 @@ function verifyRecoveryCode(code, hashedCodes) {
 
 // artifacts/api-server/src/routes/customer-auth.ts
 var router5 = (0, import_express6.Router)();
+function normalizeAndValidateIndianMobile(raw) {
+  if (!raw || typeof raw !== "string") return { valid: false, error: "Mobile number is required." };
+  let cleaned = raw.trim().replace(/[\s\-\(\)]/g, "");
+  if (cleaned.startsWith("+91")) {
+    cleaned = cleaned.slice(3);
+  } else if (cleaned.startsWith("91") && cleaned.length === 12) {
+    cleaned = cleaned.slice(2);
+  } else if (cleaned.startsWith("0") && cleaned.length === 11) {
+    cleaned = cleaned.slice(1);
+  }
+  if (!/^[6-9]\d{9}$/.test(cleaned)) {
+    return {
+      valid: false,
+      error: "Please enter a valid 10-digit Indian mobile number (e.g. 9876543210 or +919876543210). Numbers exceeding 10 digits are not allowed."
+    };
+  }
+  return { valid: true, normalized: cleaned };
+}
 var RegisterBodySchema = external_exports.object({
   firstName: external_exports.string().min(1, "First name is required").max(100),
   lastName: external_exports.string().min(1, "Last name is required").max(100),
-  mobileNumber: external_exports.string().min(10, "Please provide a valid 10-digit mobile number"),
+  mobileNumber: external_exports.string().min(1, "Mobile number is required"),
   email: external_exports.string().email("Please provide a valid email address"),
   password: external_exports.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: external_exports.string().optional()
@@ -127893,10 +127916,15 @@ var ResetPasswordBodySchema = external_exports.object({
   newPassword: external_exports.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: external_exports.string().optional()
 });
+var ChangePasswordBodySchema = external_exports.object({
+  oldPassword: external_exports.string().min(1, "Current password is required"),
+  newPassword: external_exports.string().min(6, "New password must be at least 6 characters"),
+  confirmPassword: external_exports.string().min(1, "Please confirm your new password")
+});
 var UpdateProfileBodySchema = external_exports.object({
   firstName: external_exports.string().min(1).max(100).optional(),
   lastName: external_exports.string().min(1).max(100).optional(),
-  mobileNumber: external_exports.string().min(10).optional()
+  mobileNumber: external_exports.string().optional()
 });
 var TotpVerifyBodySchema = external_exports.object({
   totpCode: external_exports.string().min(6).max(6)
@@ -128024,7 +128052,12 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
     return;
   }
   const cleanEmail = email.trim().toLowerCase();
-  const cleanMobile = mobileNumber.trim().replace(/\D/g, "");
+  const mobileCheck = normalizeAndValidateIndianMobile(mobileNumber);
+  if (!mobileCheck.valid) {
+    res.status(400).json({ error: mobileCheck.error });
+    return;
+  }
+  const cleanMobile = mobileCheck.normalized;
   try {
     const existingEmail = await db.select().from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
     if (existingEmail.length > 0) {
@@ -128188,12 +128221,13 @@ router5.put("/profile", validate({ body: UpdateProfileBodySchema }), async (req,
     const updateData = { updatedAt: /* @__PURE__ */ new Date() };
     if (firstName && typeof firstName === "string") updateData.firstName = firstName.trim();
     if (lastName && typeof lastName === "string") updateData.lastName = lastName.trim();
-    if (mobileNumber && typeof mobileNumber === "string") {
-      const cleanMobile = mobileNumber.trim().replace(/\D/g, "");
-      if (cleanMobile.length < 10) {
-        res.status(400).json({ error: "Please provide a valid 10-digit mobile number." });
+    if (mobileNumber && typeof mobileNumber === "string" && mobileNumber.trim().length > 0) {
+      const mobileCheck = normalizeAndValidateIndianMobile(mobileNumber);
+      if (!mobileCheck.valid) {
+        res.status(400).json({ error: mobileCheck.error });
         return;
       }
+      const cleanMobile = mobileCheck.normalized;
       const existingMobile = await db.select().from(usersTable).where(and(eq(usersTable.mobileNumber, cleanMobile), ne(usersTable.id, userId))).limit(1);
       if (existingMobile.length > 0) {
         res.status(400).json({ error: "This mobile number is already in use by another account." });
@@ -128211,6 +128245,38 @@ router5.put("/profile", validate({ body: UpdateProfileBodySchema }), async (req,
   } catch (err) {
     req.log.error({ err }, "Profile update error");
     res.status(500).json({ error: "Failed to update profile." });
+  }
+});
+router5.post("/change-password", changePasswordLimiter, validate({ body: ChangePasswordBodySchema }), async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized. Session expired." });
+    return;
+  }
+  const { oldPassword, newPassword, confirmPassword } = req.body;
+  if (newPassword !== confirmPassword) {
+    res.status(400).json({ error: "New password and confirmation password do not match." });
+    return;
+  }
+  try {
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (users.length === 0) {
+      res.status(404).json({ error: "User profile not found." });
+      return;
+    }
+    const user = users[0];
+    const isOldValid = verifyPassword2(oldPassword, user.passwordHash);
+    if (!isOldValid) {
+      res.status(401).json({ error: "Incorrect current password. Verification failed." });
+      return;
+    }
+    const newPasswordHash = hashPassword2(newPassword);
+    await db.update(usersTable).set({ passwordHash: newPasswordHash, updatedAt: /* @__PURE__ */ new Date() }).where(eq(usersTable.id, userId));
+    req.log.info({ userId }, "Customer successfully changed password via Settings & Security");
+    res.status(200).json({ success: true, message: "Password changed successfully!" });
+  } catch (err) {
+    req.log.error({ err }, "Change password error");
+    res.status(500).json({ error: "Failed to change password. Please try again." });
   }
 });
 router5.delete("/delete-account", async (req, res) => {

@@ -91,7 +91,15 @@ export const recoveryLimiter = createLimiter(
   "Too many password recovery attempts. Please wait a minute before trying again.",
 );
 
+/** Password change endpoint — Max 5 attempts per 60 minutes */
+export const changePasswordLimiter = createLimiter(
+  60 * 60_000,
+  5,
+  "Too many password change attempts. Security policy allows maximum 5 attempts per 60 minutes.",
+);
+
 /** Checkout order creation */
+
 export const checkoutLimiter = createLimiter(
   60_000,
   securityConfig.rateLimitCheckout,

@@ -247,6 +247,9 @@ export default function App() {
 
   // Account Portal Active Tab
   const [activeAccountTab, setActiveAccountTab] = useState<'orders' | 'addresses' | 'favorites' | 'settings' | 'profile'>('orders');
+  const [changePassLoading, setChangePassLoading] = useState(false);
+  const [changePassNotice, setChangePassNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
 
   // Products State
   const [products, setProducts] = useState<any[]>([]);
@@ -1008,10 +1011,80 @@ export default function App() {
 
                   {activeAccountTab === 'settings' && (
                     <div className="space-y-6 max-w-md">
-                      <h2 className="text-xl font-black text-[#0E3D42]">Account Security</h2>
-                      <div className="p-4 rounded-2xl bg-gray-50 border space-y-3">
-                        <p className="text-xs text-gray-600 font-medium">To change your password, use the Forgot Password workflow on the Sign In screen.</p>
+                      <div>
+                        <h2 className="text-xl font-black text-[#0E3D42]">Account Security</h2>
+                        <p className="text-xs text-gray-500 font-semibold mt-1">Verify your current password to set a new password. Rate limited to 5 attempts per 60 minutes.</p>
                       </div>
+
+                      {changePassNotice && (
+                        <div className={`p-4 rounded-2xl text-xs font-extrabold ${changePassNotice.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+                          {changePassNotice.message}
+                        </div>
+                      )}
+
+                      <form onSubmit={async (e: any) => {
+                        e.preventDefault();
+                        const oldPass = e.target.oldPassword.value;
+                        const newPass = e.target.newPassword.value;
+                        const confirmPass = e.target.confirmPassword.value;
+
+                        if (newPass !== confirmPass) {
+                          setChangePassNotice({ type: 'error', message: 'New password and confirmation password do not match.' });
+                          return;
+                        }
+                        if (newPass.length < 6) {
+                          setChangePassNotice({ type: 'error', message: 'New password must be at least 6 characters.' });
+                          return;
+                        }
+
+                        setChangePassLoading(true);
+                        setChangePassNotice(null);
+
+                        try {
+                          const res = await fetch(getApiUrl('/api/v1/auth/change-password'), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ oldPassword: oldPass, newPassword: newPass, confirmPassword: confirmPass }),
+                          });
+                          const data = await res.json();
+
+                          if (!res.ok) {
+                            setChangePassNotice({ type: 'error', message: data.error || 'Failed to update password.' });
+                          } else {
+                            setChangePassNotice({ type: 'success', message: 'Password changed successfully!' });
+                            showToast('Password changed successfully!', 'success');
+                            e.target.reset();
+                          }
+                        } catch {
+                          setChangePassNotice({ type: 'error', message: 'Network error. Please try again.' });
+                        } finally {
+                          setChangePassLoading(false);
+                        }
+                      }} className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-extrabold text-[#0E3D42] mb-1">Current Password</label>
+                          <input required type="password" name="oldPassword" placeholder="Enter current password" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]" />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-extrabold text-[#0E3D42] mb-1">New Password</label>
+                          <input required type="password" name="newPassword" placeholder="New password (min 6 characters)" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]" />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-extrabold text-[#0E3D42] mb-1">Confirm New Password</label>
+                          <input required type="password" name="confirmPassword" placeholder="Re-enter new password" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]" />
+                        </div>
+
+                        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] font-bold text-amber-900 flex items-center gap-2">
+                          <ShieldCheck size={16} className="text-amber-700 shrink-0" />
+                          <span>Security Policy: Max 5 password change attempts per 60 minutes.</span>
+                        </div>
+
+                        <button type="submit" disabled={changePassLoading} className="w-full py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow hover:bg-[#0E3D42]/90 transition disabled:bg-gray-400">
+                          {changePassLoading ? 'Verifying & Updating...' : 'Update Password'}
+                        </button>
+                      </form>
                     </div>
                   )}
 
@@ -1030,7 +1103,9 @@ export default function App() {
                             body: JSON.stringify({ firstName, lastName, mobileNumber }),
                           });
                           const data = await res.json();
-                          if (data.user) {
+                          if (!res.ok) {
+                            showToast(data.error || 'Profile update failed', 'error');
+                          } else if (data.user) {
                             setUser(data.user);
                             localStorage.setItem('raj_user', JSON.stringify(data.user));
                             showToast('Profile updated successfully!', 'success');
@@ -1039,13 +1114,23 @@ export default function App() {
                           showToast('Profile update failed', 'error');
                         }
                       }} className="space-y-3">
-                        <input required type="text" name="firstName" defaultValue={user?.firstName} placeholder="First Name" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
-                        <input required type="text" name="lastName" defaultValue={user?.lastName} placeholder="Last Name" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
-                        <input required type="tel" name="mobileNumber" defaultValue={user?.mobileNumber} placeholder="Mobile Number" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
+                        <div>
+                          <label className="block text-xs font-extrabold text-[#0E3D42] mb-1">First Name</label>
+                          <input required type="text" name="firstName" defaultValue={user?.firstName} placeholder="First Name" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-extrabold text-[#0E3D42] mb-1">Last Name</label>
+                          <input required type="text" name="lastName" defaultValue={user?.lastName} placeholder="Last Name" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-extrabold text-[#0E3D42] mb-1">Mobile Number (10 digits or +91...)</label>
+                          <input required type="tel" name="mobileNumber" defaultValue={user?.mobileNumber} maxLength={13} placeholder="e.g. 9876543210 or +919876543210" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
+                        </div>
                         <button type="submit" className="w-full py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow">Save Changes</button>
                       </form>
                     </div>
                   )}
+
                 </div>
               </div>
             </div>
@@ -1517,7 +1602,8 @@ export default function App() {
               <form onSubmit={handleRegister} className="space-y-3">
                 <input required type="text" name="firstName" placeholder="First Name" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                 <input required type="text" name="lastName" placeholder="Last Name" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
-                <input required type="tel" name="mobileNumber" placeholder="Mobile Number (Unique Identity)" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                <input required type="tel" name="mobileNumber" maxLength={13} placeholder="Mobile Number (e.g. 9876543210 or +919876543210)" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+
                 <input required type="email" name="email" placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                 <input required type="password" name="password" placeholder="Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                 <input required type="password" name="confirmPassword" placeholder="Confirm Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
