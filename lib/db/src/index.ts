@@ -202,6 +202,44 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 
+-- New Customer Tables
+CREATE TABLE IF NOT EXISTS customer_addresses (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT 'Home',
+  full_address TEXT NOT NULL,
+  house_number TEXT DEFAULT '',
+  building_society TEXT DEFAULT '',
+  landmark TEXT DEFAULT '',
+  pincode TEXT NOT NULL,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'Madhya Pradesh',
+  latitude REAL,
+  longitude REAL,
+  delivery_instructions TEXT DEFAULT '',
+  is_default BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS customer_favorites (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS customer_notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'system',
+  link TEXT,
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
@@ -215,9 +253,15 @@ CREATE INDEX IF NOT EXISTS idx_products_status_approval ON products(status, appr
 CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX IF NOT EXISTS idx_totp_secrets_user_id ON totp_secrets(user_id);
+CREATE INDEX IF NOT EXISTS idx_customer_addresses_user_id ON customer_addresses(user_id);
+CREATE INDEX IF NOT EXISTS idx_customer_favorites_user_id ON customer_favorites(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_favorites_user_product ON customer_favorites(user_id, product_id);
+CREATE INDEX IF NOT EXISTS idx_customer_notifications_user_id ON customer_notifications(user_id);
 
 -- Alter queries for existing tables missing new columns
 ALTER TABLE products ADD COLUMN IF NOT EXISTS prep_time_minutes INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_bestseller BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_veg BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'approved';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS submitted_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS approved_by TEXT;
@@ -232,6 +276,19 @@ ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_port INTEGE
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_user TEXT DEFAULT 'notifications.rajtraders@gmail.com';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_pass TEXT DEFAULT '';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_from TEXT DEFAULT 'RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_linkedin TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_instagram TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_facebook TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_pinterest TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_twitter TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS available_in_location TEXT DEFAULT 'BIRSINGPUR PALI';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS about_us_text TEXT DEFAULT 'Premium cakes, party decorations & artisanal local delights.';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS is_store_open BOOLEAN DEFAULT true;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS min_order_cents INTEGER DEFAULT 0;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS is_cod_enabled BOOLEAN DEFAULT false;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS flat_delivery_fee_cents INTEGER DEFAULT 3000;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS free_delivery_threshold_cents INTEGER DEFAULT 50000;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS packaging_fee_cents INTEGER DEFAULT 1000;
 
 `;
 

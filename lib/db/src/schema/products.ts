@@ -16,6 +16,8 @@ export const productsTable = pgTable(
     featured: boolean("featured").notNull().default(false),
     inventory: integer("inventory").notNull().default(0),
     prepTimeMinutes: integer("prep_time_minutes").notNull().default(30),
+    isBestseller: boolean("is_bestseller").notNull().default(false),
+    isVeg: boolean("is_veg").notNull().default(true),
     approvalStatus: text("approval_status").notNull().default("approved"), // 'approved', 'pending_approval', 'rejected'
     submittedBy: text("submitted_by"),
     approvedBy: text("approved_by"),

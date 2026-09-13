@@ -7,15 +7,34 @@ import {
   CheckCircle2,
   X,
   Search,
-  ArrowUpRight,
   User,
   ShieldCheck,
-  Tag,
-  Package,
   Clock,
   Sparkles,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  Bell,
+  Heart,
+  Filter,
+  SlidersHorizontal,
+  Trash2,
+  Edit3,
+  Plus,
+  ChevronDown,
+  Check,
+  AlertTriangle,
+  Store,
+  Navigation,
+  CreditCard,
+  Lock,
+  RefreshCw,
+  FileText,
+  PhoneCall,
+  Linkedin,
+  Instagram,
+  Facebook,
+  Twitter,
+  Tag
 } from 'lucide-react';
 
 function getApiUrl(path: string): string {
@@ -35,18 +54,56 @@ export default function App() {
     return match ? { slug: match[1] } : null;
   }, [location]);
 
+  // Storefront Public Settings
+  const [shopSettings, setShopSettings] = useState<any>({
+    shopName: 'RAJ TRADERS',
+    availableInLocation: 'BIRSINGPUR PALI',
+    aboutUsText: 'Premium cakes, party decorations & artisanal local delights.',
+    isStoreOpen: true,
+    isCodEnabled: false,
+    flatDeliveryFeeCents: 3000,
+    freeDeliveryThresholdCents: 50000,
+    packagingFeeCents: 1000,
+    socialLinkedin: '',
+    socialInstagram: '',
+    socialFacebook: '',
+    socialPinterest: '',
+    socialTwitter: '',
+    supportEmail: 'support@sundarvan.xyz',
+  });
+
+  useEffect(() => {
+    fetch(getApiUrl('/api/v1/storefront/settings'))
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setShopSettings(data); })
+      .catch(() => {});
+  }, []);
+
   // Store & Location State
   const [pincode, setPincode] = useState('482004');
   const [city, setCity] = useState('Jabalpur, MP');
   const [pincodeResult, setPincodeResult] = useState<any>(null);
   const [pincodeChecking, setPincodeChecking] = useState(false);
   const [showPincodeModal, setShowPincodeModal] = useState(false);
+
+  // Search & Catalog Filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('raj_recent_searches') || '[]'); } catch { return []; }
+  });
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [vegFilter, setVegFilter] = useState<'all' | 'veg' | 'nonveg'>('all');
+  const [bestsellerOnly, setBestsellerOnly] = useState(false);
+  const [priceRange, setPriceRange] = useState<string | null>(null); // '0-300', '300-500', '500-1000', '1000+'
+  const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'bestseller'>('relevance');
 
   // Cart & Auth State
-  const [cart, setCart] = useState<Array<{ product: any; quantity: number }>>([]);
+  const [cart, setCart] = useState<Array<{ product: any; quantity: number }>>(() => {
+    try { return JSON.parse(localStorage.getItem('raj_cart') || '[]'); } catch { return []; }
+  });
   const [showCartDrawer, setShowCartDrawer] = useState(false);
+  const [showCouponsDrawer, setShowCouponsDrawer] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot_password' | 'reset_password'>('login');
   const [resetToken, setResetToken] = useState('');
@@ -57,6 +114,26 @@ export default function App() {
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('raj_token'));
 
+  // Multi-tab synchronization via storage events
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'raj_token' || e.key === 'raj_user') {
+        setUser(JSON.parse(localStorage.getItem('raj_user') || 'null'));
+        setToken(localStorage.getItem('raj_token'));
+      }
+      if (e.key === 'raj_cart') {
+        try { setCart(JSON.parse(e.newValue || '[]')); } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Save Cart to LocalStorage
+  useEffect(() => {
+    localStorage.setItem('raj_cart', JSON.stringify(cart));
+  }, [cart]);
+
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
@@ -64,6 +141,66 @@ export default function App() {
   const [pendingEmail, setPendingEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [resendCooldown, setResendCooldown] = useState(45);
+
+  // Favorites & Notifications State
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('raj_favorites') || '[]'); } catch { return []; }
+  });
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+
+  // Fetch Wishlist & Notifications when logged in
+  useEffect(() => {
+    if (token) {
+      fetch(getApiUrl('/api/v1/auth/favorites'), { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then(favs => {
+          if (Array.isArray(favs)) {
+            setFavorites(favs.map(f => f.id));
+          }
+        })
+        .catch(() => {});
+
+      fetch(getApiUrl('/api/v1/auth/notifications'), { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data) {
+            setNotifications(data.notifications || []);
+            setUnreadNotificationsCount(data.unreadCount || 0);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [token]);
+
+  // Saved Addresses State
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  useEffect(() => {
+    if (token && location === '/account') {
+      setAddressLoading(true);
+      fetch(getApiUrl('/api/v1/auth/addresses'), { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => { if (Array.isArray(data)) setSavedAddresses(data); })
+        .catch(() => {})
+        .finally(() => setAddressLoading(false));
+    }
+  }, [token, location]);
+
+  // Customer Orders State
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  useEffect(() => {
+    if (token && location === '/account') {
+      setOrdersLoading(true);
+      fetch(getApiUrl('/api/v1/auth/orders'), { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => { if (Array.isArray(data)) setCustomerOrders(data); })
+        .catch(() => {})
+        .finally(() => setOrdersLoading(false));
+    }
+  }, [token, location]);
 
   // Toast Notification State
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -98,10 +235,14 @@ export default function App() {
 
   // Shipping & Checkout
   const [shippingAddress, setShippingAddress] = useState(`PIN: ${pincode}, ${city}`);
+  const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('online');
   const [discountCode, setDiscountCode] = useState('');
   const [discountResult, setDiscountResult] = useState<any>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [receipt, setReceipt] = useState<any>(null);
+
+  // Account Portal Active Tab
+  const [activeAccountTab, setActiveAccountTab] = useState<'orders' | 'addresses' | 'favorites' | 'settings' | 'profile'>('orders');
 
   // Products State
   const [products, setProducts] = useState<any[]>([]);
@@ -112,11 +253,8 @@ export default function App() {
     fetch(getApiUrl('/api/v1/products'))
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
-        if (Array.isArray(data)) {
-          setProducts(data);
-        } else {
-          setProducts([]);
-        }
+        if (Array.isArray(data)) setProducts(data);
+        else setProducts([]);
       })
       .catch(() => setProducts([]))
       .finally(() => setProductsLoading(false));
@@ -127,15 +265,50 @@ export default function App() {
     return products.find((p: any) => p.slug === params.slug || p.id === params.slug) || null;
   }, [params, products]);
 
+  // Advanced Filtered & Sorted Products
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
+    let result = products.filter((p) => {
+      // Search
       const matchSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase());
+      // Category
       const matchCat = !selectedCategory || p.category.toLowerCase() === selectedCategory.toLowerCase();
-      return matchSearch && matchCat;
+      // Veg / Non-Veg
+      const matchVeg = vegFilter === 'all' ? true : vegFilter === 'veg' ? p.isVeg !== false : p.isVeg === false;
+      // Bestseller
+      const matchBest = !bestsellerOnly || p.isBestseller || p.featured;
+      // Price Range
+      let matchPrice = true;
+      if (priceRange === '0-300') matchPrice = p.priceCents <= 30000;
+      else if (priceRange === '300-500') matchPrice = p.priceCents > 30000 && p.priceCents <= 50000;
+      else if (priceRange === '500-1000') matchPrice = p.priceCents > 50000 && p.priceCents <= 100000;
+      else if (priceRange === '1000+') matchPrice = p.priceCents > 100000;
+
+      return matchSearch && matchCat && matchVeg && matchBest && matchPrice;
     });
-  }, [products, searchQuery, selectedCategory]);
+
+    // Sorting
+    if (sortBy === 'price_asc') {
+      result.sort((a, b) => a.priceCents - b.priceCents);
+    } else if (sortBy === 'price_desc') {
+      result.sort((a, b) => b.priceCents - a.priceCents);
+    } else if (sortBy === 'newest') {
+      result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (sortBy === 'bestseller') {
+      result.sort((a, b) => (b.isBestseller ? 1 : 0) - (a.isBestseller ? 1 : 0));
+    }
+
+    return result;
+  }, [products, searchQuery, selectedCategory, vegFilter, bestsellerOnly, priceRange, sortBy]);
 
   // Handlers
+  const saveSearchTerm = (term: string) => {
+    if (!term.trim()) return;
+    const clean = term.trim();
+    const updated = [clean, ...recentSearches.filter(s => s !== clean)].slice(0, 5);
+    setRecentSearches(updated);
+    localStorage.setItem('raj_recent_searches', JSON.stringify(updated));
+  };
+
   const handleCheckPincode = async (targetPin: string) => {
     const clean = targetPin.trim();
     if (!/^[1-9][0-9]{5}$/.test(clean)) {
@@ -165,6 +338,10 @@ export default function App() {
   };
 
   const addToCart = (product: any) => {
+    if (!shopSettings.isStoreOpen) {
+      showToast('Store is currently closed for new orders.', 'error');
+      return;
+    }
     setCart((prev) => {
       const exists = prev.find((item) => item.product.id === product.id);
       if (exists) {
@@ -173,6 +350,25 @@ export default function App() {
       return [...prev, { product, quantity: 1 }];
     });
     setShowCartDrawer(true);
+    showToast(`Added ${product.name} to bag!`, 'success');
+  };
+
+  const toggleFavorite = async (product: any) => {
+    const isFav = favorites.includes(product.id);
+    const updatedFavs = isFav ? favorites.filter(id => id !== product.id) : [...favorites, product.id];
+    setFavorites(updatedFavs);
+    localStorage.setItem('raj_favorites', JSON.stringify(updatedFavs));
+
+    if (token) {
+      try {
+        await fetch(getApiUrl('/api/v1/auth/favorites/toggle'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ productId: product.id }),
+        });
+      } catch {}
+    }
+    showToast(isFav ? 'Removed from favorites' : 'Added to favorites!', 'success');
   };
 
   const shareProduct = (product: any) => {
@@ -205,6 +401,7 @@ export default function App() {
         localStorage.setItem('raj_token', data.token);
         localStorage.setItem('raj_user', JSON.stringify(data.user));
         setShowAuthModal(false);
+        showToast(`Welcome back, ${data.user.firstName}!`, 'success');
       } else {
         setAuthError(data.error || data.message || 'Login failed.');
       }
@@ -247,11 +444,12 @@ export default function App() {
         localStorage.setItem('raj_token', data.token);
         localStorage.setItem('raj_user', JSON.stringify(data.user));
         setShowAuthModal(false);
+        showToast('Account created successfully!', 'success');
       } else {
-        setAuthError(data.error || data.message || 'Registration failed.');
+        setAuthError(data.error || 'Registration failed.');
       }
     } catch {
-      setAuthError('Registration failed.');
+      setAuthError('Connection failed.');
     } finally {
       setAuthLoading(false);
     }
@@ -260,6 +458,7 @@ export default function App() {
   const handleVerifyOtp = async (e: any) => {
     e.preventDefault();
     setAuthLoading(true);
+    setAuthError(null);
     try {
       const res = await fetch(getApiUrl('/api/v1/auth/verify-login-otp'), {
         method: 'POST',
@@ -274,21 +473,20 @@ export default function App() {
         localStorage.setItem('raj_user', JSON.stringify(data.user));
         setShowAuthModal(false);
         setOtpRequired(false);
-        setOtpCode('');
+        showToast('Email verified successfully!', 'success');
       } else {
-        setAuthError(data.error || 'Verification failed.');
+        setAuthError(data.error || 'Invalid OTP code.');
       }
-    } catch (err: any) {
-      setAuthError('Server error verifying OTP.');
+    } catch {
+      setAuthError('Verification failed.');
     } finally {
       setAuthLoading(false);
     }
   };
 
   const handleResendOtp = async () => {
-    if (resendCooldown > 0 || authLoading) return;
+    if (resendCooldown > 0) return;
     setAuthLoading(true);
-    setAuthError(null);
     try {
       const res = await fetch(getApiUrl('/api/v1/auth/resend-login-otp'), {
         method: 'POST',
@@ -297,15 +495,13 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        setAuthError(null);
-        setAuthSuccess(`New verification OTP code sent to ${pendingEmail}`);
-        setOtpCode('');
+        setAuthSuccess(`New OTP code sent to ${pendingEmail}`);
         setResendCooldown(45);
       } else {
-        setAuthError(data.error || 'Failed to resend code.');
+        setAuthError(data.error || 'Failed to resend OTP.');
       }
-    } catch (err) {
-      setAuthError('Server connection error.');
+    } catch {
+      setAuthError('Failed to resend code.');
     } finally {
       setAuthLoading(false);
     }
@@ -316,7 +512,6 @@ export default function App() {
     const email = e.target.email.value;
     setAuthLoading(true);
     setAuthError(null);
-    setAuthSuccess(null);
     try {
       const res = await fetch(getApiUrl('/api/v1/auth/forgot-password'), {
         method: 'POST',
@@ -324,16 +519,14 @@ export default function App() {
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.ok) {
+        setAuthSuccess('Password reset link and OTP token sent to your email.');
         setPendingEmail(email);
-        setAuthMode('reset_password');
-        setAuthError(null);
-        setAuthSuccess(`A 60-minute password reset link and OTP token code have been sent to ${email}`);
       } else {
-        setAuthError(data.error || 'Failed to request password recovery.');
+        setAuthError(data.error || 'Failed to request reset.');
       }
     } catch {
-      setAuthError('Server connection error.');
+      setAuthError('Failed to request reset.');
     } finally {
       setAuthLoading(false);
     }
@@ -342,7 +535,7 @@ export default function App() {
   const handleResetPassword = async (e: any) => {
     e.preventDefault();
     const email = e.target.email.value;
-    const token = e.target.token.value;
+    const tokenInput = e.target.token.value;
     const newPassword = e.target.newPassword.value;
     const confirmPassword = e.target.confirmPassword.value;
     if (newPassword !== confirmPassword) {
@@ -351,23 +544,21 @@ export default function App() {
     }
     setAuthLoading(true);
     setAuthError(null);
-    setAuthSuccess(null);
     try {
       const res = await fetch(getApiUrl('/api/v1/auth/reset-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, token, newPassword, confirmPassword }),
+        body: JSON.stringify({ email, token: tokenInput, newPassword, confirmPassword }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        setAuthMode('login');
-        setAuthError(null);
-        setAuthSuccess('Password reset successful! You can now sign in with your new password.');
+      if (res.ok) {
+        setAuthSuccess('Password updated! You can now sign in.');
+        setTimeout(() => setAuthMode('login'), 2000);
       } else {
-        setAuthError(data.error || 'Failed to reset password. Please verify your token.');
+        setAuthError(data.error || 'Failed to reset password.');
       }
     } catch {
-      setAuthError('Server connection error.');
+      setAuthError('Reset failed.');
     } finally {
       setAuthLoading(false);
     }
@@ -376,14 +567,15 @@ export default function App() {
   const handleApplyDiscount = async () => {
     if (!discountCode.trim()) return;
     try {
-      const subtotalCents = cart.reduce((acc, i) => acc + i.product.priceCents * i.quantity, 0);
       const res = await fetch(getApiUrl('/api/v1/discounts/validate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: discountCode.trim(), subtotalCents, isFirstOrder: true }),
+        body: JSON.stringify({ code: discountCode.trim(), subtotalCents: cartTotalCents, isFirstOrder: true }),
       });
       const data = await res.json();
       setDiscountResult(data);
+      if (data.valid) showToast(`Coupon ${data.code} applied!`, 'success');
+      else showToast(data.message || 'Invalid coupon code', 'error');
     } catch {
       setDiscountResult({ valid: false, message: 'Could not validate code.' });
     }
@@ -392,6 +584,10 @@ export default function App() {
   const handleCheckout = async () => {
     if (!token || !user) {
       setShowAuthModal(true);
+      return;
+    }
+    if (!shopSettings.isStoreOpen) {
+      showToast('Store is currently closed for new orders.', 'error');
       return;
     }
     if (!shippingAddress || shippingAddress.length < 5) {
@@ -414,6 +610,13 @@ export default function App() {
           shippingAddress,
         }),
       });
+
+      if (res.status === 409) {
+        const conflictData = await res.json();
+        showToast(conflictData.error || 'Cart items updated by store.', 'error');
+        return;
+      }
+
       const orderData = await res.json();
       if (orderData.razorpayOrderId) {
         const verifyRes = await fetch(getApiUrl('/api/v1/checkout/verify-payment'), {
@@ -440,217 +643,600 @@ export default function App() {
     }
   };
 
+  // Cart Calculations
   const cartTotalCents = cart.reduce((acc, i) => acc + i.product.priceCents * i.quantity, 0);
+  const packagingFeeCents = shopSettings.packagingFeeCents || 1000;
+  const isFreeDelivery = cartTotalCents >= (shopSettings.freeDeliveryThresholdCents || 50000);
+  const deliveryFeeCents = isFreeDelivery ? 0 : (shopSettings.flatDeliveryFeeCents || 3000);
   const discountCents = discountResult?.valid ? discountResult.discountCents : 0;
-  const finalPayableCents = Math.max(100, cartTotalCents - discountCents);
+  const finalPayableCents = Math.max(100, cartTotalCents + packagingFeeCents + deliveryFeeCents - discountCents);
 
   return (
-    <div className="min-h-screen bg-[#F7F2EA] text-[#0E3D42] font-sans">
-      {/* Amazon-style Location Top Bar */}
-      <div className="bg-[#0E3D42] text-white text-xs py-2.5 px-4 flex items-center justify-between shadow-sm cursor-pointer hover:bg-[#0E3D42]/95 transition" onClick={() => setShowPincodeModal(true)}>
-        <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
-          <MapPin size={15} className="text-[#E2A93B]" />
-          <span className="font-semibold">Deliver to <span className="underline decoration-[#E2A93B] font-bold">{city} {pincode}</span></span>
-          <span className="text-[#E2A93B] text-[10px]">▼</span>
-        </div>
-      </div>
-
-      {/* Main Store Header */}
-      <header className="sticky top-0 z-30 bg-white border-b border-[#0E3D42]/10 backdrop-blur-md bg-white/90 px-4 sm:px-8 py-3.5 shadow-sm">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-3">
-            <img src="/RAJTRADERS-LOGO.png" alt="RAJ TRADERS" className="size-10 object-contain rounded-xl shadow-md border border-[#E2A93B]/30" />
-            <div>
-              <div className="text-lg font-black tracking-tight text-[#0E3D42]">RAJ TRADERS</div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-[#0E3D42]/60">Gourmet Bakery & Artisanal Store</div>
-            </div>
-          </Link>
-
-          {/* Search Input */}
-          <div className="hidden md:flex items-center flex-1 max-w-md mx-4 relative">
-            <Search size={16} className="absolute left-3.5 text-[#0E3D42]/40" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search products, cakes or apparel..."
-              className="w-full pl-10 pr-4 py-2 text-xs font-semibold rounded-2xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:border-[#0E3D42] transition"
-            />
+    <div className="min-h-screen bg-[#F7F2EA] text-[#0E3D42] font-sans flex flex-col justify-between">
+      <div>
+        {/* Top Store Open Status Alert Banner (if closed) */}
+        {!shopSettings.isStoreOpen && (
+          <div className="bg-amber-500 text-[#0E3D42] text-xs py-2 px-4 font-black flex items-center justify-center gap-2 shadow-sm">
+            <AlertTriangle size={16} />
+            <span>Store is currently closed for new orders. Browsing is active.</span>
           </div>
+        )}
 
-          <div className="flex items-center gap-3">
-            {user ? (
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold hidden sm:inline text-[#0E3D42]">Hi, {user.firstName}!</span>
-                <button onClick={() => { setUser(null); setToken(null); localStorage.removeItem('raj_user'); localStorage.removeItem('raj_token'); }} className="text-xs font-bold text-red-600 hover:underline">Logout</button>
+        {/* Amazon-style Location Top Bar */}
+        <div className="bg-[#0E3D42] text-white text-xs py-2.5 px-4 flex items-center justify-between shadow-sm cursor-pointer hover:bg-[#0E3D42]/95 transition" onClick={() => setShowPincodeModal(true)}>
+          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
+            <MapPin size={15} className="text-[#E2A93B]" />
+            <span className="font-semibold">Deliver to <span className="underline decoration-[#E2A93B] font-bold">{city} {pincode}</span></span>
+            <span className="text-[#E2A93B] text-[10px]">▼</span>
+          </div>
+        </div>
+
+        {/* Main Store Header */}
+        <header className="sticky top-0 z-30 bg-white border-b border-[#0E3D42]/10 backdrop-blur-md bg-white/90 px-4 sm:px-8 py-3.5 shadow-sm">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <Link href="/" className="flex items-center gap-3">
+              <img src="/RAJTRADERS-LOGO.png" alt="RAJ TRADERS" className="size-10 object-contain rounded-xl shadow-md border border-[#E2A93B]/30" />
+              <div>
+                <div className="text-lg font-black tracking-tight text-[#0E3D42]">RAJ TRADERS</div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-[#0E3D42]/60">Gourmet Bakery & Artisanal Store</div>
               </div>
-            ) : (
-              <button onClick={() => { setAuthMode('login'); setOtpRequired(false); setOtpCode(''); setAuthError(null); setShowAuthModal(true); }} className="px-4 py-2 rounded-xl text-xs font-extrabold border border-[#0E3D42] text-[#0E3D42] hover:bg-[#0E3D42] hover:text-white transition">
-                Sign In / Register
-              </button>
-            )}
-
-            <button onClick={() => setShowCartDrawer(true)} className="relative p-2.5 rounded-xl bg-[#0E3D42]/5 hover:bg-[#0E3D42]/10 transition text-[#0E3D42]">
-              <ShoppingBag size={20} />
-              {cart.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#E2A93B] text-[#0E3D42] text-[11px] font-black size-5 rounded-full flex items-center justify-center shadow">
-                  {cart.reduce((a, b) => a + b.quantity, 0)}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
-        {currentProduct ? (
-          /* Product Detail View */
-          <div className="space-y-8">
-            <Link href="/" className="inline-flex items-center gap-2 text-xs font-bold text-[#0E3D42]/70 hover:text-[#0E3D42] bg-white px-3.5 py-2 rounded-xl border border-[#0E3D42]/10 shadow-sm">
-              ← Back to Catalog
             </Link>
 
-            <div className="grid md:grid-cols-2 gap-10 bg-white p-6 sm:p-10 rounded-3xl border border-[#0E3D42]/10 shadow-xl">
-              {/* Product Media Column */}
-              <div className="relative rounded-2xl overflow-hidden bg-[#EFE8DC] aspect-square flex items-center justify-center">
-                <img src={currentProduct.imageUrl} alt={currentProduct.name} className="w-full h-full object-cover" />
-                <span className="absolute bottom-4 left-4 bg-black/75 text-white text-xs px-3 py-1 rounded-full font-semibold backdrop-blur-sm">
-                  ⏱️ {currentProduct.prepTimeMinutes || 30}m prep
-                </span>
-                <button onClick={() => shareProduct(currentProduct)} className="absolute top-4 right-4 p-2.5 rounded-full bg-white/90 text-[#0E3D42] hover:bg-white shadow transition">
-                  <Share2 size={18} />
+            {/* Search Input with Auto-complete */}
+            <div className="hidden md:flex items-center flex-1 max-w-md mx-4 relative">
+              <Search size={16} className="absolute left-3.5 text-[#0E3D42]/40" />
+              <input
+                type="text"
+                value={searchQuery}
+                onFocus={() => setShowSearchDropdown(true)}
+                onBlur={() => setTimeout(() => setShowSearchDropdown(false), 200)}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveSearchTerm(searchQuery); }}
+                placeholder="Search products, cakes or apparel..."
+                className="w-full pl-10 pr-4 py-2 text-xs font-semibold rounded-2xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:border-[#0E3D42] transition"
+              />
+
+              {/* Search History & Category Chips Dropdown */}
+              {showSearchDropdown && (
+                <div className="absolute top-12 left-0 right-0 bg-white rounded-2xl shadow-2xl border border-[#0E3D42]/10 p-4 z-40 space-y-3">
+                  {recentSearches.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] font-bold text-gray-400 mb-2">
+                        <span>Recent Searches</span>
+                        <button onClick={() => { setRecentSearches([]); localStorage.removeItem('raj_recent_searches'); }} className="hover:underline">Clear</button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {recentSearches.map((term) => (
+                          <button
+                            key={term}
+                            onClick={() => setSearchQuery(term)}
+                            className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold text-[#0E3D42]"
+                          >
+                            {term}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="text-[11px] font-bold text-gray-400 mb-2">Categories</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['Bakery', 'Apparel', 'Home'].map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => { setSelectedCategory(cat); setSearchQuery(''); }}
+                          className="px-3 py-1.5 bg-[#0E3D42]/5 hover:bg-[#0E3D42]/10 rounded-xl text-xs font-bold text-[#0E3D42]"
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Header Right Actions */}
+            <div className="flex items-center gap-3">
+              {/* Notification Bell */}
+              <button onClick={() => setShowNotificationsModal(true)} className="relative p-2.5 rounded-xl bg-[#0E3D42]/5 hover:bg-[#0E3D42]/10 transition text-[#0E3D42]">
+                <Bell size={18} />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-black size-4 rounded-full flex items-center justify-center">
+                    {unreadNotificationsCount}
+                  </span>
+                )}
+              </button>
+
+              {/* User Account / Sign In */}
+              {user ? (
+                <Link href="/account" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0E3D42]/5 hover:bg-[#0E3D42]/10 transition text-[#0E3D42]">
+                  <div className="size-6 rounded-full bg-[#0E3D42] text-white flex items-center justify-center text-xs font-black">
+                    {user.firstName ? user.firstName[0].toUpperCase() : 'U'}
+                  </div>
+                  <span className="text-xs font-bold hidden sm:inline">{user.firstName}</span>
+                </Link>
+              ) : (
+                <button onClick={() => { setAuthMode('login'); setOtpRequired(false); setOtpCode(''); setAuthError(null); setShowAuthModal(true); }} className="px-4 py-2 rounded-xl text-xs font-extrabold border border-[#0E3D42] text-[#0E3D42] hover:bg-[#0E3D42] hover:text-white transition">
+                  Sign In / Register
+                </button>
+              )}
+
+              {/* Cart Bag Icon */}
+              <button onClick={() => setShowCartDrawer(true)} className="relative p-2.5 rounded-xl bg-[#0E3D42] text-white hover:bg-[#0E3D42]/90 transition shadow-sm">
+                <ShoppingBag size={18} />
+                {cart.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-[#E2A93B] text-[#0E3D42] text-[10px] font-black size-5 rounded-full flex items-center justify-center shadow">
+                    {cart.reduce((a, b) => a + b.quantity, 0)}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content Router */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
+          {location === '/account' ? (
+            /* Full-Page Customer Profile Portal */
+            <div className="space-y-6">
+              <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#0E3D42]/10 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="size-16 rounded-full bg-[#0E3D42] text-[#E2A93B] font-black text-2xl flex items-center justify-center shadow-inner">
+                    {user?.firstName ? user.firstName[0].toUpperCase() : 'U'}
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-black text-[#0E3D42]">{user?.firstName} {user?.lastName}</h1>
+                    <div className="text-xs font-semibold text-gray-500 flex flex-wrap items-center gap-3 mt-1">
+                      <span>📱 {user?.mobileNumber}</span>
+                      <span>✉️ {user?.email}</span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setUser(null);
+                    setToken(null);
+                    localStorage.removeItem('raj_user');
+                    localStorage.removeItem('raj_token');
+                    setLocation('/');
+                    showToast('Logged out successfully', 'info');
+                  }}
+                  className="px-4 py-2 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-200 hover:bg-red-100 transition"
+                >
+                  Logout Account
                 </button>
               </div>
 
-              {/* Product Details Column */}
-              <div className="flex flex-col justify-between space-y-6">
-                <div>
-                  <span className="text-xs font-extrabold uppercase tracking-widest text-[#E2A93B]">{currentProduct.category}</span>
-                  <h1 className="text-3xl sm:text-4xl font-black mt-1 text-[#0E3D42] tracking-tight">{currentProduct.name}</h1>
-
-                  <div className="mt-4 flex items-baseline gap-4">
-                    <span className="text-3xl font-extrabold text-[#0E3D42]">{money(currentProduct.priceCents)}</span>
-                    {currentProduct.compareAtPriceCents && (
-                      <span className="text-lg text-gray-400 line-through font-semibold">{money(currentProduct.compareAtPriceCents)}</span>
-                    )}
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">In Stock ({currentProduct.inventory} available)</span>
-                  </div>
-
-                  <p className="mt-5 text-sm leading-relaxed text-[#0E3D42]/80 font-medium">{currentProduct.description}</p>
+              {/* Sidebar + Content Grid */}
+              <div className="grid md:grid-cols-4 gap-6">
+                {/* Sidebar Navigation */}
+                <div className="bg-white p-4 rounded-3xl border border-[#0E3D42]/10 shadow-sm space-y-1 h-fit">
+                  {[
+                    { id: 'orders', label: 'My Orders', icon: Package },
+                    { id: 'addresses', label: 'Saved Addresses', icon: MapPin },
+                    { id: 'favorites', label: 'Wishlist & Favorites', icon: Heart },
+                    { id: 'settings', label: 'Settings & Security', icon: Lock },
+                    { id: 'profile', label: 'Edit Profile', icon: User },
+                  ].map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeAccountTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveAccountTab(tab.id as any)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-extrabold transition ${isActive ? 'bg-[#0E3D42] text-white shadow' : 'text-[#0E3D42] hover:bg-gray-50'}`}
+                      >
+                        <Icon size={16} />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* PIN Code Delivery Checker Box */}
-                <div className="bg-[#F7F2EA] p-4 rounded-2xl border border-[#0E3D42]/10 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold flex items-center gap-1.5"><MapPin size={15} className="text-[#0E3D42]" /> Check Delivery Pincode</span>
-                    <button onClick={() => setShowPincodeModal(true)} className="text-xs font-bold text-[#0E3D42] underline">Change</button>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={pincode}
-                      onChange={(e) => setPincode(e.target.value)}
-                      className="flex-1 px-3 py-2 text-sm font-bold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
-                      placeholder="6-Digit PIN Code"
-                    />
-                    <button onClick={() => handleCheckPincode(pincode)} disabled={pincodeChecking} className="px-4 py-2 bg-[#0E3D42] text-white text-xs font-extrabold rounded-xl hover:bg-[#0E3D42]/90">
-                      {pincodeChecking ? 'Checking...' : 'Check'}
-                    </button>
-                  </div>
-                  {pincodeResult && (
-                    <div className={`text-xs font-bold p-2.5 rounded-xl flex items-center gap-2 ${pincodeResult.allowed ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                      <CheckCircle2 size={16} />
-                      {pincodeResult.message}
+                {/* Content Panel */}
+                <div className="md:col-span-3 bg-white p-6 sm:p-8 rounded-3xl border border-[#0E3D42]/10 shadow-sm min-h-[400px]">
+                  {activeAccountTab === 'orders' && (
+                    <div className="space-y-6">
+                      <h2 className="text-xl font-black text-[#0E3D42]">Past Orders & Receipts</h2>
+                      {ordersLoading ? (
+                        <div className="space-y-4">
+                          {[1, 2].map(n => <div key={n} className="h-28 bg-gray-100 animate-pulse rounded-2xl" />)}
+                        </div>
+                      ) : customerOrders.length === 0 ? (
+                        <div className="text-center py-12 space-y-3">
+                          <Package size={40} className="mx-auto text-gray-300" />
+                          <p className="text-sm font-bold text-gray-500">You have no orders yet.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {customerOrders.map((order) => (
+                            <div key={order.id} className="p-5 rounded-2xl border border-gray-200 space-y-3 bg-gray-50/50">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 text-xs">
+                                <div>
+                                  <span className="font-black text-[#0E3D42]">{order.formattedOrderId}</span>
+                                  <span className="text-gray-400 ml-2">{new Date(order.createdAt).toLocaleDateString()}</span>
+                                </div>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${order.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                  {order.status}
+                                </span>
+                              </div>
+
+                              <div className="space-y-2 text-xs">
+                                {Array.isArray(order.items) && order.items.map((item: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between font-semibold">
+                                    <span>{item.quantity}x {item.name}</span>
+                                    <span>{money(item.priceCents * item.quantity)}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 text-xs font-bold border-t">
+                                <span>Total: {money(order.totalCents)}</span>
+                                <a href={`mailto:${shopSettings.supportEmail}?subject=Order Cancellation Query ${order.formattedOrderId}`} className="text-xs font-bold text-[#0E3D42] hover:underline">
+                                  Contact Support for Cancellation
+                                </a>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeAccountTab === 'addresses' && (
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-black text-[#0E3D42]">Saved Delivery Addresses</h2>
+                      </div>
+                      {addressLoading ? (
+                        <div className="h-24 bg-gray-100 animate-pulse rounded-2xl" />
+                      ) : savedAddresses.length === 0 ? (
+                        <div className="text-center py-12 space-y-3">
+                          <MapPin size={40} className="mx-auto text-gray-300" />
+                          <p className="text-sm font-bold text-gray-500">No saved addresses yet. PIN: {pincode}, {city} is active.</p>
+                        </div>
+                      ) : (
+                        <div className="grid gap-4">
+                          {savedAddresses.map((addr) => (
+                            <div key={addr.id} className="p-4 rounded-2xl border border-gray-200 flex justify-between items-start">
+                              <div>
+                                <span className="px-2 py-0.5 bg-[#0E3D42]/10 text-[#0E3D42] text-[10px] font-black rounded-md uppercase">{addr.label}</span>
+                                <p className="text-xs font-bold mt-2 text-[#0E3D42]">{addr.fullAddress}</p>
+                                <p className="text-[11px] text-gray-500 font-semibold">{addr.city}, {addr.pincode}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeAccountTab === 'favorites' && (
+                    <div className="space-y-6">
+                      <h2 className="text-xl font-black text-[#0E3D42]">Your Wishlist</h2>
+                      {favorites.length === 0 ? (
+                        <div className="text-center py-12 space-y-3">
+                          <Heart size={40} className="mx-auto text-gray-300" />
+                          <p className="text-sm font-bold text-gray-500">Your wishlist is empty.</p>
+                        </div>
+                      ) : (
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          {products.filter(p => favorites.includes(p.id)).map(product => (
+                            <div key={product.id} className="p-4 rounded-2xl border border-gray-200 flex gap-3 items-center">
+                              <img src={product.imageUrl} alt={product.name} className="size-16 rounded-xl object-cover" />
+                              <div className="flex-1">
+                                <div className="font-bold text-xs text-[#0E3D42]">{product.name}</div>
+                                <div className="text-xs font-extrabold text-[#0E3D42]">{money(product.priceCents)}</div>
+                              </div>
+                              <button onClick={() => addToCart(product)} className="px-3 py-1.5 bg-[#0E3D42] text-white text-xs font-bold rounded-lg">Add</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeAccountTab === 'settings' && (
+                    <div className="space-y-6 max-w-md">
+                      <h2 className="text-xl font-black text-[#0E3D42]">Account Security</h2>
+                      <div className="p-4 rounded-2xl bg-gray-50 border space-y-3">
+                        <p className="text-xs text-gray-600 font-medium">To change your password, use the Forgot Password workflow on the Sign In screen.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeAccountTab === 'profile' && (
+                    <div className="space-y-6 max-w-md">
+                      <h2 className="text-xl font-black text-[#0E3D42]">Edit Profile Details</h2>
+                      <form onSubmit={async (e: any) => {
+                        e.preventDefault();
+                        const firstName = e.target.firstName.value;
+                        const lastName = e.target.lastName.value;
+                        const mobileNumber = e.target.mobileNumber.value;
+                        try {
+                          const res = await fetch(getApiUrl('/api/v1/auth/profile'), {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ firstName, lastName, mobileNumber }),
+                          });
+                          const data = await res.json();
+                          if (data.user) {
+                            setUser(data.user);
+                            localStorage.setItem('raj_user', JSON.stringify(data.user));
+                            showToast('Profile updated successfully!', 'success');
+                          }
+                        } catch {
+                          showToast('Profile update failed', 'error');
+                        }
+                      }} className="space-y-3">
+                        <input required type="text" name="firstName" defaultValue={user?.firstName} placeholder="First Name" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
+                        <input required type="text" name="lastName" defaultValue={user?.lastName} placeholder="Last Name" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
+                        <input required type="tel" name="mobileNumber" defaultValue={user?.mobileNumber} placeholder="Mobile Number" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
+                        <button type="submit" className="w-full py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow">Save Changes</button>
+                      </form>
                     </div>
                   )}
                 </div>
-
-                {/* Action Buttons */}
-                <div className="grid sm:grid-cols-2 gap-3 pt-2">
-                  <button onClick={() => addToCart(currentProduct)} className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:shadow-xl hover:bg-[#0E3D42]/95 transition flex items-center justify-center gap-2 text-sm">
-                    <ShoppingBag size={18} /> Add to Bag
-                  </button>
-                  <button onClick={() => { addToCart(currentProduct); setShowCartDrawer(true); }} className="w-full py-4 bg-[#E2A93B] text-[#0E3D42] font-extrabold rounded-2xl shadow-md hover:bg-[#E2A93B]/90 transition text-sm">
-                    Buy Now
-                  </button>
-                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          /* Catalog Grid View */
-          <div className="space-y-8">
-            <div className="text-center max-w-2xl mx-auto space-y-2">
-              <h1 className="text-4xl font-black tracking-tight text-[#0E3D42]">Made for the Everyday</h1>
-              <p className="text-sm font-medium text-[#0E3D42]/70">Small-batch artisanal cakes, organic bakes, apparel & specialty store items.</p>
-            </div>
+          ) : currentProduct ? (
+            /* Standalone Product Detail View Route /products/:slug */
+            <div className="space-y-8">
+              <Link href="/" className="inline-flex items-center gap-2 text-xs font-bold text-[#0E3D42]/70 hover:text-[#0E3D42] bg-white px-3.5 py-2 rounded-xl border border-[#0E3D42]/10 shadow-sm">
+                ← Back to Catalog
+              </Link>
 
-            {/* Category Filter Chips */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none justify-center">
-              <button
-                onClick={() => setSelectedCategory(null)}
-                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition ${!selectedCategory ? 'bg-[#0E3D42] text-white' : 'bg-white border border-[#0E3D42]/10 text-[#0E3D42]'}`}
-              >
-                All Products
-              </button>
-              {['Apparel', 'Home', 'Bakery'].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-xl text-xs font-extrabold transition ${selectedCategory === cat ? 'bg-[#0E3D42] text-white' : 'bg-white border border-[#0E3D42]/10 text-[#0E3D42]'}`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            {filteredProducts.length === 0 ? (
-              <div className="text-center py-16 px-4 bg-white rounded-3xl border border-[#0E3D42]/10 shadow-sm max-w-md mx-auto my-6 space-y-4">
-                <div className="size-16 rounded-full bg-[#FAF5EE] border-2 border-dashed border-[#0E3D42]/20 flex items-center justify-center mx-auto text-[#0E3D42]">
-                  <ShoppingBag size={28} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-[#0E3D42]">New Collection Coming Soon</h3>
-                  <p className="mt-2 text-xs text-gray-500 max-w-xs mx-auto leading-relaxed font-medium">
-                    We are currently updating our catalog with fresh items. Please check back shortly to explore our handcrafted selections.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredProducts.map((product: any) => (
-                  <div key={product.id} className="bg-white rounded-3xl border border-[#0E3D42]/10 overflow-hidden shadow-md hover:shadow-xl transition group flex flex-col justify-between">
-                    <div>
-                      <div className="relative aspect-square bg-[#EFE8DC] overflow-hidden">
-                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                        <span className="absolute bottom-3 left-3 bg-black/70 text-white text-[11px] font-semibold px-2.5 py-0.5 rounded-full">⏱️ {product.prepTimeMinutes || 30}m prep</span>
-                        <button onClick={() => shareProduct(product)} className="absolute top-3 right-3 p-2 rounded-full bg-white/80 text-[#0E3D42] hover:bg-white shadow">
-                          <Share2 size={16} />
-                        </button>
-                      </div>
-                      <div className="p-5 space-y-2">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[#E2A93B]">{product.category}</span>
-                        <Link href={`/products/${product.slug}`} className="block text-lg font-extrabold text-[#0E3D42] hover:underline">{product.name}</Link>
-                        <p className="text-xs text-[#0E3D42]/70 line-clamp-2">{product.description}</p>
-                      </div>
-                    </div>
-                    <div className="p-5 pt-0 flex items-center justify-between gap-4">
-                      <span className="text-xl font-black text-[#0E3D42]">{money(product.priceCents)}</span>
-                      <button onClick={() => addToCart(product)} className="px-4 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 shadow transition">
-                        Add to Bag
-                      </button>
-                    </div>
+              <div className="grid md:grid-cols-2 gap-10 bg-white p-6 sm:p-10 rounded-3xl border border-[#0E3D42]/10 shadow-xl">
+                <div className="relative rounded-2xl overflow-hidden bg-[#EFE8DC] aspect-square flex items-center justify-center">
+                  <img src={currentProduct.imageUrl} alt={currentProduct.name} className="w-full h-full object-cover" />
+                  <span className="absolute bottom-4 left-4 bg-black/75 text-white text-xs px-3 py-1 rounded-full font-semibold backdrop-blur-sm">
+                    ⏱️ {currentProduct.prepTimeMinutes || 30}m prep
+                  </span>
+                  <div className="absolute top-4 right-4 flex gap-2">
+                    <button onClick={() => toggleFavorite(currentProduct)} className="p-2.5 rounded-full bg-white/90 text-red-600 hover:bg-white shadow transition">
+                      <Heart size={18} fill={favorites.includes(currentProduct.id) ? 'currentColor' : 'none'} />
+                    </button>
+                    <button onClick={() => shareProduct(currentProduct)} className="p-2.5 rounded-full bg-white/90 text-[#0E3D42] hover:bg-white shadow transition">
+                      <Share2 size={18} />
+                    </button>
                   </div>
+                </div>
+
+                <div className="flex flex-col justify-between space-y-6">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {currentProduct.isVeg !== false ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-300">
+                          🟢 100% Veg
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-red-700 bg-red-50 px-2.5 py-0.5 rounded-md border border-red-300">
+                          🔺 Non-Veg
+                        </span>
+                      )}
+                      {(currentProduct.isBestseller || currentProduct.featured) && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-md border border-amber-300">
+                          ⭐ Bestseller
+                        </span>
+                      )}
+                    </div>
+
+                    <h1 className="text-3xl sm:text-4xl font-black mt-2 text-[#0E3D42] tracking-tight">{currentProduct.name}</h1>
+
+                    <div className="mt-4 flex items-baseline gap-4">
+                      <span className="text-3xl font-extrabold text-[#0E3D42]">{money(currentProduct.priceCents)}</span>
+                      {currentProduct.compareAtPriceCents && (
+                        <span className="text-lg text-gray-400 line-through font-semibold">{money(currentProduct.compareAtPriceCents)}</span>
+                      )}
+                    </div>
+
+                    <p className="mt-5 text-sm leading-relaxed text-[#0E3D42]/80 font-medium">{currentProduct.description}</p>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3 pt-2">
+                    <button onClick={() => addToCart(currentProduct)} className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition flex items-center justify-center gap-2 text-sm">
+                      <ShoppingBag size={18} /> Add to Bag
+                    </button>
+                    <button onClick={() => { addToCart(currentProduct); setShowCartDrawer(true); }} className="w-full py-4 bg-[#E2A93B] text-[#0E3D42] font-extrabold rounded-2xl shadow-md hover:bg-[#E2A93B]/90 transition text-sm">
+                      Buy Now
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Catalog Grid View with Sorting & Shimmer Skeleton Loaders */
+            <div className="space-y-8">
+              <div className="text-center max-w-2xl mx-auto space-y-2">
+                <h1 className="text-4xl font-black tracking-tight text-[#0E3D42]">Made for the Everyday</h1>
+                <p className="text-sm font-medium text-[#0E3D42]/70">Small-batch artisanal cakes, organic bakes, apparel & specialty store items.</p>
+              </div>
+
+              {/* Advanced Controls Filter & Sort Bar */}
+              <div className="bg-white p-4 rounded-3xl border border-[#0E3D42]/10 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                {/* Category Chips */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  <button
+                    onClick={() => setSelectedCategory(null)}
+                    className={`px-4 py-2 rounded-xl text-xs font-extrabold transition ${!selectedCategory ? 'bg-[#0E3D42] text-white' : 'bg-gray-100 text-[#0E3D42]'}`}
+                  >
+                    All
+                  </button>
+                  {['Bakery', 'Apparel', 'Home'].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-4 py-2 rounded-xl text-xs font-extrabold transition ${selectedCategory === cat ? 'bg-[#0E3D42] text-white' : 'bg-gray-100 text-[#0E3D42]'}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Filters & Sorting */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Veg Toggle */}
+                  <button
+                    onClick={() => setVegFilter(vegFilter === 'veg' ? 'all' : 'veg')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition ${vegFilter === 'veg' ? 'bg-emerald-100 border-emerald-400 text-emerald-800' : 'bg-white border-gray-200 text-gray-700'}`}
+                  >
+                    🟢 Veg Only
+                  </button>
+
+                  {/* Bestseller Filter */}
+                  <button
+                    onClick={() => setBestsellerOnly(!bestsellerOnly)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition ${bestsellerOnly ? 'bg-amber-100 border-amber-400 text-amber-800' : 'bg-white border-gray-200 text-gray-700'}`}
+                  >
+                    ⭐ Bestsellers
+                  </button>
+
+                  {/* Sort Dropdown */}
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="px-3 py-1.5 bg-white border border-gray-200 text-xs font-bold rounded-xl text-[#0E3D42] focus:outline-none"
+                  >
+                    <option value="relevance">Relevance (Default)</option>
+                    <option value="price_asc">Price: Low to High</option>
+                    <option value="price_desc">Price: High to Low</option>
+                    <option value="newest">Newest First</option>
+                    <option value="bestseller">Bestseller First</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Price Range Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-bold">
+                <span className="text-gray-400">Price Range:</span>
+                {[
+                  { label: 'All Prices', val: null },
+                  { label: 'Under ₹300', val: '0-300' },
+                  { label: '₹300 - ₹500', val: '300-500' },
+                  { label: '₹500 - ₹1000', val: '500-1000' },
+                  { label: '₹1000+', val: '1000+' },
+                ].map(p => (
+                  <button
+                    key={p.label}
+                    onClick={() => setPriceRange(p.val)}
+                    className={`px-3 py-1 rounded-full border transition ${priceRange === p.val ? 'bg-[#0E3D42] text-white border-[#0E3D42]' : 'bg-white border-gray-200 text-[#0E3D42]'}`}
+                  >
+                    {p.label}
+                  </button>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-      </main>
 
-      {/* Cart & Checkout Drawer Modal */}
+              {productsLoading ? (
+                /* Shimmer Skeleton Loaders */
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3, 4, 5, 6].map(n => (
+                    <div key={n} className="bg-white rounded-3xl p-4 border border-[#0E3D42]/10 space-y-4 animate-pulse">
+                      <div className="aspect-square bg-gray-200 rounded-2xl" />
+                      <div className="h-4 bg-gray-200 rounded w-3/4" />
+                      <div className="h-3 bg-gray-200 rounded w-1/2" />
+                    </div>
+                  ))}
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="text-center py-16 px-4 bg-white rounded-3xl border border-[#0E3D42]/10 shadow-sm max-w-md mx-auto my-6 space-y-4">
+                  <ShoppingBag size={32} className="mx-auto text-gray-400" />
+                  <h3 className="text-lg font-black text-[#0E3D42]">No Products Found</h3>
+                  <p className="text-xs text-gray-500 font-medium">Try clearing your filters or searching for another item.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredProducts.map((product: any) => (
+                    <div key={product.id} className="bg-white rounded-3xl border border-[#0E3D42]/10 overflow-hidden shadow-md hover:shadow-xl transition group flex flex-col justify-between">
+                      <div>
+                        <div className="relative aspect-square bg-[#EFE8DC] overflow-hidden">
+                          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                          <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                            {product.isVeg !== false ? (
+                              <span className="bg-emerald-900/90 text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full backdrop-blur-sm">🟢 Veg</span>
+                            ) : (
+                              <span className="bg-red-900/90 text-red-300 text-[10px] font-black px-2 py-0.5 rounded-full backdrop-blur-sm">🔺 Non-Veg</span>
+                            )}
+                            {(product.isBestseller || product.featured) && (
+                              <span className="bg-amber-500 text-[#0E3D42] text-[10px] font-black px-2 py-0.5 rounded-full shadow">⭐ Bestseller</span>
+                            )}
+                          </div>
+                          <button onClick={() => toggleFavorite(product)} className="absolute top-3 right-3 p-2 rounded-full bg-white/80 text-red-600 hover:bg-white shadow">
+                            <Heart size={16} fill={favorites.includes(product.id) ? 'currentColor' : 'none'} />
+                          </button>
+                        </div>
+                        <div className="p-5 space-y-2">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-[#E2A93B]">{product.category}</span>
+                          <Link href={`/products/${product.slug}`} className="block text-lg font-extrabold text-[#0E3D42] hover:underline">{product.name}</Link>
+                          <p className="text-xs text-[#0E3D42]/70 line-clamp-2">{product.description}</p>
+                        </div>
+                      </div>
+                      <div className="p-5 pt-0 flex items-center justify-between gap-4">
+                        <span className="text-xl font-black text-[#0E3D42]">{money(product.priceCents)}</span>
+                        <button onClick={() => addToCart(product)} className="px-4 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 shadow transition">
+                          Add to Bag
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* Swiggy-Inspired Footer Section */}
+      <footer className="bg-[#0E3D42] text-white pt-16 pb-8 border-t border-[#E2A93B]/20">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 grid grid-cols-1 md:grid-cols-4 gap-10">
+          {/* Company / About Us */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <img src="/RAJTRADERS-LOGO.png" alt="RAJ TRADERS" className="size-10 object-contain rounded-xl border border-[#E2A93B]" />
+              <span className="text-xl font-black tracking-tight text-white">RAJ TRADERS</span>
+            </div>
+            <p className="text-xs text-white/70 leading-relaxed font-medium">
+              {shopSettings.aboutUsText || 'Premium cakes, party decorations & artisanal local delights.'}
+            </p>
+          </div>
+
+          {/* Contact Us */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Contact Us</h3>
+            <ul className="text-xs text-white/80 space-y-2 font-medium">
+              <li><a href={`mailto:${shopSettings.supportEmail}`} className="hover:underline">Help & Support</a></li>
+              <li><span>Email: {shopSettings.supportEmail}</span></li>
+            </ul>
+          </div>
+
+          {/* Available In Location */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Available in</h3>
+            <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/10 p-3 rounded-xl border border-white/10 w-fit">
+              <MapPin size={16} className="text-[#E2A93B]" />
+              <span>{shopSettings.availableInLocation || 'BIRSINGPUR PALI'}</span>
+            </div>
+          </div>
+
+          {/* Social Links */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Social Links</h3>
+            <div className="flex items-center gap-3">
+              {shopSettings.socialLinkedin && <a href={shopSettings.socialLinkedin} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Linkedin size={18} /></a>}
+              {shopSettings.socialInstagram && <a href={shopSettings.socialInstagram} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Instagram size={18} /></a>}
+              {shopSettings.socialFacebook && <a href={shopSettings.socialFacebook} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Facebook size={18} /></a>}
+              {shopSettings.socialTwitter && <a href={shopSettings.socialTwitter} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Twitter size={18} /></a>}
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 border-t border-white/10 mt-12 pt-6 text-center text-xs font-bold text-white/50">
+          © 2026 RAJ TRADERS. All rights reserved. Built with excellence.
+        </div>
+      </footer>
+
+      {/* Cart & Checkout Drawer */}
       {showCartDrawer && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white h-full shadow-2xl p-6 flex flex-col justify-between overflow-y-auto">
@@ -682,9 +1268,28 @@ export default function App() {
                     </div>
                   ))}
 
+                  {/* Fee Breakdown */}
+                  <div className="bg-[#F7F2EA] p-4 rounded-2xl space-y-2 text-xs font-bold border border-[#0E3D42]/10">
+                    <div className="flex justify-between"><span>Items Subtotal:</span><span>{money(cartTotalCents)}</span></div>
+                    <div className="flex justify-between"><span>Packaging Fee:</span><span>{money(packagingFeeCents)}</span></div>
+                    <div className="flex justify-between">
+                      <span>Delivery Fee:</span>
+                      <span className={isFreeDelivery ? 'text-emerald-700' : ''}>{isFreeDelivery ? 'FREE' : money(deliveryFeeCents)}</span>
+                    </div>
+                    {discountResult?.valid && (
+                      <div className="flex justify-between text-emerald-700"><span>Discount ({discountResult.code}):</span><span>-{money(discountCents)}</span></div>
+                    )}
+                    <div className="flex justify-between text-sm font-black border-t pt-2 text-[#0E3D42]"><span>Final Payable:</span><span>{money(finalPayableCents)}</span></div>
+                  </div>
+
                   {/* Discount Code Input */}
-                  <div className="space-y-2 pt-2">
-                    <label className="text-xs font-extrabold text-[#0E3D42]">Discount Code</label>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-extrabold text-[#0E3D42]">Discount Code</label>
+                      <button onClick={() => setShowCouponsDrawer(!showCouponsDrawer)} className="text-xs font-bold text-[#E2A93B] hover:underline flex items-center gap-1">
+                        <Tag size={12} /> View Coupons
+                      </button>
+                    </div>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -695,13 +1300,31 @@ export default function App() {
                       />
                       <button onClick={handleApplyDiscount} className="px-4 py-2 bg-[#0E3D42] text-white text-xs font-bold rounded-xl">Apply</button>
                     </div>
-                    {discountResult && (
-                      <div className={`text-xs font-bold ${discountResult.valid ? 'text-emerald-700' : 'text-red-600'}`}>{discountResult.message}</div>
-                    )}
                   </div>
 
+                  {/* Payment Method Selector if COD Enabled */}
+                  {shopSettings.isCodEnabled && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-extrabold text-[#0E3D42]">Payment Method</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setPaymentMethod('online')}
+                          className={`p-2.5 rounded-xl border text-xs font-bold ${paymentMethod === 'online' ? 'bg-[#0E3D42] text-white border-[#0E3D42]' : 'bg-white border-gray-200 text-gray-700'}`}
+                        >
+                          Online Payment
+                        </button>
+                        <button
+                          onClick={() => setPaymentMethod('cod')}
+                          className={`p-2.5 rounded-xl border text-xs font-bold ${paymentMethod === 'cod' ? 'bg-[#0E3D42] text-white border-[#0E3D42]' : 'bg-white border-gray-200 text-gray-700'}`}
+                        >
+                          Cash on Delivery
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Shipping Address Input */}
-                  <div className="space-y-2 pt-2">
+                  <div className="space-y-2">
                     <label className="text-xs font-extrabold text-[#0E3D42]">Shipping Address & Pincode</label>
                     <textarea
                       rows={2}
@@ -717,14 +1340,10 @@ export default function App() {
 
             {cart.length > 0 && (
               <div className="border-t pt-4 space-y-4">
-                <div className="flex justify-between text-base font-black text-[#0E3D42]">
-                  <span>Total Payable:</span>
-                  <span>{money(finalPayableCents)}</span>
-                </div>
                 <button
                   onClick={handleCheckout}
-                  disabled={isCheckingOut}
-                  className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition"
+                  disabled={isCheckingOut || !shopSettings.isStoreOpen}
+                  className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition disabled:bg-gray-400"
                 >
                   {isCheckingOut ? 'Processing Order...' : `Pay & Complete Order · ${money(finalPayableCents)}`}
                 </button>
@@ -837,6 +1456,30 @@ export default function App() {
                   Already have an account? <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">Sign In</button>
                 </div>
               </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Notifications Modal */}
+      {showNotificationsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="font-extrabold text-[#0E3D42] text-base flex items-center gap-2"><Bell size={18} /> Notifications</h3>
+              <button onClick={() => setShowNotificationsModal(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+            </div>
+            {notifications.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-6">No new notifications.</p>
+            ) : (
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {notifications.map((n) => (
+                  <div key={n.id} className="p-3 bg-gray-50 rounded-xl border text-xs">
+                    <div className="font-extrabold text-[#0E3D42]">{n.title}</div>
+                    <div className="text-gray-600 font-medium">{n.message}</div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>

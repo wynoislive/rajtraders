@@ -173,6 +173,53 @@ router.get("/v1/storefront/summary", async (_req, res): Promise<void> => {
   }
 });
 
+router.get("/v1/storefront/settings", async (_req, res): Promise<void> => {
+  try {
+    const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+    res.json({
+      shopName: settings?.shopName || "RAJ TRADERS",
+      shopDomain: settings?.shopDomain || "sundarvan.xyz",
+      shopAddress: settings?.shopAddress || "123 Baker Street, Mumbai",
+      supportEmail: settings?.supportEmail || "support@sundarvan.xyz",
+      contactEmail: settings?.contactEmail || "contact@sundarvan.xyz",
+      socialLinkedin: settings?.socialLinkedin || "",
+      socialInstagram: settings?.socialInstagram || "",
+      socialFacebook: settings?.socialFacebook || "",
+      socialPinterest: settings?.socialPinterest || "",
+      socialTwitter: settings?.socialTwitter || "",
+      availableInLocation: settings?.availableInLocation || "BIRSINGPUR PALI",
+      aboutUsText: settings?.aboutUsText || "Premium cakes, party decorations & artisanal local delights.",
+      isStoreOpen: settings?.isStoreOpen ?? true,
+      minOrderCents: settings?.minOrderCents ?? 0,
+      isCodEnabled: settings?.isCodEnabled ?? false,
+      flatDeliveryFeeCents: settings?.flatDeliveryFeeCents ?? 3000,
+      freeDeliveryThresholdCents: settings?.freeDeliveryThresholdCents ?? 50000,
+      packagingFeeCents: settings?.packagingFeeCents ?? 1000,
+    });
+  } catch (err) {
+    res.json({
+      shopName: "RAJ TRADERS",
+      shopDomain: "sundarvan.xyz",
+      shopAddress: "Birsingpur Pali",
+      supportEmail: "support@sundarvan.xyz",
+      contactEmail: "contact@sundarvan.xyz",
+      socialLinkedin: "",
+      socialInstagram: "",
+      socialFacebook: "",
+      socialPinterest: "",
+      socialTwitter: "",
+      availableInLocation: "BIRSINGPUR PALI",
+      aboutUsText: "Premium cakes, party decorations & artisanal local delights.",
+      isStoreOpen: true,
+      minOrderCents: 0,
+      isCodEnabled: false,
+      flatDeliveryFeeCents: 3000,
+      freeDeliveryThresholdCents: 50000,
+      packagingFeeCents: 1000,
+    });
+  }
+});
+
 router.post("/v1/registrations/eligibility", async (req, res): Promise<void> => {
   const parsed = CheckRegistrationEligibilityBody.safeParse(req.body);
   if (!parsed.success) {

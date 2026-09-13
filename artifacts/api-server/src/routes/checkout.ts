@@ -238,6 +238,12 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
       return;
     }
 
+    // Check store availability
+    if (settings.isStoreOpen === false) {
+      res.status(400).json({ error: "Store is currently closed for new orders. Please check back shortly." });
+      return;
+    }
+
     // Fetch product details
     const productIds = items.map((i) => i.productId);
     const dbProducts = await db
@@ -253,9 +259,19 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     for (const item of items) {
       const product = productMap.get(item.productId);
       if (!product || product.status !== "active") {
-        res.status(400).json({ error: `Product not available for checkout.` });
+        res.status(400).json({ error: `Product is no longer available for checkout.` });
         return;
       }
+
+      if (product.inventory < item.quantity) {
+        res.status(409).json({
+          error: `Insufficient stock for "${product.name}". Only ${product.inventory} item(s) remaining.`,
+          productId: product.id,
+          availableStock: product.inventory,
+        });
+        return;
+      }
+
       const qty = Math.max(1, Math.min(99, item.quantity || 1));
       subtotalCents += product.priceCents * qty;
       orderItems.push({

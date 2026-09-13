@@ -36,6 +36,20 @@ export const shopSettingsTable = pgTable("shop_settings", {
   notificationSmtpUser: text("notification_smtp_user").default("notifications.rajtraders@gmail.com"),
   notificationSmtpPass: text("notification_smtp_pass").default(""),
   notificationSmtpFrom: text("notification_smtp_from").default("RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>"),
+  // Footer, Social & Operational Settings
+  socialLinkedin: text("social_linkedin").default(""),
+  socialInstagram: text("social_instagram").default(""),
+  socialFacebook: text("social_facebook").default(""),
+  socialPinterest: text("social_pinterest").default(""),
+  socialTwitter: text("social_twitter").default(""),
+  availableInLocation: text("available_in_location").default("BIRSINGPUR PALI"),
+  aboutUsText: text("about_us_text").default("Premium cakes, party decorations & artisanal local delights."),
+  isStoreOpen: boolean("is_store_open").notNull().default(true),
+  minOrderCents: integer("min_order_cents").default(0),
+  isCodEnabled: boolean("is_cod_enabled").notNull().default(false),
+  flatDeliveryFeeCents: integer("flat_delivery_fee_cents").default(3000), // ₹30
+  freeDeliveryThresholdCents: integer("free_delivery_threshold_cents").default(50000), // ₹500
+  packagingFeeCents: integer("packaging_fee_cents").default(1000), // ₹10
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

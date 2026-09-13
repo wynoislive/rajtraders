@@ -537,6 +537,21 @@ router.put("/v1/admin/shop-settings", async (req, res): Promise<void> => {
     if (req.body.contactEmail !== undefined) updateData.contactEmail = req.body.contactEmail.trim();
     if (req.body.ordersEmail !== undefined) updateData.ordersEmail = req.body.ordersEmail.trim();
 
+    // Footer, Social & Operational Settings
+    if (req.body.socialLinkedin !== undefined) updateData.socialLinkedin = req.body.socialLinkedin.trim();
+    if (req.body.socialInstagram !== undefined) updateData.socialInstagram = req.body.socialInstagram.trim();
+    if (req.body.socialFacebook !== undefined) updateData.socialFacebook = req.body.socialFacebook.trim();
+    if (req.body.socialPinterest !== undefined) updateData.socialPinterest = req.body.socialPinterest.trim();
+    if (req.body.socialTwitter !== undefined) updateData.socialTwitter = req.body.socialTwitter.trim();
+    if (req.body.availableInLocation !== undefined) updateData.availableInLocation = req.body.availableInLocation.trim();
+    if (req.body.aboutUsText !== undefined) updateData.aboutUsText = req.body.aboutUsText.trim();
+    if (typeof req.body.isStoreOpen === "boolean") updateData.isStoreOpen = req.body.isStoreOpen;
+    if (typeof req.body.minOrderCents === "number") updateData.minOrderCents = Math.max(0, req.body.minOrderCents);
+    if (typeof req.body.isCodEnabled === "boolean") updateData.isCodEnabled = req.body.isCodEnabled;
+    if (typeof req.body.flatDeliveryFeeCents === "number") updateData.flatDeliveryFeeCents = Math.max(0, req.body.flatDeliveryFeeCents);
+    if (typeof req.body.freeDeliveryThresholdCents === "number") updateData.freeDeliveryThresholdCents = Math.max(0, req.body.freeDeliveryThresholdCents);
+    if (typeof req.body.packagingFeeCents === "number") updateData.packagingFeeCents = Math.max(0, req.body.packagingFeeCents);
+
     await db.update(shopSettingsTable).set(updateData).where(eq(shopSettingsTable.id, "default_shop"));
     clearTransporterCache();
 

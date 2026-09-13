@@ -8,3 +8,6 @@ export * from "./shop-settings";
 export * from "./admin-users";
 export * from "./security-compliance";
 export * from "./totp-secrets";
+export * from "./customer-addresses";
+export * from "./customer-favorites";
+export * from "./customer-notifications";

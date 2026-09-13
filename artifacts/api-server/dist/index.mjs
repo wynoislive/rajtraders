@@ -119631,6 +119631,9 @@ var Index = class {
 function index(name) {
   return new IndexBuilderOn(false, name);
 }
+function uniqueIndex(name) {
+  return new IndexBuilderOn(true, name);
+}
 
 // node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/casing.js
 function toSnakeCase(input) {
@@ -123461,6 +123464,9 @@ var schema_exports = {};
 __export(schema_exports, {
   adminRoles: () => adminRoles,
   adminUsersTable: () => adminUsersTable,
+  customerAddressesTable: () => customerAddressesTable,
+  customerFavoritesTable: () => customerFavoritesTable,
+  customerNotificationsTable: () => customerNotificationsTable,
   deletedAccountsLogTable: () => deletedAccountsLogTable,
   discountsTable: () => discountsTable,
   emailVerificationsTable: () => emailVerificationsTable,
@@ -123492,6 +123498,8 @@ var productsTable = pgTable(
     featured: boolean("featured").notNull().default(false),
     inventory: integer("inventory").notNull().default(0),
     prepTimeMinutes: integer("prep_time_minutes").notNull().default(30),
+    isBestseller: boolean("is_bestseller").notNull().default(false),
+    isVeg: boolean("is_veg").notNull().default(true),
     approvalStatus: text("approval_status").notNull().default("approved"),
     // 'approved', 'pending_approval', 'rejected'
     submittedBy: text("submitted_by"),
@@ -123629,6 +123637,23 @@ var shopSettingsTable = pgTable("shop_settings", {
   notificationSmtpUser: text("notification_smtp_user").default("notifications.rajtraders@gmail.com"),
   notificationSmtpPass: text("notification_smtp_pass").default(""),
   notificationSmtpFrom: text("notification_smtp_from").default("RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>"),
+  // Footer, Social & Operational Settings
+  socialLinkedin: text("social_linkedin").default(""),
+  socialInstagram: text("social_instagram").default(""),
+  socialFacebook: text("social_facebook").default(""),
+  socialPinterest: text("social_pinterest").default(""),
+  socialTwitter: text("social_twitter").default(""),
+  availableInLocation: text("available_in_location").default("BIRSINGPUR PALI"),
+  aboutUsText: text("about_us_text").default("Premium cakes, party decorations & artisanal local delights."),
+  isStoreOpen: boolean("is_store_open").notNull().default(true),
+  minOrderCents: integer("min_order_cents").default(0),
+  isCodEnabled: boolean("is_cod_enabled").notNull().default(false),
+  flatDeliveryFeeCents: integer("flat_delivery_fee_cents").default(3e3),
+  // ₹30
+  freeDeliveryThresholdCents: integer("free_delivery_threshold_cents").default(5e4),
+  // ₹500
+  packagingFeeCents: integer("packaging_fee_cents").default(1e3),
+  // ₹10
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -123724,6 +123749,71 @@ var totpSecretsTable = pgTable(
   },
   (table) => [
     index("idx_totp_secrets_user_id").on(table.userId)
+  ]
+);
+
+// lib/db/src/schema/customer-addresses.ts
+import { randomUUID as randomUUID10 } from "node:crypto";
+var customerAddressesTable = pgTable(
+  "customer_addresses",
+  {
+    id: text("id").primaryKey().$defaultFn(randomUUID10),
+    userId: text("user_id").notNull(),
+    label: text("label").notNull().default("Home"),
+    // Home, Work, Other
+    fullAddress: text("full_address").notNull(),
+    houseNumber: text("house_number").default(""),
+    buildingSociety: text("building_society").default(""),
+    landmark: text("landmark").default(""),
+    pincode: text("pincode").notNull(),
+    city: text("city").notNull(),
+    state: text("state").notNull().default("Madhya Pradesh"),
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    deliveryInstructions: text("delivery_instructions").default(""),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index("idx_customer_addresses_user_id").on(table.userId)
+  ]
+);
+
+// lib/db/src/schema/customer-favorites.ts
+import { randomUUID as randomUUID11 } from "node:crypto";
+var customerFavoritesTable = pgTable(
+  "customer_favorites",
+  {
+    id: text("id").primaryKey().$defaultFn(randomUUID11),
+    userId: text("user_id").notNull(),
+    productId: text("product_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index("idx_customer_favorites_user_id").on(table.userId),
+    uniqueIndex("idx_customer_favorites_user_product").on(table.userId, table.productId)
+  ]
+);
+
+// lib/db/src/schema/customer-notifications.ts
+import { randomUUID as randomUUID12 } from "node:crypto";
+var customerNotificationsTable = pgTable(
+  "customer_notifications",
+  {
+    id: text("id").primaryKey().$defaultFn(randomUUID12),
+    userId: text("user_id").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    type: text("type").notNull().default("system"),
+    // order_update, promo, system
+    link: text("link"),
+    isRead: boolean("is_read").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index("idx_customer_notifications_user_id").on(table.userId),
+    index("idx_customer_notifications_is_read").on(table.isRead)
   ]
 );
 
@@ -123922,6 +124012,44 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 
+-- New Customer Tables
+CREATE TABLE IF NOT EXISTS customer_addresses (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT 'Home',
+  full_address TEXT NOT NULL,
+  house_number TEXT DEFAULT '',
+  building_society TEXT DEFAULT '',
+  landmark TEXT DEFAULT '',
+  pincode TEXT NOT NULL,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'Madhya Pradesh',
+  latitude REAL,
+  longitude REAL,
+  delivery_instructions TEXT DEFAULT '',
+  is_default BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS customer_favorites (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS customer_notifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'system',
+  link TEXT,
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
@@ -123935,9 +124063,15 @@ CREATE INDEX IF NOT EXISTS idx_products_status_approval ON products(status, appr
 CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
 CREATE INDEX IF NOT EXISTS idx_totp_secrets_user_id ON totp_secrets(user_id);
+CREATE INDEX IF NOT EXISTS idx_customer_addresses_user_id ON customer_addresses(user_id);
+CREATE INDEX IF NOT EXISTS idx_customer_favorites_user_id ON customer_favorites(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_favorites_user_product ON customer_favorites(user_id, product_id);
+CREATE INDEX IF NOT EXISTS idx_customer_notifications_user_id ON customer_notifications(user_id);
 
 -- Alter queries for existing tables missing new columns
 ALTER TABLE products ADD COLUMN IF NOT EXISTS prep_time_minutes INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_bestseller BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS is_veg BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'approved';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS submitted_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS approved_by TEXT;
@@ -123952,6 +124086,19 @@ ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_port INTEGE
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_user TEXT DEFAULT 'notifications.rajtraders@gmail.com';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_pass TEXT DEFAULT '';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS notification_smtp_from TEXT DEFAULT 'RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_linkedin TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_instagram TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_facebook TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_pinterest TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS social_twitter TEXT DEFAULT '';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS available_in_location TEXT DEFAULT 'BIRSINGPUR PALI';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS about_us_text TEXT DEFAULT 'Premium cakes, party decorations & artisanal local delights.';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS is_store_open BOOLEAN DEFAULT true;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS min_order_cents INTEGER DEFAULT 0;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS is_cod_enabled BOOLEAN DEFAULT false;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS flat_delivery_fee_cents INTEGER DEFAULT 3000;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS free_delivery_threshold_cents INTEGER DEFAULT 50000;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS packaging_fee_cents INTEGER DEFAULT 1000;
 
 `;
 async function syncEnvToShopSettings(db2) {
@@ -124187,6 +124334,52 @@ router2.get("/v1/storefront/summary", async (_req, res) => {
     });
   }
 });
+router2.get("/v1/storefront/settings", async (_req, res) => {
+  try {
+    const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+    res.json({
+      shopName: settings?.shopName || "RAJ TRADERS",
+      shopDomain: settings?.shopDomain || "sundarvan.xyz",
+      shopAddress: settings?.shopAddress || "123 Baker Street, Mumbai",
+      supportEmail: settings?.supportEmail || "support@sundarvan.xyz",
+      contactEmail: settings?.contactEmail || "contact@sundarvan.xyz",
+      socialLinkedin: settings?.socialLinkedin || "",
+      socialInstagram: settings?.socialInstagram || "",
+      socialFacebook: settings?.socialFacebook || "",
+      socialPinterest: settings?.socialPinterest || "",
+      socialTwitter: settings?.socialTwitter || "",
+      availableInLocation: settings?.availableInLocation || "BIRSINGPUR PALI",
+      aboutUsText: settings?.aboutUsText || "Premium cakes, party decorations & artisanal local delights.",
+      isStoreOpen: settings?.isStoreOpen ?? true,
+      minOrderCents: settings?.minOrderCents ?? 0,
+      isCodEnabled: settings?.isCodEnabled ?? false,
+      flatDeliveryFeeCents: settings?.flatDeliveryFeeCents ?? 3e3,
+      freeDeliveryThresholdCents: settings?.freeDeliveryThresholdCents ?? 5e4,
+      packagingFeeCents: settings?.packagingFeeCents ?? 1e3
+    });
+  } catch (err) {
+    res.json({
+      shopName: "RAJ TRADERS",
+      shopDomain: "sundarvan.xyz",
+      shopAddress: "Birsingpur Pali",
+      supportEmail: "support@sundarvan.xyz",
+      contactEmail: "contact@sundarvan.xyz",
+      socialLinkedin: "",
+      socialInstagram: "",
+      socialFacebook: "",
+      socialPinterest: "",
+      socialTwitter: "",
+      availableInLocation: "BIRSINGPUR PALI",
+      aboutUsText: "Premium cakes, party decorations & artisanal local delights.",
+      isStoreOpen: true,
+      minOrderCents: 0,
+      isCodEnabled: false,
+      flatDeliveryFeeCents: 3e3,
+      freeDeliveryThresholdCents: 5e4,
+      packagingFeeCents: 1e3
+    });
+  }
+});
 router2.post("/v1/registrations/eligibility", async (req, res) => {
   const parsed = CheckRegistrationEligibilityBody.safeParse(req.body);
   if (!parsed.success) {
@@ -124281,7 +124474,7 @@ var requireAdmin = (req, res, next) => {
 
 // artifacts/api-server/src/routes/staff-admin.ts
 var import_express4 = __toESM(require_express2(), 1);
-import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID10 } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } from "node:crypto";
 
 // artifacts/api-server/src/lib/redis.ts
 var import_ioredis = __toESM(require_built3(), 1);
@@ -126180,7 +126373,7 @@ router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodyS
       res.status(401).json({ error: "Invalid staff email or password." });
       return;
     }
-    const token = `staff_${randomUUID10().replace(/-/g, "")}`;
+    const token = `staff_${randomUUID13().replace(/-/g, "")}`;
     const session = {
       userId: staff.id,
       name: staff.name,
@@ -126252,7 +126445,7 @@ router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req, re
       const parsed = new Date(expiresAtDate);
       if (!isNaN(parsed.getTime())) expirationDate = parsed;
     }
-    const id = randomUUID10();
+    const id = randomUUID13();
     const passwordHash = hashPassword(password);
     await db.insert(adminUsersTable).values({
       id,
@@ -127166,6 +127359,19 @@ router4.put("/v1/admin/shop-settings", async (req, res) => {
     if (req.body.supportEmail !== void 0) updateData.supportEmail = req.body.supportEmail.trim();
     if (req.body.contactEmail !== void 0) updateData.contactEmail = req.body.contactEmail.trim();
     if (req.body.ordersEmail !== void 0) updateData.ordersEmail = req.body.ordersEmail.trim();
+    if (req.body.socialLinkedin !== void 0) updateData.socialLinkedin = req.body.socialLinkedin.trim();
+    if (req.body.socialInstagram !== void 0) updateData.socialInstagram = req.body.socialInstagram.trim();
+    if (req.body.socialFacebook !== void 0) updateData.socialFacebook = req.body.socialFacebook.trim();
+    if (req.body.socialPinterest !== void 0) updateData.socialPinterest = req.body.socialPinterest.trim();
+    if (req.body.socialTwitter !== void 0) updateData.socialTwitter = req.body.socialTwitter.trim();
+    if (req.body.availableInLocation !== void 0) updateData.availableInLocation = req.body.availableInLocation.trim();
+    if (req.body.aboutUsText !== void 0) updateData.aboutUsText = req.body.aboutUsText.trim();
+    if (typeof req.body.isStoreOpen === "boolean") updateData.isStoreOpen = req.body.isStoreOpen;
+    if (typeof req.body.minOrderCents === "number") updateData.minOrderCents = Math.max(0, req.body.minOrderCents);
+    if (typeof req.body.isCodEnabled === "boolean") updateData.isCodEnabled = req.body.isCodEnabled;
+    if (typeof req.body.flatDeliveryFeeCents === "number") updateData.flatDeliveryFeeCents = Math.max(0, req.body.flatDeliveryFeeCents);
+    if (typeof req.body.freeDeliveryThresholdCents === "number") updateData.freeDeliveryThresholdCents = Math.max(0, req.body.freeDeliveryThresholdCents);
+    if (typeof req.body.packagingFeeCents === "number") updateData.packagingFeeCents = Math.max(0, req.body.packagingFeeCents);
     await db.update(shopSettingsTable).set(updateData).where(eq(shopSettingsTable.id, "default_shop"));
     clearTransporterCache();
     const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
@@ -127252,7 +127458,7 @@ var admin_default = router4;
 
 // artifacts/api-server/src/routes/checkout.ts
 var import_express7 = __toESM(require_express2(), 1);
-import { createHmac as createHmac2, randomUUID as randomUUID12 } from "node:crypto";
+import { createHmac as createHmac2, randomUUID as randomUUID15 } from "node:crypto";
 
 // artifacts/api-server/src/utils/geo.ts
 function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -127267,7 +127473,7 @@ function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
 
 // artifacts/api-server/src/routes/customer-auth.ts
 var import_express6 = __toESM(require_express2(), 1);
-import { randomBytes as randomBytes5, scryptSync as scryptSync3, timingSafeEqual as timingSafeEqual5, randomUUID as randomUUID11, createHash as createHash2, randomInt as randomInt2 } from "node:crypto";
+import { randomBytes as randomBytes5, scryptSync as scryptSync3, timingSafeEqual as timingSafeEqual5, randomUUID as randomUUID14, createHash as createHash2, randomInt as randomInt2 } from "node:crypto";
 
 // artifacts/api-server/src/lib/totp.ts
 import { createCipheriv, createDecipheriv, randomBytes as randomBytes4, scryptSync as scryptSync2, timingSafeEqual as timingSafeEqual4, randomInt } from "node:crypto";
@@ -128064,7 +128270,7 @@ var SESSION_TTL_MS = securityConfig.sessionTtlMs;
 var SESSION_TTL_SECONDS = securityConfig.sessionTtlSeconds;
 var fallbackSessionStore = /* @__PURE__ */ new Map();
 async function createSession(userId) {
-  const token = `auth_${randomUUID11().replace(/-/g, "")}`;
+  const token = `auth_${randomUUID14().replace(/-/g, "")}`;
   const session = { userId, expiresAt: Date.now() + SESSION_TTL_MS };
   const redis = getRedisClient();
   if (redis) {
@@ -128132,7 +128338,7 @@ async function issueVerificationOtp(req, res, user, cleanEmail, extra) {
   const otpCode = randomInt2(1e5, 999999).toString();
   const expiresAt = new Date(Date.now() + OTP_VALIDITY_MS);
   await db.insert(emailVerificationsTable).values({
-    id: randomUUID11(),
+    id: randomUUID14(),
     userId: user.id,
     email: cleanEmail,
     otpCode,
@@ -128171,7 +128377,7 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
     const now = /* @__PURE__ */ new Date();
     const deletedLogs = await db.select().from(deletedAccountsLogTable).where(and(eq(deletedAccountsLogTable.email, cleanEmail), gt(deletedAccountsLogTable.penaltyExpiresAt, now))).limit(1);
     let hasLockdownPenalty = deletedLogs.length > 0;
-    const userId = randomUUID11();
+    const userId = randomUUID14();
     const passwordHash = hashPassword2(password);
     await db.transaction(async (tx) => {
       await tx.insert(usersTable).values({
@@ -128183,7 +128389,7 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
         passwordHash
       });
       if (hasLockdownPenalty) {
-        await tx.insert(registrationClaimsTable).values({ id: randomUUID11(), email: cleanEmail, policyId: "forfeited_due_to_deletion_penalty" }).onConflictDoNothing({ target: registrationClaimsTable.email });
+        await tx.insert(registrationClaimsTable).values({ id: randomUUID14(), email: cleanEmail, policyId: "forfeited_due_to_deletion_penalty" }).onConflictDoNothing({ target: registrationClaimsTable.email });
         req.log.warn({ cleanEmail }, "User re-registered within 15-day deletion penalty; welcome offers forfeited.");
       }
     });
@@ -128360,7 +128566,7 @@ router5.delete("/delete-account", async (req, res) => {
     const user = foundUsers[0];
     const deletedAt = /* @__PURE__ */ new Date();
     const penaltyExpiresAt = new Date(deletedAt.getTime() + 15 * 24 * 60 * 60 * 1e3);
-    await db.insert(deletedAccountsLogTable).values({ id: randomUUID11(), email: user.email, mobileNumber: user.mobileNumber, deletedAt, penaltyExpiresAt });
+    await db.insert(deletedAccountsLogTable).values({ id: randomUUID14(), email: user.email, mobileNumber: user.mobileNumber, deletedAt, penaltyExpiresAt });
     await db.delete(usersTable).where(eq(usersTable.id, userId));
     await db.delete(totpSecretsTable).where(eq(totpSecretsTable.userId, userId));
     await deleteSession(req.headers.authorization);
@@ -128394,7 +128600,7 @@ router5.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPasswor
     const tokenHash = createHash2("sha256").update(rawToken).digest("hex");
     const now = Date.now();
     const expiresAt = new Date(now + 60 * 60 * 1e3);
-    await db.insert(passwordResetsTable).values({ id: randomUUID11(), userId: user.id, email: cleanEmail, tokenHash, expiresAt });
+    await db.insert(passwordResetsTable).values({ id: randomUUID14(), userId: user.id, email: cleanEmail, tokenHash, expiresAt });
     const shopSettings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const shopDomain = shopSettings?.shopDomain || "myshop.com";
     const resetUrl = `https://${shopDomain}/reset-password?token=${rawToken}&email=${encodeURIComponent(cleanEmail)}`;
@@ -128426,7 +128632,7 @@ router5.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordB
     await db.update(usersTable).set({ passwordHash: newPasswordHash, updatedAt: now }).where(eq(usersTable.id, resetRecord.userId));
     await db.update(passwordResetsTable).set({ usedAt: now }).where(eq(passwordResetsTable.id, resetRecord.id));
     const lockoutUntil = new Date(now.getTime() + 15 * 60 * 1e3);
-    await db.insert(passwordLockoutsTable).values({ id: randomUUID11(), email: cleanEmail, lockedUntil: lockoutUntil }).onConflictDoUpdate({ target: passwordLockoutsTable.email, set: { lockedUntil: lockoutUntil } });
+    await db.insert(passwordLockoutsTable).values({ id: randomUUID14(), email: cleanEmail, lockedUntil: lockoutUntil }).onConflictDoUpdate({ target: passwordLockoutsTable.email, set: { lockedUntil: lockoutUntil } });
     req.log.info({ email: cleanEmail }, "Password successfully reset; 15-min lockout enacted");
     res.status(200).json({ success: true, message: "Password reset successful! You may now sign in with your new password." });
   } catch (err) {
@@ -128458,7 +128664,7 @@ router5.post("/totp/setup", async (req, res) => {
       await db.delete(totpSecretsTable).where(eq(totpSecretsTable.userId, userId));
     }
     await db.insert(totpSecretsTable).values({
-      id: randomUUID11(),
+      id: randomUUID14(),
       userId,
       encryptedSecret: encrypted,
       isEnabled: false,
@@ -128611,6 +128817,218 @@ router5.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema })
   } catch (err) {
     req.log.error({ err }, "TOTP recovery error");
     res.status(500).json({ error: "TOTP recovery failed." });
+  }
+});
+router5.get("/addresses", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  try {
+    const addresses = await db.select().from(customerAddressesTable).where(eq(customerAddressesTable.userId, userId)).orderBy(desc(customerAddressesTable.isDefault), desc(customerAddressesTable.createdAt));
+    res.json(addresses);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch addresses." });
+  }
+});
+router5.post("/addresses", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req.body;
+  if (!fullAddress || !pincode || !city) {
+    res.status(400).json({ error: "Full address, pincode, and city are required." });
+    return;
+  }
+  try {
+    if (isDefault) {
+      await db.update(customerAddressesTable).set({ isDefault: false }).where(eq(customerAddressesTable.userId, userId));
+    }
+    const [inserted] = await db.insert(customerAddressesTable).values({
+      userId,
+      label: label || "Home",
+      fullAddress,
+      houseNumber: houseNumber || "",
+      buildingSociety: buildingSociety || "",
+      landmark: landmark || "",
+      pincode,
+      city,
+      state: state || "Madhya Pradesh",
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null,
+      deliveryInstructions: deliveryInstructions || "",
+      isDefault: Boolean(isDefault)
+    }).returning();
+    res.status(201).json(inserted);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save address." });
+  }
+});
+router5.put("/addresses/:id", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  const { id } = req.params;
+  const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req.body;
+  try {
+    const existing = await db.select().from(customerAddressesTable).where(and(eq(customerAddressesTable.id, id), eq(customerAddressesTable.userId, userId))).limit(1);
+    if (existing.length === 0) {
+      res.status(404).json({ error: "Address not found." });
+      return;
+    }
+    if (isDefault) {
+      await db.update(customerAddressesTable).set({ isDefault: false }).where(eq(customerAddressesTable.userId, userId));
+    }
+    const [updated] = await db.update(customerAddressesTable).set({
+      ...label !== void 0 ? { label } : {},
+      ...fullAddress !== void 0 ? { fullAddress } : {},
+      ...houseNumber !== void 0 ? { houseNumber } : {},
+      ...buildingSociety !== void 0 ? { buildingSociety } : {},
+      ...landmark !== void 0 ? { landmark } : {},
+      ...pincode !== void 0 ? { pincode } : {},
+      ...city !== void 0 ? { city } : {},
+      ...state !== void 0 ? { state } : {},
+      ...latitude !== void 0 ? { latitude: parseFloat(latitude) } : {},
+      ...longitude !== void 0 ? { longitude: parseFloat(longitude) } : {},
+      ...deliveryInstructions !== void 0 ? { deliveryInstructions } : {},
+      ...isDefault !== void 0 ? { isDefault: Boolean(isDefault) } : {},
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(customerAddressesTable.id, id)).returning();
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update address." });
+  }
+});
+router5.delete("/addresses/:id", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  const { id } = req.params;
+  try {
+    await db.delete(customerAddressesTable).where(and(eq(customerAddressesTable.id, id), eq(customerAddressesTable.userId, userId)));
+    res.json({ success: true, message: "Address deleted successfully." });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete address." });
+  }
+});
+router5.get("/favorites", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  try {
+    const favorites = await db.select().from(customerFavoritesTable).where(eq(customerFavoritesTable.userId, userId));
+    const productIds = favorites.map((f) => f.productId);
+    if (productIds.length === 0) {
+      res.json([]);
+      return;
+    }
+    const products = await db.select().from(productsTable).where(and(eq(productsTable.status, "active"), eq(productsTable.approvalStatus, "approved")));
+    const favProducts = products.filter((p) => productIds.includes(p.id));
+    res.json(favProducts);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch wishlist." });
+  }
+});
+router5.post("/favorites/toggle", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  const { productId } = req.body;
+  if (!productId) {
+    res.status(400).json({ error: "productId is required." });
+    return;
+  }
+  try {
+    const existing = await db.select().from(customerFavoritesTable).where(and(eq(customerFavoritesTable.userId, userId), eq(customerFavoritesTable.productId, productId))).limit(1);
+    if (existing.length > 0) {
+      await db.delete(customerFavoritesTable).where(eq(customerFavoritesTable.id, existing[0].id));
+      res.json({ isFavorite: false, message: "Removed from favorites." });
+    } else {
+      await db.insert(customerFavoritesTable).values({ userId, productId });
+      res.json({ isFavorite: true, message: "Added to favorites." });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Failed to toggle favorite." });
+  }
+});
+router5.get("/orders", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  try {
+    const orders = await db.select().from(ordersTable).where(eq(ordersTable.userId, userId)).orderBy(desc(ordersTable.createdAt));
+    res.json(orders.map((o) => ({
+      ...o,
+      formattedOrderId: `#RAJ-${o.id.substring(0, 6).toUpperCase()}`,
+      estimatedEta: "30-45 mins",
+      items: JSON.parse(o.itemsJson || "[]")
+    })));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch customer orders." });
+  }
+});
+router5.get("/orders/:id", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  const { id } = req.params;
+  try {
+    const found = await db.select().from(ordersTable).where(and(eq(ordersTable.id, id), eq(ordersTable.userId, userId))).limit(1);
+    if (found.length === 0) {
+      res.status(404).json({ error: "Order not found." });
+      return;
+    }
+    const o = found[0];
+    res.json({
+      ...o,
+      formattedOrderId: `#RAJ-${o.id.substring(0, 6).toUpperCase()}`,
+      estimatedEta: "30-45 mins",
+      items: JSON.parse(o.itemsJson || "[]")
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch order details." });
+  }
+});
+router5.get("/notifications", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  try {
+    const notifications = await db.select().from(customerNotificationsTable).where(eq(customerNotificationsTable.userId, userId)).orderBy(desc(customerNotificationsTable.createdAt)).limit(30);
+    const unreadCount = notifications.filter((n) => !n.isRead).length;
+    res.json({ notifications, unreadCount });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch notifications." });
+  }
+});
+router5.put("/notifications/read-all", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  try {
+    await db.update(customerNotificationsTable).set({ isRead: true }).where(eq(customerNotificationsTable.userId, userId));
+    res.json({ success: true, message: "All notifications marked as read." });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update notifications." });
   }
 });
 var customer_auth_default = router5;
@@ -128784,6 +129202,10 @@ router6.post("/create-order", async (req, res) => {
       });
       return;
     }
+    if (settings.isStoreOpen === false) {
+      res.status(400).json({ error: "Store is currently closed for new orders. Please check back shortly." });
+      return;
+    }
     const productIds = items.map((i) => i.productId);
     const dbProducts = await db.select().from(productsTable).where(inArray(productsTable.id, productIds));
     const productMap = new Map(dbProducts.map((p) => [p.id, p]));
@@ -128792,7 +129214,15 @@ router6.post("/create-order", async (req, res) => {
     for (const item of items) {
       const product = productMap.get(item.productId);
       if (!product || product.status !== "active") {
-        res.status(400).json({ error: `Product not available for checkout.` });
+        res.status(400).json({ error: `Product is no longer available for checkout.` });
+        return;
+      }
+      if (product.inventory < item.quantity) {
+        res.status(409).json({
+          error: `Insufficient stock for "${product.name}". Only ${product.inventory} item(s) remaining.`,
+          productId: product.id,
+          availableStock: product.inventory
+        });
         return;
       }
       const qty = Math.max(1, Math.min(99, item.quantity || 1));
@@ -128820,7 +129250,7 @@ router6.post("/create-order", async (req, res) => {
       }
     }
     const totalCents = Math.max(100, subtotalCents - discountCents);
-    const internalOrderId = randomUUID12();
+    const internalOrderId = randomUUID15();
     const rzpKeyId = settings.razorpayKeyId;
     const rzpKeySecret = settings.razorpayKeySecret;
     let razorpayOrderId;
@@ -129080,14 +129510,14 @@ var approvals_default = router7;
 
 // artifacts/api-server/src/routes/storage.ts
 var import_express9 = __toESM(require_express2(), 1);
-import { randomUUID as randomUUID13 } from "node:crypto";
+import { randomUUID as randomUUID16 } from "node:crypto";
 var router8 = (0, import_express9.Router)();
 router8.use(requireAdmin);
 router8.post("/storage/upload", async (req, res) => {
   const { filename, contentType, base64Data, imageUrl } = req.body;
   try {
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-    const uniqueKey = `products/${randomUUID13()}_${(filename || "cake-photo.jpg").replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    const uniqueKey = `products/${randomUUID16()}_${(filename || "cake-photo.jpg").replace(/[^a-zA-Z0-9.-]/g, "_")}`;
     if (settings?.r2AccountId && settings?.r2AccessKeyId && settings?.r2SecretAccessKey) {
       const publicBase = settings.r2PublicUrl || `https://pub-${settings.r2AccountId.substring(0, 8)}.r2.dev`;
       const finalUrl = `${publicBase.replace(/\/$/, "")}/${uniqueKey}`;
@@ -130518,10 +130948,10 @@ function clerkProxyMiddleware() {
 }
 
 // artifacts/api-server/src/middlewares/request-id.ts
-import { randomUUID as randomUUID14 } from "node:crypto";
+import { randomUUID as randomUUID17 } from "node:crypto";
 var requestIdMiddleware = (req, res, next) => {
   const existingId = req.headers["x-request-id"];
-  const requestId = typeof existingId === "string" && existingId.length > 0 ? existingId : `req_${randomUUID14().replace(/-/g, "")}`;
+  const requestId = typeof existingId === "string" && existingId.length > 0 ? existingId : `req_${randomUUID17().replace(/-/g, "")}`;
   req.id = requestId;
   res.setHeader("X-Request-Id", requestId);
   next();

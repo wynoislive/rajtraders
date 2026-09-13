@@ -545,6 +545,8 @@ type ProductForm = {
   prepTimeMinutes: string;
   status: 'active' | 'draft';
   featured: boolean;
+  isBestseller: boolean;
+  isVeg: boolean;
 };
 
 const blankProduct: ProductForm = {
@@ -558,6 +560,8 @@ const blankProduct: ProductForm = {
   prepTimeMinutes: '30',
   status: 'active',
   featured: false,
+  isBestseller: false,
+  isVeg: true,
 };
 
 function Products() {
@@ -953,9 +957,17 @@ function ProductDialog({ open, mode, form, setForm, busy, onClose, onSubmit }: {
             <option value="draft">Draft only</option>
           </select>
         </label>
-        <label className="flex items-end gap-2 pb-2 text-sm font-bold">
-          <input type="checkbox" checked={form.featured} onChange={(e) => update('featured', e.target.checked)} className="size-4 accent-[hsl(var(--primary))]" /> Feature on homepage
-        </label>
+        <div className="space-y-2 pt-2">
+          <label className="flex items-center gap-2 text-xs font-extrabold">
+            <input type="checkbox" checked={form.featured} onChange={(e) => update('featured', e.target.checked)} className="size-4 accent-[hsl(var(--primary))]" /> Feature on homepage
+          </label>
+          <label className="flex items-center gap-2 text-xs font-extrabold">
+            <input type="checkbox" checked={form.isBestseller} onChange={(e) => update('isBestseller', e.target.checked)} className="size-4 accent-[hsl(var(--primary))]" /> ⭐ Bestseller Badge
+          </label>
+          <label className="flex items-center gap-2 text-xs font-extrabold">
+            <input type="checkbox" checked={form.isVeg !== false} onChange={(e) => update('isVeg', e.target.checked)} className="size-4 accent-[hsl(var(--primary))]" /> 🟢 100% Veg Product
+          </label>
+        </div>
       </div>
 
       <div className="mt-6 flex justify-end gap-2 border-t border-[hsl(var(--border))] pt-4">
@@ -1296,6 +1308,18 @@ function StoreSettings() {
     notificationSmtpUser: 'notifications.rajtraders@gmail.com',
     notificationSmtpPass: '',
     notificationSmtpFrom: 'RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>',
+    socialLinkedin: '',
+    socialInstagram: '',
+    socialFacebook: '',
+    socialPinterest: '',
+    socialTwitter: '',
+    availableInLocation: 'BIRSINGPUR PALI',
+    aboutUsText: 'Premium cakes, party decorations & artisanal local delights.',
+    isStoreOpen: true,
+    isCodEnabled: false,
+    flatDeliveryFeeCents: 3000,
+    freeDeliveryThresholdCents: 50000,
+    packagingFeeCents: 1000,
   });
 
   const [showSecret, setShowSecret] = useState(false);
@@ -1470,6 +1494,64 @@ function StoreSettings() {
                 <span className="font-mono text-base font-black text-[hsl(var(--primary))]">{form.deliveryRadiusKm} km</span>
               </div>
               <input type="range" min="1" max="100" step="1" value={form.deliveryRadiusKm} onChange={(e) => setForm({ ...form, deliveryRadiusKm: parseFloat(e.target.value) || 1 })} className="w-full h-2 rounded-lg bg-[hsl(var(--border))] accent-[hsl(var(--primary))]" />
+            </div>
+          </div>
+
+          {/* Footer, Social Links & Payment Options */}
+          <div className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-[hsl(var(--primary)/.10)] text-[hsl(var(--primary))]"><Settings2 size={20} /></div>
+                <div>
+                  <h3 className="text-base font-extrabold">Public Storefront Footer, Social & Payment Options</h3>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Customize footer location text, social media links, store open status, COD payment option, and delivery fees.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.isStoreOpen} onChange={(e) => setForm({ ...form, isStoreOpen: e.target.checked })} className="size-4 rounded accent-[hsl(var(--primary))]" />
+                  <span className="text-xs font-bold">{form.isStoreOpen ? 'Store Open 🟢' : 'Store Closed 🔴'}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={form.isCodEnabled} onChange={(e) => setForm({ ...form, isCodEnabled: e.target.checked })} className="size-4 rounded accent-[hsl(var(--primary))]" />
+                  <span className="text-xs font-bold">{form.isCodEnabled ? 'COD Enabled' : 'Online Only'}</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Available In Location Display</label>
+                <input type="text" value={form.availableInLocation} onChange={(e) => setForm({ ...form, availableInLocation: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold" placeholder="BIRSINGPUR PALI" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">About Us Footer Summary</label>
+                <input type="text" value={form.aboutUsText} onChange={(e) => setForm({ ...form, aboutUsText: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold" placeholder="Premium cakes, decorations & artisanal delights." />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Flat Delivery Fee (₹ INR)</label>
+                <input type="number" value={form.flatDeliveryFeeCents / 100} onChange={(e) => setForm({ ...form, flatDeliveryFeeCents: (parseFloat(e.target.value) || 0) * 100 })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-bold" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Free Delivery Over Amount (₹ INR)</label>
+                <input type="number" value={form.freeDeliveryThresholdCents / 100} onChange={(e) => setForm({ ...form, freeDeliveryThresholdCents: (parseFloat(e.target.value) || 0) * 100 })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-bold" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Packaging Fee (₹ INR)</label>
+                <input type="number" value={form.packagingFeeCents / 100} onChange={(e) => setForm({ ...form, packagingFeeCents: (parseFloat(e.target.value) || 0) * 100 })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-bold" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Instagram URL</label>
+                <input type="text" value={form.socialInstagram} onChange={(e) => setForm({ ...form, socialInstagram: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="https://instagram.com/rajtraders" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">LinkedIn URL</label>
+                <input type="text" value={form.socialLinkedin} onChange={(e) => setForm({ ...form, socialLinkedin: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="https://linkedin.com/company/rajtraders" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Facebook URL</label>
+                <input type="text" value={form.socialFacebook} onChange={(e) => setForm({ ...form, socialFacebook: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="https://facebook.com/rajtraders" />
+              </div>
             </div>
           </div>
 

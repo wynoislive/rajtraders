@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { db, usersTable, deletedAccountsLogTable, passwordResetsTable, passwordLockoutsTable, registrationClaimsTable, emailVerificationsTable, shopSettingsTable, totpSecretsTable } from "@workspace/db";
+import { db, usersTable, deletedAccountsLogTable, passwordResetsTable, passwordLockoutsTable, registrationClaimsTable, emailVerificationsTable, shopSettingsTable, totpSecretsTable, customerAddressesTable, customerFavoritesTable, customerNotificationsTable, ordersTable, productsTable } from "@workspace/db";
 import { eq, and, ne, gt, asc, desc } from "drizzle-orm";
 import { randomBytes, scryptSync, timingSafeEqual, randomUUID, createHash, randomInt } from "node:crypto";
 import { z } from "zod";
@@ -778,6 +778,198 @@ router.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema }),
   } catch (err: any) {
     req.log.error({ err }, "TOTP recovery error");
     res.status(500).json({ error: "TOTP recovery failed." });
+  }
+});
+
+// ── Saved Addresses CRUD ─────────────────────────────────────
+router.get("/addresses", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  try {
+    const addresses = await db.select().from(customerAddressesTable).where(eq(customerAddressesTable.userId, userId)).orderBy(desc(customerAddressesTable.isDefault), desc(customerAddressesTable.createdAt));
+    res.json(addresses);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch addresses." });
+  }
+});
+
+router.post("/addresses", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req.body;
+  if (!fullAddress || !pincode || !city) {
+    res.status(400).json({ error: "Full address, pincode, and city are required." });
+    return;
+  }
+  try {
+    if (isDefault) {
+      await db.update(customerAddressesTable).set({ isDefault: false }).where(eq(customerAddressesTable.userId, userId));
+    }
+    const [inserted] = await db.insert(customerAddressesTable).values({
+      userId,
+      label: label || "Home",
+      fullAddress,
+      houseNumber: houseNumber || "",
+      buildingSociety: buildingSociety || "",
+      landmark: landmark || "",
+      pincode,
+      city,
+      state: state || "Madhya Pradesh",
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null,
+      deliveryInstructions: deliveryInstructions || "",
+      isDefault: Boolean(isDefault),
+    }).returning();
+    res.status(201).json(inserted);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to save address." });
+  }
+});
+
+router.put("/addresses/:id", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  const { id } = req.params;
+  const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req.body;
+
+  try {
+    const existing = await db.select().from(customerAddressesTable).where(and(eq(customerAddressesTable.id, id), eq(customerAddressesTable.userId, userId))).limit(1);
+    if (existing.length === 0) { res.status(404).json({ error: "Address not found." }); return; }
+
+    if (isDefault) {
+      await db.update(customerAddressesTable).set({ isDefault: false }).where(eq(customerAddressesTable.userId, userId));
+    }
+
+    const [updated] = await db.update(customerAddressesTable).set({
+      ...(label !== undefined ? { label } : {}),
+      ...(fullAddress !== undefined ? { fullAddress } : {}),
+      ...(houseNumber !== undefined ? { houseNumber } : {}),
+      ...(buildingSociety !== undefined ? { buildingSociety } : {}),
+      ...(landmark !== undefined ? { landmark } : {}),
+      ...(pincode !== undefined ? { pincode } : {}),
+      ...(city !== undefined ? { city } : {}),
+      ...(state !== undefined ? { state } : {}),
+      ...(latitude !== undefined ? { latitude: parseFloat(latitude) } : {}),
+      ...(longitude !== undefined ? { longitude: parseFloat(longitude) } : {}),
+      ...(deliveryInstructions !== undefined ? { deliveryInstructions } : {}),
+      ...(isDefault !== undefined ? { isDefault: Boolean(isDefault) } : {}),
+      updatedAt: new Date(),
+    }).where(eq(customerAddressesTable.id, id)).returning();
+
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to update address." });
+  }
+});
+
+router.delete("/addresses/:id", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  const { id } = req.params;
+  try {
+    await db.delete(customerAddressesTable).where(and(eq(customerAddressesTable.id, id), eq(customerAddressesTable.userId, userId)));
+    res.json({ success: true, message: "Address deleted successfully." });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to delete address." });
+  }
+});
+
+// ── Customer Favorites / Wishlist ─────────────────────────────
+router.get("/favorites", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  try {
+    const favorites = await db.select().from(customerFavoritesTable).where(eq(customerFavoritesTable.userId, userId));
+    const productIds = favorites.map(f => f.productId);
+    if (productIds.length === 0) {
+      res.json([]);
+      return;
+    }
+    const products = await db.select().from(productsTable).where(and(eq(productsTable.status, "active"), eq(productsTable.approvalStatus, "approved")));
+    const favProducts = products.filter(p => productIds.includes(p.id));
+    res.json(favProducts);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch wishlist." });
+  }
+});
+
+router.post("/favorites/toggle", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  const { productId } = req.body;
+  if (!productId) { res.status(400).json({ error: "productId is required." }); return; }
+
+  try {
+    const existing = await db.select().from(customerFavoritesTable).where(and(eq(customerFavoritesTable.userId, userId), eq(customerFavoritesTable.productId, productId))).limit(1);
+    if (existing.length > 0) {
+      await db.delete(customerFavoritesTable).where(eq(customerFavoritesTable.id, existing[0].id));
+      res.json({ isFavorite: false, message: "Removed from favorites." });
+    } else {
+      await db.insert(customerFavoritesTable).values({ userId, productId });
+      res.json({ isFavorite: true, message: "Added to favorites." });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to toggle favorite." });
+  }
+});
+
+// ── Customer Orders History ──────────────────────────────────
+router.get("/orders", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  try {
+    const orders = await db.select().from(ordersTable).where(eq(ordersTable.userId, userId)).orderBy(desc(ordersTable.createdAt));
+    res.json(orders.map(o => ({
+      ...o,
+      formattedOrderId: `#RAJ-${o.id.substring(0, 6).toUpperCase()}`,
+      estimatedEta: "30-45 mins",
+      items: JSON.parse(o.itemsJson || "[]"),
+    })));
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch customer orders." });
+  }
+});
+
+router.get("/orders/:id", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  const { id } = req.params;
+  try {
+    const found = await db.select().from(ordersTable).where(and(eq(ordersTable.id, id), eq(ordersTable.userId, userId))).limit(1);
+    if (found.length === 0) { res.status(404).json({ error: "Order not found." }); return; }
+    const o = found[0];
+    res.json({
+      ...o,
+      formattedOrderId: `#RAJ-${o.id.substring(0, 6).toUpperCase()}`,
+      estimatedEta: "30-45 mins",
+      items: JSON.parse(o.itemsJson || "[]"),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch order details." });
+  }
+});
+
+// ── Customer Notifications ───────────────────────────────────
+router.get("/notifications", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  try {
+    const notifications = await db.select().from(customerNotificationsTable).where(eq(customerNotificationsTable.userId, userId)).orderBy(desc(customerNotificationsTable.createdAt)).limit(30);
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+    res.json({ notifications, unreadCount });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch notifications." });
+  }
+});
+
+router.put("/notifications/read-all", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
+  try {
+    await db.update(customerNotificationsTable).set({ isRead: true }).where(eq(customerNotificationsTable.userId, userId));
+    res.json({ success: true, message: "All notifications marked as read." });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to update notifications." });
   }
 });
 
