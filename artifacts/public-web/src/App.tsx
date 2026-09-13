@@ -35,8 +35,11 @@ import {
   Instagram,
   Facebook,
   Twitter,
-  Tag
+  Tag,
+  Package,
+  LogOut
 } from 'lucide-react';
+
 
 function getApiUrl(path: string): string {
   const apiTarget = (import.meta.env as any).VITE_API_TARGET || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? 'https://api.sundarvan.xyz' : '');
@@ -826,6 +829,23 @@ export default function App() {
         {/* Main Content Router */}
         <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
           {location === '/account' ? (
+            !user || !token ? (
+              <div className="max-w-md mx-auto my-12 bg-white p-8 rounded-3xl border border-[#0E3D42]/10 shadow-xl text-center space-y-5">
+                <div className="size-16 mx-auto rounded-2xl bg-[#0E3D42]/10 text-[#0E3D42] flex items-center justify-center">
+                  <User size={32} />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-black text-[#0E3D42]">Sign In to View Account</h1>
+                  <p className="text-xs text-gray-500 mt-1 font-semibold">Access your past orders, saved delivery addresses, wishlist & account settings.</p>
+                </div>
+                <button
+                  onClick={() => { setAuthMode('login'); setOtpRequired(false); setOtpCode(''); setAuthError(null); setShowAuthModal(true); }}
+                  className="w-full py-3 bg-[#0E3D42] text-white text-xs font-black rounded-2xl hover:bg-[#0E3D42]/90 shadow-md transition"
+                >
+                  Sign In / Register
+                </button>
+              </div>
+            ) : (
             /* Full-Page Customer Profile Portal */
             <div className="space-y-6">
               <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#0E3D42]/10 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -841,6 +861,7 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+
                 <button
                   onClick={() => {
                     setUser(null);
@@ -1028,7 +1049,9 @@ export default function App() {
                 </div>
               </div>
             </div>
-          ) : currentProduct ? (
+          )) : currentProduct ? (
+
+
             /* Standalone Product Detail View Route /products/:slug */
             <div className="space-y-8">
               <Link href="/" className="inline-flex items-center gap-2 text-xs font-bold text-[#0E3D42]/70 hover:text-[#0E3D42] bg-white px-3.5 py-2 rounded-xl border border-[#0E3D42]/10 shadow-sm">
