@@ -87,7 +87,7 @@ import { Link, Route, Router as WouterRouter, Switch, useLocation } from 'wouter
 
 const queryClient = new QueryClient();
 
-type Tone = 'teal' | 'yellow' | 'coral' | 'green' | 'slate';
+type Tone = 'teal' | 'yellow' | 'coral' | 'green' | 'slate' | 'red';
 
 // Shared contexts
 import { createContext, useContext } from 'react';
@@ -95,6 +95,7 @@ const ShopContext = createContext<{ shopName: string; shopDomain: string }>({ sh
 
 export interface StaffUser {
   id: string;
+  userId?: string;
   name: string;
   email: string;
   role: 'MAIN_ADMIN' | 'ADMIN' | 'SUB_ADMIN' | 'MODERATOR';
@@ -108,6 +109,8 @@ export type AdminProduct = Product & {
   prepTimeMinutes?: number;
   subCategory?: string;
   deletedAt?: string | null;
+  isBestseller?: boolean;
+  isVeg?: boolean;
 };
 
 export interface DiscountItem {
@@ -199,6 +202,7 @@ function StatusPill({ children, tone = 'green' }: { children: ReactNode; tone?: 
     coral: 'bg-[hsl(var(--accent)/.12)] text-[hsl(12_63%_42%)]',
     green: 'bg-[hsl(148_37%_43%/.13)] text-[hsl(148_37%_32%)]',
     slate: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]',
+    red: 'bg-[hsl(0_84%_60%/.15)] text-[hsl(0_72%_45%)]',
   };
   return <span className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[.08em]', tones[tone])}>{children}</span>;
 }
@@ -281,6 +285,7 @@ function AdminLoginPage({ onLoginSuccess }: { onLoginSuccess: (token: string, st
       const cleanEmail = email.trim().toLowerCase();
       if ((cleanEmail === 'admin@rajtraders.com' || cleanEmail === 'admin@sundarvan.xyz') && (password === 'Admin@123' || password === 'admin123' || password === 'admin')) {
         onLoginSuccess('staff_master_admin_offline', {
+          id: 'main_admin_01',
           userId: 'main_admin_01',
           name: 'Master Administrator',
           email: 'admin@rajtraders.com',
@@ -514,7 +519,7 @@ function PageIntro({ eyebrow, title, detail, action }: { eyebrow: string; title:
 }
 
 function MetricCard({ label, value, detail, icon: Icon, tone = 'teal', trend }: { label: string; value: string | number; detail: string; icon: typeof Package; tone?: Tone; trend?: string }) {
-  const accents: Record<Tone, string> = { teal: 'bg-[hsl(var(--primary))]', yellow: 'bg-[hsl(var(--secondary))]', coral: 'bg-[hsl(var(--accent))]', green: 'bg-[hsl(148_37%_43%)]', slate: 'bg-[hsl(var(--muted-foreground))]' };
+  const accents: Record<Tone, string> = { teal: 'bg-[hsl(var(--primary))]', yellow: 'bg-[hsl(var(--secondary))]', coral: 'bg-[hsl(var(--accent))]', green: 'bg-[hsl(148_37%_43%)]', slate: 'bg-[hsl(var(--muted-foreground))]', red: 'bg-[hsl(0_84%_60%)]' };
   return <div className="fade-up fade-up-delay-1 relative overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-5 shadow-[0_4px_18px_hsl(190_28%_15%/.035)]"><div className={cx('absolute left-0 top-0 h-1 w-16 rounded-br-full', accents[tone])} /><div className="flex items-start justify-between"><div className="font-mono text-[10px] font-medium uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">{label}</div><div className={cx('flex size-8 items-center justify-center rounded-lg', tone === 'yellow' ? 'bg-[hsl(var(--secondary)/.25)] text-[hsl(32_73%_31%)]' : `bg-[hsl(var(--primary)/.10)] text-[hsl(var(--primary))]`)}><Icon size={16} /></div></div><div className="mt-5 flex items-end justify-between"><div><div className="text-3xl font-extrabold tracking-[-.06em]">{value}</div><div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{detail}</div></div>{trend && <span className="flex items-center gap-1 font-mono text-[10px] font-medium text-[hsl(148_37%_35%)]"><ArrowUpRight size={13} />{trend}</span>}</div></div>;
 }
 
@@ -2777,7 +2782,7 @@ function Discounts() {
     setEditingId(item.id);
     setForm({
       code: item.code,
-      type: item.type || 'percentage',
+      type: (item.type === 'fixed' ? 'fixed' : 'percentage') as 'fixed' | 'percentage',
       value: String(item.value),
       minSpend: String(item.minSpendCents ? item.minSpendCents / 100 : 0),
       active: item.active !== false,
@@ -3197,6 +3202,8 @@ function App() {
       })
       .catch(() => {});
   }, []);
+
+  const basePath = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '') || undefined;
 
   return (
     <QueryClientProvider client={queryClient}>
