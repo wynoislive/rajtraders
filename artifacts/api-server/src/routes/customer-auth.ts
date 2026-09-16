@@ -170,12 +170,17 @@ export async function getUserIdFromToken(token?: string): Promise<string | null>
   if (redis) {
     const data = await redis.get(`session:customer:${clean}`);
     if (!data) return null;
-    const session: CustomerSession = JSON.parse(data);
-    if (Date.now() > session.expiresAt) {
+    try {
+      const session: CustomerSession = JSON.parse(data);
+      if (Date.now() > session.expiresAt) {
+        await redis.del(`session:customer:${clean}`);
+        return null;
+      }
+      return session.userId;
+    } catch {
       await redis.del(`session:customer:${clean}`);
       return null;
     }
-    return session.userId;
   }
 
   // Fallback

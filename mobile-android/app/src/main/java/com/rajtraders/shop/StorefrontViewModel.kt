@@ -570,7 +570,10 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                 }
             }
 
-            val user = _uiState.value.currentUser!!
+            val user = _uiState.value.currentUser ?: run {
+                _uiState.update { it.copy(isCheckingOut = false, error = "Please sign in to complete checkout") }
+                return@launch
+            }
             val items = _uiState.value.cart.map { OrderItemRequest(it.product.id, it.quantity) }
             val discountCode = _uiState.value.discount?.let { if (it.valid) it.code else null }
 

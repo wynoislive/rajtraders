@@ -637,8 +637,9 @@ router.post("/v1/admin/test-email", async (req, res): Promise<void> => {
 
     const result = await sendEmail(toEmail.trim(), subject, htmlContent, targetProvider);
     res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || "Failed to send test email" });
+  } catch (err: unknown) {
+    req.log.error({ err }, "Failed to send test email");
+    res.status(500).json({ success: false, error: "Failed to send test email" });
   }
 });
 

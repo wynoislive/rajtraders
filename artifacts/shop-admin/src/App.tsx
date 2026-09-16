@@ -87,10 +87,21 @@ type Tone = 'teal' | 'yellow' | 'coral' | 'green' | 'slate';
 import { createContext, useContext } from 'react';
 const ShopContext = createContext<{ shopName: string; shopDomain: string }>({ shopName: 'RAJ TRADERS', shopDomain: 'sundarvan.xyz' });
 
+export interface StaffUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'MAIN_ADMIN' | 'ADMIN' | 'SUB_ADMIN' | 'MODERATOR';
+  permissions?: string[];
+  active?: boolean;
+  permanent?: boolean;
+  expiresAt?: string | null;
+}
+
 const AdminAuthContext = createContext<{
-  staffUser: any | null;
+  staffUser: StaffUser | null;
   staffToken: string | null;
-  login: (token: string, user: any) => void;
+  login: (token: string, user: StaffUser) => void;
   logout: () => void;
 }>({
   staffUser: null,
@@ -1265,7 +1276,7 @@ function StaffManagement() {
       });
       if (res.ok) {
         const data = await res.json();
-        setStaffList(data.filter((u: any) => u.email !== 'admin@harborlane.shop'));
+        setStaffList(data);
       }
     } catch (e) {
       console.error(e);

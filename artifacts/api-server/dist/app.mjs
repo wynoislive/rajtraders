@@ -127361,7 +127361,8 @@ router4.post("/v1/admin/test-email", async (req, res) => {
     const result = await sendEmail(toEmail.trim(), subject, htmlContent, targetProvider);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message || "Failed to send test email" });
+    req.log.error({ err }, "Failed to send test email");
+    res.status(500).json({ success: false, error: "Failed to send test email" });
   }
 });
 router4.get("/v1/admin/orders", async (req, res) => {
@@ -128268,12 +128269,17 @@ async function getUserIdFromToken(token) {
   if (redis) {
     const data = await redis.get(`session:customer:${clean}`);
     if (!data) return null;
-    const session2 = JSON.parse(data);
-    if (Date.now() > session2.expiresAt) {
+    try {
+      const session2 = JSON.parse(data);
+      if (Date.now() > session2.expiresAt) {
+        await redis.del(`session:customer:${clean}`);
+        return null;
+      }
+      return session2.userId;
+    } catch {
       await redis.del(`session:customer:${clean}`);
       return null;
     }
-    return session2.userId;
   }
   const session = fallbackSessionStore.get(clean);
   if (!session) return null;

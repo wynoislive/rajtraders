@@ -126,7 +126,7 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
                         Column {
                             Text(state.shopName, fontWeight = FontWeight.Bold)
                             Text(
-                                if (state.currentUser != null) "Welcome, ${state.currentUser!!.firstName}!" else "gourmet bakery & artisanal cakes",
+                                state.currentUser?.firstName?.let { "Welcome, $it!" } ?: "gourmet bakery & artisanal cakes",
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }
@@ -874,7 +874,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                 }
             }
         } else {
-            val user = state.currentUser!!
+            val user = state.currentUser ?: return
             var editingMobile by remember { mutableStateOf(user.mobileNumber) }
             var editingFirstName by remember { mutableStateOf(user.firstName) }
             var editingLastName by remember { mutableStateOf(user.lastName) }
