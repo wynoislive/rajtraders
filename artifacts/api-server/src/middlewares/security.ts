@@ -47,101 +47,114 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
   return false;
 }
 
-// ── Rate limit store (Redis or in-memory fallback) ──────────
-// We lazily build the Redis store only when a Redis client is available.
-// In local dev without Redis, falls back to express-rate-limit's default
-// in-memory store — this is fine for single-instance dev servers.
+import { RedisStore } from "rate-limit-redis";
 
-let rateLimitStore: any = undefined; // undefined = use default MemoryStore
-
-async function getRateLimitStore() {
-  if (rateLimitStore !== undefined) return rateLimitStore;
-  const redis = getRedisClient();
-  if (redis) {
-    try {
-      // Dynamically import to avoid failure when redis is unavailable
-      const { RedisStore } = await import("rate-limit-redis");
-      rateLimitStore = new RedisStore({
-        // @ts-expect-error - ioredis sendCommand is compatible
-        sendCommand: (...args: string[]) => redis.call(...args),
-      });
-    } catch {
-      rateLimitStore = null; // fallback to in-memory
-    }
-  } else {
-    rateLimitStore = null;
+// ── Composite Key Generator ─────────────────────────────────
+export function resolveCompositeKey(req: Request): string {
+  // 1. Authenticated Staff session
+  if ((req as any).staff?.userId) {
+    return `staff:${(req as any).staff.userId}`;
   }
-  return rateLimitStore;
+
+  // 2. Customer or other Bearer token
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      return `auth:${token.slice(0, 32)}`;
+    }
+  }
+
+  // 3. Fallback to client IP (respecting forward proxies if present)
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip = typeof forwarded === "string" ? forwarded.split(",")[0].trim() : req.ip || req.socket?.remoteAddress || "127.0.0.1";
+  return `ip:${ip}`;
 }
 
-// ── Rate limiter factory ────────────────────────────────────
-function createLimiter(
+// ── Distributed Rate Limiter Factory ────────────────────────
+export function createDistributedLimiter(
   windowMs: number,
   limit: number,
   message: string,
+  prefix = "default",
 ): RequestHandler {
+  const redis = getRedisClient();
+  const store = redis
+    ? new RedisStore({
+        // @ts-expect-error - ioredis sendCommand is compatible
+        sendCommand: (...args: string[]) => redis.call(...args),
+        prefix: `rl:${prefix}:`,
+      })
+    : undefined;
+
   return rateLimit({
     windowMs,
     limit,
     standardHeaders: "draft-7",
     legacyHeaders: false,
+    keyGenerator: resolveCompositeKey,
+    store,
     message: { error: message },
-    // Store will be set when first request arrives; this is a workaround
-    // because we can't await in module scope. express-rate-limit handles
-    // undefined store by using MemoryStore.
   });
 }
 
 // ── Exported rate limiters ──────────────────────────────────
 
 /** Global baseline — all routes */
-export const globalLimiter = createLimiter(
+export const globalLimiter = createDistributedLimiter(
   60_000,
   securityConfig.rateLimitGlobal,
   "Too many requests. Please try again shortly.",
+  "global",
 );
 
 /** Auth endpoints (login, register) */
-export const authLimiter = createLimiter(
+export const authLimiter = createDistributedLimiter(
   60_000,
   securityConfig.rateLimitAuth,
   "Too many login/register attempts. Please wait a minute before trying again.",
+  "auth",
 );
 
 /** OTP endpoints (verify, resend) */
-export const otpLimiter = createLimiter(
+export const otpLimiter = createDistributedLimiter(
   60_000,
   securityConfig.rateLimitOtp,
   "Too many OTP requests. Please wait a minute before trying again.",
+  "otp",
 );
 
 /** Password recovery endpoints */
-export const recoveryLimiter = createLimiter(
+export const recoveryLimiter = createDistributedLimiter(
   60_000,
   securityConfig.rateLimitRecovery,
   "Too many password recovery attempts. Please wait a minute before trying again.",
+  "recovery",
 );
 
 /** Password change endpoint — Max 5 attempts per 60 minutes */
-export const changePasswordLimiter = createLimiter(
+export const changePasswordLimiter = createDistributedLimiter(
   60 * 60_000,
   5,
   "Too many password change attempts. Security policy allows maximum 5 attempts per 60 minutes.",
+  "pwd-change",
 );
 
 /** Checkout order creation */
 
-export const checkoutLimiter = createLimiter(
+export const checkoutLimiter = createDistributedLimiter(
   60_000,
   securityConfig.rateLimitCheckout,
   "Too many checkout attempts. Please wait before trying again.",
+  "checkout",
 );
 
 /** Staff login */
-export const staffLoginLimiter = createLimiter(
+export const staffLoginLimiter = createDistributedLimiter(
   60_000,
   securityConfig.rateLimitStaffLogin,
   "Too many staff login attempts. Please wait a minute before trying again.",
+  "staff-login",
 );
 
 // ── Helmet + security headers ───────────────────────────────

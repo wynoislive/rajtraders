@@ -8,6 +8,7 @@ import { getRedisClient } from "../lib/redis";
 import { securityConfig } from "../lib/security-config";
 import { validate } from "../middlewares/validate";
 import { staffLoginLimiter } from "../middlewares/security";
+import { logAuditEvent } from "../utils/audit-logger";
 
 const router: Router = Router();
 
@@ -248,6 +249,14 @@ router.post("/staff", validate({ body: CreateStaffBodySchema }), async (req: Req
       })
       .returning();
 
+    logAuditEvent(req, {
+      action: "STAFF_USER_CREATED",
+      resource: "admin_users",
+      resourceId: created.id,
+      status: "SUCCESS",
+      details: { email: created.email, role: created.role, permissions: assignedPermissions },
+    });
+
     res.status(201).json({
       success: true,
       message: "Staff member created successfully.",
@@ -331,6 +340,15 @@ router.delete("/staff/:id", async (req: Request, res: Response) => {
     }
 
     await db.delete(adminUsersTable).where(eq(adminUsersTable.id, id));
+
+    logAuditEvent(req, {
+      action: "STAFF_USER_DELETED",
+      resource: "admin_users",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { deletedEmail: target[0]?.email, deletedRole: target[0]?.role },
+    });
+
     res.status(200).json({ success: true, message: "Staff account deleted successfully." });
   } catch (err: unknown) {
     req.log.error({ err }, "Delete staff error");

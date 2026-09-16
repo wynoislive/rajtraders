@@ -3,6 +3,7 @@ import { db, productsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getStaffFromToken } from "./staff-admin";
 import { requireAdmin } from "../middlewares/auth";
+import { requirePermission } from "../middlewares/permission-guard";
 
 const router: Router = Router();
 
@@ -12,7 +13,7 @@ const router: Router = Router();
 router.use(requireAdmin);
 
 // 1. List All Pending Product Approvals
-router.get("/approvals", async (req: Request, res: Response) => {
+router.get("/approvals", requirePermission("approvals"), async (req: Request, res: Response) => {
   try {
     const pendingProducts = await db
       .select()

@@ -80187,9 +80187,9 @@ var require_node_redis_client = __commonJS({
       }
     };
     var NodeRedisTransaction = class {
-      constructor(raw, scripts) {
+      constructor(raw, scripts2) {
         this.raw = raw;
-        this.scripts = scripts;
+        this.scripts = scripts2;
         this.transformers = [];
       }
       addIdentityTransformer() {
@@ -80705,10 +80705,10 @@ var require_bun_redis_client = __commonJS({
        * that subsequent EVALSHA calls (e.g. inside a MULTI/EXEC) won't fail with
        * NOSCRIPT. Each script is SCRIPT LOAD'd at most once per connection.
        */
-      async ensureScriptsLoaded(scripts) {
+      async ensureScriptsLoaded(scripts2) {
         const toLoad = [];
         const seen = /* @__PURE__ */ new Set();
-        for (const s2 of scripts) {
+        for (const s2 of scripts2) {
           if (this.loadedScriptShas.has(s2.sha) || seen.has(s2.sha)) {
             continue;
           }
@@ -81110,8 +81110,8 @@ var require_bun_redis_client = __commonJS({
       }
     };
     var BunRedisTransaction = class {
-      constructor(scripts, transactional, adapter) {
-        this.scripts = scripts;
+      constructor(scripts2, transactional, adapter) {
+        this.scripts = scripts2;
         this.transactional = transactional;
         this.adapter = adapter;
         this.commands = [];
@@ -81286,7 +81286,7 @@ var require_redis_connection = __commonJS({
     var events_1 = __require("events");
     var utils_1 = require_utils8();
     var version_1 = require_version3();
-    var scripts = require_scripts();
+    var scripts2 = require_scripts();
     var ioredis_client_1 = require_ioredis_client();
     var node_redis_client_1 = require_node_redis_client();
     var bun_redis_client_1 = require_bun_redis_client();
@@ -81442,7 +81442,7 @@ var require_redis_connection = __commonJS({
         return this.initializing;
       }
       loadCommands(packageVersion, providedScripts) {
-        const finalScripts = providedScripts || scripts;
+        const finalScripts = providedScripts || scripts2;
         for (const property in finalScripts) {
           const commandName = `${finalScripts[property].name}:${packageVersion}`;
           if (!this._client[commandName]) {
@@ -81912,7 +81912,7 @@ var require_job = __commonJS({
           var _a;
           return new this(queue, job.name, job.data, job.opts, (_a = job.opts) === null || _a === void 0 ? void 0 : _a.jobId);
         });
-        const scripts = queue.backend;
+        const scripts2 = queue.backend;
         const entries = jobInstances.map((job) => {
           const jobData = job.asJSON();
           job.validateOptions(jobData);
@@ -81925,7 +81925,7 @@ var require_job = __commonJS({
             }
           };
         });
-        const ids = await scripts.addJobs(entries);
+        const ids = await scripts2.addJobs(entries);
         jobInstances.forEach((job, index2) => {
           job.id = ids[index2];
         });
@@ -82020,8 +82020,8 @@ var require_job = __commonJS({
        */
       static async fromId(queue, jobId) {
         if (jobId) {
-          const scripts = queue.backend;
-          const jobData = await scripts.getJobData(jobId);
+          const scripts2 = queue.backend;
+          const jobData = await scripts2.getJobData(jobId);
           return jobData ? this.fromJSON(queue, jobData, jobId) : void 0;
         }
       }
@@ -82036,11 +82036,11 @@ var require_job = __commonJS({
        * @returns The total number of log entries for this job so far.
        */
       static addJobLog(queue, jobId, logRow, keepLogs) {
-        const scripts = queue.backend;
-        return scripts.addLog(jobId, logRow, keepLogs);
+        const scripts2 = queue.backend;
+        return scripts2.addLog(jobId, logRow, keepLogs);
       }
       toJSON() {
-        const _a = this, { queue, backend: scripts } = _a, withoutQueueAndScripts = tslib_1.__rest(_a, ["queue", "backend"]);
+        const _a = this, { queue, backend: scripts2 } = _a, withoutQueueAndScripts = tslib_1.__rest(_a, ["queue", "backend"]);
         return withoutQueueAndScripts;
       }
       /**
@@ -83954,9 +83954,9 @@ var require_valkey_glide_client = __commonJS({
       }
     };
     var ValkeyGlideTransaction = class {
-      constructor(adapter, scripts) {
+      constructor(adapter, scripts2) {
         this.adapter = adapter;
-        this.scripts = scripts;
+        this.scripts = scripts2;
         this.commands = [];
       }
       queueCommand(args, transform) {
@@ -124813,9 +124813,36 @@ var requireAdmin = async (req2, res, next) => {
   res.status(401).json({ error: "Authentication required. Please provide a valid admin staff token or session." });
 };
 
-// artifacts/api-server/src/routes/staff-admin.ts
-var import_express4 = __toESM(require_express2(), 1);
-import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } from "node:crypto";
+// artifacts/api-server/src/middlewares/permission-guard.ts
+function requirePermission(module) {
+  return (req2, res, next) => {
+    const staff = req2.staff;
+    if (!staff) {
+      res.status(401).json({ error: "Authentication required. Valid staff session required." });
+      return;
+    }
+    if (staff.role === "MAIN_ADMIN" || staff.role === "ADMIN") {
+      return next();
+    }
+    const hasPermission = Array.isArray(staff.permissions) && staff.permissions.includes(module);
+    if (!hasPermission) {
+      req2.log?.warn?.(
+        {
+          staffId: staff.userId,
+          role: staff.role,
+          requestedModule: module,
+          grantedPermissions: staff.permissions
+        },
+        "Forbidden: Staff account lacks permission for requested module"
+      );
+      res.status(403).json({
+        error: `Forbidden: You do not have permissions to access the '${module}' module. Contact an administrator.`
+      });
+      return;
+    }
+    next();
+  };
+}
 
 // artifacts/api-server/src/middlewares/validate.ts
 function validate(schemas) {
@@ -124881,6 +124908,34 @@ function validate(schemas) {
     next();
   };
 }
+
+// artifacts/api-server/src/utils/audit-logger.ts
+function logAuditEvent(req2, payload) {
+  const staff = req2.staff;
+  const ip = req2.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req2.ip || req2.socket?.remoteAddress || "unknown";
+  const event = {
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    actorId: staff?.userId || "anonymous",
+    actorEmail: staff?.email || "anonymous",
+    actorRole: staff?.role || "GUEST",
+    clientIp: ip,
+    userAgent: req2.headers["user-agent"] || "unknown",
+    action: payload.action,
+    resource: payload.resource,
+    resourceId: payload.resourceId ?? null,
+    status: payload.status,
+    details: payload.details ?? {}
+  };
+  req2.log?.info?.(
+    { audit: event },
+    `SECURITY_AUDIT: [${event.action}] on [${event.resource}${event.resourceId ? `:${event.resourceId}` : ""}] by [${event.actorEmail}] - ${event.status}`
+  );
+  return event;
+}
+
+// artifacts/api-server/src/routes/staff-admin.ts
+var import_express4 = __toESM(require_express2(), 1);
+import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } from "node:crypto";
 
 // node_modules/.pnpm/express-rate-limit@8.7.0_express@5.2.1/node_modules/express-rate-limit/dist/index.mjs
 var import_ip_address = __toESM(require_ip_address(), 1);
@@ -126454,6 +126509,218 @@ var helmet = Object.assign(
   }
 );
 
+// node_modules/.pnpm/rate-limit-redis@6.0.1_expr_5e3fbd687dd25d80d49175219419c4bf/node_modules/rate-limit-redis/dist/index.mjs
+var scripts = {
+  increment: `
+	      local windowMs = tonumber(ARGV[1])
+	      local timeToExpire = redis.call("PTTL", KEYS[1])
+
+	      if timeToExpire <= 0 then
+	        redis.call("SET", KEYS[1], 1, "PX", windowMs)
+	        return { 1, windowMs }
+	      end
+
+	      local totalHits = redis.call("INCR", KEYS[1])        
+	      return { totalHits, timeToExpire }
+		`.replaceAll(/^\s+/gm, "").trim(),
+  get: `
+      local totalHits = redis.call("GET", KEYS[1])
+      local timeToExpire = redis.call("PTTL", KEYS[1])
+
+      return { totalHits, timeToExpire }
+		`.replaceAll(/^\s+/gm, "").trim()
+};
+var toInt = (input) => {
+  if (typeof input === "number") return input;
+  return Number.parseInt((input ?? "").toString(), 10);
+};
+var parseScriptResponse = (results) => {
+  if (!Array.isArray(results))
+    throw new TypeError("Expected result to be array of values");
+  if (results.length !== 2)
+    throw new Error(`Expected 2 replies, got ${results.length}`);
+  const totalHits = results[0] === false ? 0 : toInt(results[0]);
+  const timeToExpire = toInt(results[1]);
+  const resetTime = new Date(Date.now() + timeToExpire);
+  return { totalHits, resetTime };
+};
+var isNoScriptError = (error) => error instanceof Error && /^NOSCRIPT(?:\s|$)/.test(error.message);
+var RedisStore = class {
+  /**
+   * The function used to send raw commands to Redis.
+   *
+   * When a non-cluster SendCommandFn is provided, a wrapper function is used to convert between the two
+   */
+  sendCommand;
+  /**
+   * The text to prepend to the key in Redis.
+   */
+  prefix;
+  /**
+   * Stores the loaded SHA1s of the LUA scripts used for executing the increment
+   * and get key operations.
+   */
+  incrementScriptSha;
+  getScriptSha;
+  /**
+   * The number of milliseconds to remember that user's requests.
+   */
+  windowMs;
+  /**
+   * @constructor for `RedisStore`.
+   *
+   * @param options {Options} - The configuration options for the store.
+   */
+  constructor(options) {
+    if (typeof options !== "object") {
+      throw new TypeError("rate-limit-redis: Error: options object is required");
+    }
+    if ("resetExpiryOnChange" in options) {
+      throw new TypeError(
+        "rate-limit-redis: Error: the resetExpiryOnChange option was removed in v6"
+      );
+    }
+    if ("sendCommand" in options && !("sendCommandCluster" in options)) {
+      const sendCommandFn = options.sendCommand.bind(this);
+      this.sendCommand = async ({ command }) => sendCommandFn(...command);
+    } else if (!("sendCommand" in options) && "sendCommandCluster" in options) {
+      this.sendCommand = options.sendCommandCluster.bind(this);
+    } else {
+      throw new Error(
+        "rate-limit-redis: Error: options must include either sendCommand or sendCommandCluster (but not both)"
+      );
+    }
+    this.prefix = options.prefix ?? "rl:";
+  }
+  /**
+   * Loads the script used to increment a client's hit count.
+   */
+  async loadIncrementScript(key) {
+    const result = await this.sendCommand({
+      key,
+      isReadOnly: false,
+      command: ["SCRIPT", "LOAD", scripts.increment]
+    });
+    if (typeof result !== "string") {
+      throw new TypeError("unexpected reply from redis client");
+    }
+    return result;
+  }
+  /**
+   * Loads the script used to fetch a client's hit count and expiry time.
+   */
+  async loadGetScript(key) {
+    const result = await this.sendCommand({
+      key,
+      isReadOnly: false,
+      command: ["SCRIPT", "LOAD", scripts.get]
+    });
+    if (typeof result !== "string") {
+      throw new TypeError("unexpected reply from redis client");
+    }
+    return result;
+  }
+  /**
+   * Runs the increment command, and retries it if the script is not loaded.
+   */
+  async retryableIncrement(_key) {
+    const key = this.prefixKey(_key);
+    const evalCommand = async () => this.sendCommand({
+      key,
+      isReadOnly: false,
+      command: [
+        "EVALSHA",
+        await this.incrementScriptSha,
+        "1",
+        key,
+        this.windowMs.toString()
+      ]
+    });
+    try {
+      const result = await evalCommand();
+      return result;
+    } catch (error) {
+      if (!isNoScriptError(error)) throw error;
+      this.incrementScriptSha = this.loadIncrementScript(key);
+      return evalCommand();
+    }
+  }
+  /**
+   * Method to prefix the keys with the given text.
+   *
+   * @param key {string} - The key.
+   *
+   * @returns {string} - The text + the key.
+   */
+  prefixKey(key) {
+    return `${this.prefix}${key}`;
+  }
+  /**
+   * Method that actually initializes the store.
+   *
+   * @param options {RateLimitConfiguration} - The options used to setup the middleware.
+   */
+  async init(options) {
+    this.windowMs = options.windowMs;
+    this.incrementScriptSha = this.loadIncrementScript();
+    this.getScriptSha = this.loadGetScript();
+    await Promise.all([this.incrementScriptSha, this.getScriptSha]);
+  }
+  /**
+   * Method to fetch a client's hit count and reset time.
+   *
+   * @param key {string} - The identifier for a client.
+   *
+   * @returns {ClientRateLimitInfo | undefined} - The number of hits and reset time for that client.
+   */
+  async get(_key) {
+    const key = this.prefixKey(_key);
+    let results;
+    const evalCommand = async () => this.sendCommand({
+      key,
+      isReadOnly: true,
+      command: ["EVALSHA", await this.getScriptSha, "1", key]
+    });
+    try {
+      results = await evalCommand();
+    } catch (error) {
+      if (!isNoScriptError(error)) throw error;
+      this.getScriptSha = this.loadGetScript(key);
+      results = await evalCommand();
+    }
+    return parseScriptResponse(results);
+  }
+  /**
+   * Method to increment a client's hit counter.
+   *
+   * @param key {string} - The identifier for a client
+   *
+   * @returns {IncrementResponse} - The number of hits and reset time for that client
+   */
+  async increment(key) {
+    const results = await this.retryableIncrement(key);
+    return parseScriptResponse(results);
+  }
+  /**
+   * Method to decrement a client's hit counter.
+   *
+   * @param key {string} - The identifier for a client
+   */
+  async decrement(_key) {
+    const key = this.prefixKey(_key);
+    await this.sendCommand({ key, isReadOnly: false, command: ["DECR", key] });
+  }
+  /**
+   * Method to reset a client's hit counter.
+   *
+   * @param key {string} - The identifier for a client
+   */
+  async resetKey(_key) {
+    const key = this.prefixKey(_key);
+    await this.sendCommand({ key, isReadOnly: false, command: ["DEL", key] });
+  }
+};
+
 // artifacts/api-server/src/middlewares/security.ts
 var isProduction2 = process.env.NODE_ENV === "production";
 var allowedOrigins = new Set(
@@ -126482,52 +126749,79 @@ function isAllowedOrigin(origin) {
   }
   return false;
 }
-function createLimiter(windowMs, limit, message) {
+function resolveCompositeKey(req2) {
+  if (req2.staff?.userId) {
+    return `staff:${req2.staff.userId}`;
+  }
+  const authHeader = req2.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      return `auth:${token.slice(0, 32)}`;
+    }
+  }
+  const forwarded = req2.headers["x-forwarded-for"];
+  const ip = typeof forwarded === "string" ? forwarded.split(",")[0].trim() : req2.ip || req2.socket?.remoteAddress || "127.0.0.1";
+  return `ip:${ip}`;
+}
+function createDistributedLimiter(windowMs, limit, message, prefix = "default") {
+  const redis = getRedisClient();
+  const store = redis ? new RedisStore({
+    // @ts-expect-error - ioredis sendCommand is compatible
+    sendCommand: (...args) => redis.call(...args),
+    prefix: `rl:${prefix}:`
+  }) : void 0;
   return rate_limit_default({
     windowMs,
     limit,
     standardHeaders: "draft-7",
     legacyHeaders: false,
+    keyGenerator: resolveCompositeKey,
+    store,
     message: { error: message }
-    // Store will be set when first request arrives; this is a workaround
-    // because we can't await in module scope. express-rate-limit handles
-    // undefined store by using MemoryStore.
   });
 }
-var globalLimiter = createLimiter(
+var globalLimiter = createDistributedLimiter(
   6e4,
   securityConfig.rateLimitGlobal,
-  "Too many requests. Please try again shortly."
+  "Too many requests. Please try again shortly.",
+  "global"
 );
-var authLimiter = createLimiter(
+var authLimiter = createDistributedLimiter(
   6e4,
   securityConfig.rateLimitAuth,
-  "Too many login/register attempts. Please wait a minute before trying again."
+  "Too many login/register attempts. Please wait a minute before trying again.",
+  "auth"
 );
-var otpLimiter = createLimiter(
+var otpLimiter = createDistributedLimiter(
   6e4,
   securityConfig.rateLimitOtp,
-  "Too many OTP requests. Please wait a minute before trying again."
+  "Too many OTP requests. Please wait a minute before trying again.",
+  "otp"
 );
-var recoveryLimiter = createLimiter(
+var recoveryLimiter = createDistributedLimiter(
   6e4,
   securityConfig.rateLimitRecovery,
-  "Too many password recovery attempts. Please wait a minute before trying again."
+  "Too many password recovery attempts. Please wait a minute before trying again.",
+  "recovery"
 );
-var changePasswordLimiter = createLimiter(
+var changePasswordLimiter = createDistributedLimiter(
   60 * 6e4,
   5,
-  "Too many password change attempts. Security policy allows maximum 5 attempts per 60 minutes."
+  "Too many password change attempts. Security policy allows maximum 5 attempts per 60 minutes.",
+  "pwd-change"
 );
-var checkoutLimiter = createLimiter(
+var checkoutLimiter = createDistributedLimiter(
   6e4,
   securityConfig.rateLimitCheckout,
-  "Too many checkout attempts. Please wait before trying again."
+  "Too many checkout attempts. Please wait before trying again.",
+  "checkout"
 );
-var staffLoginLimiter = createLimiter(
+var staffLoginLimiter = createDistributedLimiter(
   6e4,
   securityConfig.rateLimitStaffLogin,
-  "Too many staff login attempts. Please wait a minute before trying again."
+  "Too many staff login attempts. Please wait a minute before trying again.",
+  "staff-login"
 );
 var secureGateway = [
   helmet({
@@ -126746,6 +127040,13 @@ router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req2, r
       createdAt: /* @__PURE__ */ new Date(),
       updatedAt: /* @__PURE__ */ new Date()
     }).returning();
+    logAuditEvent(req2, {
+      action: "STAFF_USER_CREATED",
+      resource: "admin_users",
+      resourceId: created.id,
+      status: "SUCCESS",
+      details: { email: created.email, role: created.role, permissions: assignedPermissions }
+    });
     res.status(201).json({
       success: true,
       message: "Staff member created successfully.",
@@ -126812,6 +127113,13 @@ router3.delete("/staff/:id", async (req2, res) => {
       }
     }
     await db.delete(adminUsersTable).where(eq(adminUsersTable.id, id));
+    logAuditEvent(req2, {
+      action: "STAFF_USER_DELETED",
+      resource: "admin_users",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { deletedEmail: target[0]?.email, deletedRole: target[0]?.role }
+    });
     res.status(200).json({ success: true, message: "Staff account deleted successfully." });
   } catch (err) {
     req2.log.error({ err }, "Delete staff error");
@@ -127206,6 +127514,72 @@ function buildRecoveryHtml(shopName, userName, resetToken, resetUrl) {
 }
 
 // artifacts/api-server/src/routes/admin.ts
+var SECRET_MASK = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+var UpdateShopSettingsSchema = external_exports.object({
+  shopName: external_exports.string().min(1).max(100).optional(),
+  shopDomain: external_exports.string().min(1).max(100).optional(),
+  shopAddress: external_exports.string().max(255).optional(),
+  latitude: external_exports.number().min(-90).max(90).optional(),
+  longitude: external_exports.number().min(-180).max(180).optional(),
+  deliveryRadiusKm: external_exports.number().positive().max(500).optional(),
+  isDeliveryEnabled: external_exports.boolean().optional(),
+  razorpayKeyId: external_exports.string().max(100).optional(),
+  razorpayKeySecret: external_exports.string().max(255).optional(),
+  r2AccountId: external_exports.string().max(100).optional(),
+  r2AccessKeyId: external_exports.string().max(100).optional(),
+  r2SecretAccessKey: external_exports.string().max(255).optional(),
+  r2BucketName: external_exports.string().max(100).optional(),
+  r2PublicUrl: external_exports.string().max(255).optional(),
+  smtpHost: external_exports.string().max(100).optional(),
+  smtpPort: external_exports.number().int().min(1).max(65535).optional(),
+  smtpUser: external_exports.string().max(100).optional(),
+  smtpPass: external_exports.string().max(255).optional(),
+  smtpFrom: external_exports.string().max(255).optional(),
+  supportEmail: external_exports.string().email().or(external_exports.literal("")).optional(),
+  contactEmail: external_exports.string().email().or(external_exports.literal("")).optional(),
+  ordersEmail: external_exports.string().email().or(external_exports.literal("")).optional(),
+  hostingerApiToken: external_exports.string().max(255).optional(),
+  hostingerMailboxResourceId: external_exports.string().max(100).optional(),
+  notificationSmtpHost: external_exports.string().max(100).optional(),
+  notificationSmtpPort: external_exports.number().int().min(1).max(65535).optional(),
+  notificationSmtpUser: external_exports.string().max(100).optional(),
+  notificationSmtpPass: external_exports.string().max(255).optional(),
+  notificationSmtpFrom: external_exports.string().max(255).optional(),
+  socialLinkedin: external_exports.string().max(255).optional(),
+  socialInstagram: external_exports.string().max(255).optional(),
+  socialFacebook: external_exports.string().max(255).optional(),
+  socialPinterest: external_exports.string().max(255).optional(),
+  socialTwitter: external_exports.string().max(255).optional(),
+  availableInLocation: external_exports.string().max(100).optional(),
+  aboutUsText: external_exports.string().max(1e3).optional(),
+  isStoreOpen: external_exports.boolean().optional(),
+  minOrderCents: external_exports.number().int().min(0).optional(),
+  isCodEnabled: external_exports.boolean().optional(),
+  flatDeliveryFeeCents: external_exports.number().int().min(0).optional(),
+  freeDeliveryThresholdCents: external_exports.number().int().min(0).optional(),
+  packagingFeeCents: external_exports.number().int().min(0).optional()
+}).strict();
+function sanitizeShopSettings(settings) {
+  return {
+    ...settings,
+    razorpayKeySecret: settings.razorpayKeySecret ? SECRET_MASK : "",
+    r2SecretAccessKey: settings.r2SecretAccessKey ? SECRET_MASK : "",
+    smtpPass: settings.smtpPass ? SECRET_MASK : "",
+    notificationSmtpPass: settings.notificationSmtpPass ? SECRET_MASK : "",
+    hostingerApiToken: settings.hostingerApiToken ? SECRET_MASK : "",
+    hasRazorpaySecret: Boolean(settings.razorpayKeySecret && settings.razorpayKeySecret.trim().length > 0),
+    hasR2Secret: Boolean(settings.r2SecretAccessKey && settings.r2SecretAccessKey.trim().length > 0),
+    hasSmtpPass: Boolean(settings.smtpPass && settings.smtpPass.trim().length > 0),
+    hasNotificationSmtpPass: Boolean(settings.notificationSmtpPass && settings.notificationSmtpPass.trim().length > 0),
+    hasHostingerToken: Boolean(settings.hostingerApiToken && settings.hostingerApiToken.trim().length > 0)
+  };
+}
+function resolveSecretField(value) {
+  if (value === void 0) return void 0;
+  const trimmed = value.trim();
+  if (trimmed === SECRET_MASK) return void 0;
+  return trimmed;
+}
 var router4 = (0, import_express5.Router)();
 router4.use("/v1/admin", requireAdmin);
 var iso = (value) => value instanceof Date ? value.toISOString() : value;
@@ -127337,7 +127711,7 @@ router4.get("/v1/admin/products", async (req2, res) => {
     ]);
   }
 });
-router4.post("/v1/admin/products", async (req2, res) => {
+router4.post("/v1/admin/products", requirePermission("products"), async (req2, res) => {
   const staff = await getStaffFromToken(req2.headers.authorization);
   const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req2.body;
   const cleanName = (name || "").trim();
@@ -127442,34 +127816,40 @@ var handleUpdateProduct = async (req2, res) => {
     });
   }
 };
-router4.patch("/v1/admin/products/:productId", handleUpdateProduct);
-router4.put("/v1/admin/products/:productId", handleUpdateProduct);
-router4.delete("/v1/admin/products/:productId", async (req2, res) => {
+router4.patch("/v1/admin/products/:productId", requirePermission("products"), handleUpdateProduct);
+router4.put("/v1/admin/products/:productId", requirePermission("products"), handleUpdateProduct);
+router4.delete("/v1/admin/products/:productId", requirePermission("products"), async (req2, res) => {
   const { productId } = req2.params;
   try {
-    await db.update(productsTable).set({ status: "archived", deletedAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }).where(eq(productsTable.id, productId));
+    await db.update(productsTable).set({ status: "archived", deletedAt: /* @__PURE__ */ new Date() }).where(eq(productsTable.id, productId));
   } catch (err) {
   }
-  res.json({ success: true, message: "Product moved to Recycle Bin. You can restore it within 30 days." });
+  res.json({ success: true, message: "Product moved to trash." });
 });
-router4.post("/v1/admin/products/:productId/restore", async (req2, res) => {
+router4.post("/v1/admin/products/:productId/restore", requirePermission("products"), async (req2, res) => {
   const { productId } = req2.params;
   try {
-    const [restored] = await db.update(productsTable).set({ status: "active", deletedAt: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq(productsTable.id, productId)).returning();
-    res.json({ success: true, message: "Product restored to active catalog.", product: restored ? productResponse2(restored) : null });
+    await db.update(productsTable).set({ status: "active", deletedAt: null }).where(eq(productsTable.id, productId));
+    res.json({ success: true, message: "Product restored to active catalog." });
   } catch (err) {
     res.json({ success: true, message: "Product restored to active catalog." });
   }
 });
-router4.delete("/v1/admin/products/:productId/permanent", async (req2, res) => {
+router4.delete("/v1/admin/products/:productId/permanent", requirePermission("products"), async (req2, res) => {
   const { productId } = req2.params;
   try {
     await db.delete(productsTable).where(eq(productsTable.id, productId));
+    logAuditEvent(req2, {
+      action: "PRODUCT_PERMANENTLY_DELETED",
+      resource: "products",
+      resourceId: productId,
+      status: "SUCCESS"
+    });
   } catch (err) {
   }
   res.json({ success: true, message: "Product permanently deleted." });
 });
-router4.get("/v1/admin/discounts", async (_req, res) => {
+router4.get("/v1/admin/discounts", requirePermission("discounts"), async (_req, res) => {
   try {
     const discounts = await db.select().from(discountsTable).orderBy(desc(discountsTable.startsAt));
     res.json(ListDiscountsResponse.parse(discounts.map(discountResponse)));
@@ -127504,40 +127884,44 @@ router4.get("/v1/admin/discounts", async (_req, res) => {
     ]);
   }
 });
-router4.post("/v1/admin/discounts", async (req2, res) => {
+router4.post("/v1/admin/discounts", requirePermission("discounts"), async (req2, res) => {
   const parsed = CreateDiscountBody.safeParse(req2.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const discount = parsed.data;
+  const payload = parsed.data;
+  const id = randomUUID14();
   try {
-    const [created] = await db.insert(discountsTable).values({
-      ...discount,
-      code: discount.code.trim().toUpperCase(),
-      minimumSubtotalCents: Math.round(discount.minimumSubtotalCents),
-      usageLimit: discount.usageLimit == null ? null : Math.round(discount.usageLimit),
-      startsAt: new Date(discount.startsAt),
-      expiresAt: discount.expiresAt ? new Date(discount.expiresAt) : null
+    const [inserted] = await db.insert(discountsTable).values({
+      id,
+      code: payload.code.trim().toUpperCase(),
+      type: payload.type,
+      value: payload.value,
+      minimumSubtotalCents: payload.minimumSubtotalCents ?? 0,
+      usageLimit: payload.usageLimit ?? 100,
+      usageCount: 0,
+      active: payload.active ?? true,
+      startsAt: payload.startsAt ? new Date(payload.startsAt) : /* @__PURE__ */ new Date(),
+      expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null
     }).returning();
-    res.status(201).json(CreateDiscountResponse.parse(discountResponse(created)));
+    res.status(201).json(CreateDiscountResponse.parse(discountResponse(inserted)));
   } catch (err) {
     res.status(201).json({
-      id: `disc_${Date.now()}`,
-      code: discount.code.trim().toUpperCase(),
-      type: discount.type || "percentage",
-      value: discount.value,
-      minimumSubtotalCents: Math.round(discount.minimumSubtotalCents),
-      usageLimit: discount.usageLimit == null ? null : Math.round(discount.usageLimit),
+      id,
+      code: payload.code.trim().toUpperCase(),
+      type: payload.type,
+      value: payload.value,
+      minimumSubtotalCents: payload.minimumSubtotalCents ?? 0,
+      usageLimit: payload.usageLimit ?? 100,
       usageCount: 0,
-      startsAt: discount.startsAt,
-      expiresAt: discount.expiresAt || null,
-      active: discount.active ?? true,
-      firstOrderOnly: discount.firstOrderOnly ?? false
+      active: payload.active ?? true,
+      startsAt: payload.startsAt ?? (/* @__PURE__ */ new Date()).toISOString(),
+      expiresAt: payload.expiresAt ?? null
     });
   }
 });
-router4.patch("/v1/admin/discounts/:discountId", async (req2, res) => {
+router4.patch("/v1/admin/discounts/:discountId", requirePermission("discounts"), async (req2, res) => {
   const params = UpdateDiscountParams.safeParse(req2.params);
   const body = UpdateDiscountBody.safeParse(req2.body);
   if (!params.success) {
@@ -127580,25 +127964,38 @@ router4.patch("/v1/admin/discounts/:discountId", async (req2, res) => {
     });
   }
 });
-router4.get("/v1/admin/registrations", async (_req, res) => {
+router4.get("/v1/admin/registrations", requirePermission("registrations"), async (_req, res) => {
   try {
-    const policies = await db.select().from(registrationPoliciesTable).orderBy(desc(registrationPoliciesTable.updatedAt));
-    res.json(ListRegistrationPoliciesResponse.parse(policies.map(policyResponse)));
-  } catch (err) {
-    res.json([
-      {
-        id: "policy_1",
-        name: "Welcome offer",
-        description: "Give first-time shoppers a warm welcome without stacking offers.",
-        offerCode: "WELCOME10",
-        active: true,
-        windowDays: 14,
-        registrationsCount: 0
-      }
+    const [policies, claims] = await Promise.all([
+      db.select().from(registrationPoliciesTable),
+      db.select().from(registrationClaimsTable).orderBy(desc(registrationClaimsTable.createdAt))
     ]);
+    res.json({
+      policies: ListRegistrationPoliciesResponse.parse(policies.map(policyResponse)),
+      claims: claims.map((claim) => ({
+        ...claim,
+        createdAt: iso(claim.createdAt),
+        expiresAt: iso(claim.expiresAt)
+      }))
+    });
+  } catch (err) {
+    res.json({
+      policies: [
+        {
+          id: "policy_default",
+          name: "New Customer 10% Welcome",
+          description: "Default welcome offer for all verified customers",
+          offerCode: "WELCOME10",
+          active: true,
+          windowDays: 30,
+          registrationsCount: 0
+        }
+      ],
+      claims: []
+    });
   }
 });
-router4.patch("/v1/admin/registrations", async (req2, res) => {
+router4.patch("/v1/admin/registrations", requirePermission("registrations"), async (req2, res) => {
   const parsed = UpdateRegistrationPolicyBody.safeParse(req2.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -127626,97 +128023,141 @@ router4.patch("/v1/admin/registrations", async (req2, res) => {
     });
   }
 });
-router4.get("/v1/admin/shop-settings", async (_req, res) => {
+router4.get("/v1/admin/shop-settings", requirePermission("settings"), async (_req, res) => {
   try {
     let settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     if (!settings) {
       const [inserted] = await db.insert(shopSettingsTable).values({ id: "default_shop", shopName: "RAJ TRADERS", shopDomain: "sundarvan.xyz", shopAddress: "123 Baker Street, Mumbai", latitude: 19.076, longitude: 72.8777, deliveryRadiusKm: 15, isDeliveryEnabled: true }).returning();
       settings = inserted;
     }
-    res.json(settings);
+    res.json(sanitizeShopSettings(settings));
   } catch (err) {
     req.log.error({ err }, "Failed to load shop settings");
     res.status(500).json({ error: "Failed to load shop settings." });
   }
 });
-router4.put("/v1/admin/shop-settings", async (req2, res) => {
-  const {
-    shopName,
-    shopDomain,
-    shopAddress,
-    latitude,
-    longitude,
-    deliveryRadiusKm,
-    isDeliveryEnabled,
-    razorpayKeyId,
-    razorpayKeySecret,
-    r2AccountId,
-    r2AccessKeyId,
-    r2SecretAccessKey,
-    r2BucketName,
-    r2PublicUrl,
-    smtpHost,
-    smtpPort,
-    smtpUser,
-    smtpPass,
-    smtpFrom
-  } = req2.body;
-  try {
-    const updateData = {
-      updatedAt: /* @__PURE__ */ new Date()
-    };
-    if (typeof shopName === "string") updateData.shopName = shopName.trim();
-    if (typeof shopDomain === "string") updateData.shopDomain = shopDomain.trim();
-    if (typeof shopAddress === "string") updateData.shopAddress = shopAddress.trim();
-    if (typeof latitude === "number" && !isNaN(latitude)) updateData.latitude = latitude;
-    if (typeof longitude === "number" && !isNaN(longitude)) updateData.longitude = longitude;
-    if (typeof deliveryRadiusKm === "number" && !isNaN(deliveryRadiusKm)) updateData.deliveryRadiusKm = Math.max(0.1, deliveryRadiusKm);
-    if (typeof isDeliveryEnabled === "boolean") updateData.isDeliveryEnabled = isDeliveryEnabled;
-    if (typeof razorpayKeyId === "string" && razorpayKeyId.trim()) updateData.razorpayKeyId = razorpayKeyId.trim();
-    if (typeof razorpayKeySecret === "string" && razorpayKeySecret.trim()) updateData.razorpayKeySecret = razorpayKeySecret.trim();
-    if (r2AccountId !== void 0) updateData.r2AccountId = r2AccountId.trim();
-    if (r2AccessKeyId !== void 0) updateData.r2AccessKeyId = r2AccessKeyId.trim();
-    if (r2SecretAccessKey !== void 0) updateData.r2SecretAccessKey = r2SecretAccessKey.trim();
-    if (r2BucketName !== void 0) updateData.r2BucketName = r2BucketName.trim();
-    if (r2PublicUrl !== void 0) updateData.r2PublicUrl = r2PublicUrl.trim();
-    if (smtpHost !== void 0) updateData.smtpHost = smtpHost.trim();
-    if (smtpPort !== void 0) updateData.smtpPort = Number(smtpPort) || 465;
-    if (smtpUser !== void 0) updateData.smtpUser = smtpUser.trim();
-    if (smtpPass !== void 0) updateData.smtpPass = smtpPass.trim();
-    if (smtpFrom !== void 0) updateData.smtpFrom = smtpFrom.trim();
-    if (req2.body.hostingerApiToken !== void 0) updateData.hostingerApiToken = req2.body.hostingerApiToken.trim();
-    if (req2.body.hostingerMailboxResourceId !== void 0) updateData.hostingerMailboxResourceId = req2.body.hostingerMailboxResourceId.trim();
-    if (req2.body.notificationSmtpHost !== void 0) updateData.notificationSmtpHost = req2.body.notificationSmtpHost.trim();
-    if (req2.body.notificationSmtpPort !== void 0) updateData.notificationSmtpPort = Number(req2.body.notificationSmtpPort) || 465;
-    if (req2.body.notificationSmtpUser !== void 0) updateData.notificationSmtpUser = req2.body.notificationSmtpUser.trim();
-    if (req2.body.notificationSmtpPass !== void 0) updateData.notificationSmtpPass = req2.body.notificationSmtpPass.trim();
-    if (req2.body.notificationSmtpFrom !== void 0) updateData.notificationSmtpFrom = req2.body.notificationSmtpFrom.trim();
-    if (req2.body.supportEmail !== void 0) updateData.supportEmail = req2.body.supportEmail.trim();
-    if (req2.body.contactEmail !== void 0) updateData.contactEmail = req2.body.contactEmail.trim();
-    if (req2.body.ordersEmail !== void 0) updateData.ordersEmail = req2.body.ordersEmail.trim();
-    if (req2.body.socialLinkedin !== void 0) updateData.socialLinkedin = req2.body.socialLinkedin.trim();
-    if (req2.body.socialInstagram !== void 0) updateData.socialInstagram = req2.body.socialInstagram.trim();
-    if (req2.body.socialFacebook !== void 0) updateData.socialFacebook = req2.body.socialFacebook.trim();
-    if (req2.body.socialPinterest !== void 0) updateData.socialPinterest = req2.body.socialPinterest.trim();
-    if (req2.body.socialTwitter !== void 0) updateData.socialTwitter = req2.body.socialTwitter.trim();
-    if (req2.body.availableInLocation !== void 0) updateData.availableInLocation = req2.body.availableInLocation.trim();
-    if (req2.body.aboutUsText !== void 0) updateData.aboutUsText = req2.body.aboutUsText.trim();
-    if (typeof req2.body.isStoreOpen === "boolean") updateData.isStoreOpen = req2.body.isStoreOpen;
-    if (typeof req2.body.minOrderCents === "number") updateData.minOrderCents = Math.max(0, req2.body.minOrderCents);
-    if (typeof req2.body.isCodEnabled === "boolean") updateData.isCodEnabled = req2.body.isCodEnabled;
-    if (typeof req2.body.flatDeliveryFeeCents === "number") updateData.flatDeliveryFeeCents = Math.max(0, req2.body.flatDeliveryFeeCents);
-    if (typeof req2.body.freeDeliveryThresholdCents === "number") updateData.freeDeliveryThresholdCents = Math.max(0, req2.body.freeDeliveryThresholdCents);
-    if (typeof req2.body.packagingFeeCents === "number") updateData.packagingFeeCents = Math.max(0, req2.body.packagingFeeCents);
-    await db.update(shopSettingsTable).set(updateData).where(eq(shopSettingsTable.id, "default_shop"));
-    clearTransporterCache();
-    const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-    res.json({ success: true, settings: updated });
-  } catch (err) {
-    req2.log.error({ err }, "Failed to update shop settings");
-    res.status(500).json({ error: "Failed to update shop settings." });
+router4.put(
+  "/v1/admin/shop-settings",
+  requirePermission("settings"),
+  validate({ body: UpdateShopSettingsSchema }),
+  async (req2, res) => {
+    const {
+      shopName,
+      shopDomain,
+      shopAddress,
+      latitude,
+      longitude,
+      deliveryRadiusKm,
+      isDeliveryEnabled,
+      razorpayKeyId,
+      razorpayKeySecret,
+      r2AccountId,
+      r2AccessKeyId,
+      r2SecretAccessKey,
+      r2BucketName,
+      r2PublicUrl,
+      smtpHost,
+      smtpPort,
+      smtpUser,
+      smtpPass,
+      smtpFrom,
+      supportEmail,
+      contactEmail,
+      ordersEmail,
+      hostingerApiToken,
+      hostingerMailboxResourceId,
+      notificationSmtpHost,
+      notificationSmtpPort,
+      notificationSmtpUser,
+      notificationSmtpPass,
+      notificationSmtpFrom,
+      socialLinkedin,
+      socialInstagram,
+      socialFacebook,
+      socialPinterest,
+      socialTwitter,
+      availableInLocation,
+      aboutUsText,
+      isStoreOpen,
+      minOrderCents,
+      isCodEnabled,
+      flatDeliveryFeeCents,
+      freeDeliveryThresholdCents,
+      packagingFeeCents
+    } = req2.body;
+    try {
+      const updateData = {
+        updatedAt: /* @__PURE__ */ new Date()
+      };
+      if (typeof shopName === "string") updateData.shopName = shopName.trim();
+      if (typeof shopDomain === "string") updateData.shopDomain = shopDomain.trim();
+      if (typeof shopAddress === "string") updateData.shopAddress = shopAddress.trim();
+      if (typeof latitude === "number" && !isNaN(latitude)) updateData.latitude = latitude;
+      if (typeof longitude === "number" && !isNaN(longitude)) updateData.longitude = longitude;
+      if (typeof deliveryRadiusKm === "number" && !isNaN(deliveryRadiusKm)) updateData.deliveryRadiusKm = Math.max(0.1, deliveryRadiusKm);
+      if (typeof isDeliveryEnabled === "boolean") updateData.isDeliveryEnabled = isDeliveryEnabled;
+      if (typeof razorpayKeyId === "string" && razorpayKeyId.trim()) updateData.razorpayKeyId = razorpayKeyId.trim();
+      const resolvedRzpSecret = resolveSecretField(razorpayKeySecret);
+      if (resolvedRzpSecret !== void 0) updateData.razorpayKeySecret = resolvedRzpSecret;
+      if (r2AccountId !== void 0) updateData.r2AccountId = r2AccountId.trim();
+      if (r2AccessKeyId !== void 0) updateData.r2AccessKeyId = r2AccessKeyId.trim();
+      const resolvedR2Secret = resolveSecretField(r2SecretAccessKey);
+      if (resolvedR2Secret !== void 0) updateData.r2SecretAccessKey = resolvedR2Secret;
+      if (r2BucketName !== void 0) updateData.r2BucketName = r2BucketName.trim();
+      if (r2PublicUrl !== void 0) updateData.r2PublicUrl = r2PublicUrl.trim();
+      if (smtpHost !== void 0) updateData.smtpHost = smtpHost.trim();
+      if (smtpPort !== void 0) updateData.smtpPort = Number(smtpPort) || 465;
+      if (smtpUser !== void 0) updateData.smtpUser = smtpUser.trim();
+      const resolvedSmtpPass = resolveSecretField(smtpPass);
+      if (resolvedSmtpPass !== void 0) updateData.smtpPass = resolvedSmtpPass;
+      if (smtpFrom !== void 0) updateData.smtpFrom = smtpFrom.trim();
+      const resolvedHostingerToken = resolveSecretField(hostingerApiToken);
+      if (resolvedHostingerToken !== void 0) updateData.hostingerApiToken = resolvedHostingerToken;
+      if (hostingerMailboxResourceId !== void 0) updateData.hostingerMailboxResourceId = hostingerMailboxResourceId.trim();
+      if (notificationSmtpHost !== void 0) updateData.notificationSmtpHost = notificationSmtpHost.trim();
+      if (notificationSmtpPort !== void 0) updateData.notificationSmtpPort = Number(notificationSmtpPort) || 465;
+      if (notificationSmtpUser !== void 0) updateData.notificationSmtpUser = notificationSmtpUser.trim();
+      const resolvedNotifPass = resolveSecretField(notificationSmtpPass);
+      if (resolvedNotifPass !== void 0) updateData.notificationSmtpPass = resolvedNotifPass;
+      if (notificationSmtpFrom !== void 0) updateData.notificationSmtpFrom = notificationSmtpFrom.trim();
+      if (supportEmail !== void 0) updateData.supportEmail = supportEmail.trim();
+      if (contactEmail !== void 0) updateData.contactEmail = contactEmail.trim();
+      if (ordersEmail !== void 0) updateData.ordersEmail = ordersEmail.trim();
+      if (socialLinkedin !== void 0) updateData.socialLinkedin = socialLinkedin.trim();
+      if (socialInstagram !== void 0) updateData.socialInstagram = socialInstagram.trim();
+      if (socialFacebook !== void 0) updateData.socialFacebook = socialFacebook.trim();
+      if (socialPinterest !== void 0) updateData.socialPinterest = socialPinterest.trim();
+      if (socialTwitter !== void 0) updateData.socialTwitter = socialTwitter.trim();
+      if (availableInLocation !== void 0) updateData.availableInLocation = availableInLocation.trim();
+      if (aboutUsText !== void 0) updateData.aboutUsText = aboutUsText.trim();
+      if (typeof isStoreOpen === "boolean") updateData.isStoreOpen = isStoreOpen;
+      if (typeof minOrderCents === "number") updateData.minOrderCents = Math.max(0, minOrderCents);
+      if (typeof isCodEnabled === "boolean") updateData.isCodEnabled = isCodEnabled;
+      if (typeof flatDeliveryFeeCents === "number") updateData.flatDeliveryFeeCents = Math.max(0, flatDeliveryFeeCents);
+      if (typeof freeDeliveryThresholdCents === "number") updateData.freeDeliveryThresholdCents = Math.max(0, freeDeliveryThresholdCents);
+      if (typeof packagingFeeCents === "number") updateData.packagingFeeCents = Math.max(0, packagingFeeCents);
+      await db.update(shopSettingsTable).set(updateData).where(eq(shopSettingsTable.id, "default_shop"));
+      clearTransporterCache();
+      logAuditEvent(req2, {
+        action: "SHOP_SETTINGS_UPDATED",
+        resource: "shop_settings",
+        resourceId: "default_shop",
+        status: "SUCCESS",
+        details: {
+          updatedFields: Object.keys(updateData).filter(
+            (k) => !k.toLowerCase().includes("secret") && !k.toLowerCase().includes("pass") && !k.toLowerCase().includes("token")
+          )
+        }
+      });
+      const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+      res.json({ success: true, settings: sanitizeShopSettings(updated) });
+    } catch (err) {
+      req2.log.error({ err }, "Failed to update shop settings");
+      res.status(500).json({ error: "Failed to update shop settings." });
+    }
   }
-});
-router4.post("/v1/admin/test-email", async (req2, res) => {
+);
+router4.post("/v1/admin/test-email", requirePermission("settings"), async (req2, res) => {
   const { toEmail, provider } = req2.body;
   if (!toEmail || typeof toEmail !== "string" || !toEmail.includes("@")) {
     res.status(400).json({ error: "Valid recipient email address is required." });
@@ -127748,13 +128189,14 @@ router4.post("/v1/admin/test-email", async (req2, res) => {
     res.status(500).json({ success: false, error: "Failed to send test email" });
   }
 });
-router4.get("/v1/admin/orders", async (req2, res) => {
+router4.get("/v1/admin/orders", requirePermission("orders"), async (req2, res) => {
   try {
-    const allOrders = await db.select().from(ordersTable);
-    res.json(filterOrders(allOrders, req2.query));
+    const orders = await db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt));
+    const filtered = filterOrders(orders, req2.query);
+    res.json(filtered);
   } catch (err) {
-    req2.log.error({ err }, "Error listing admin orders");
-    res.status(500).json({ error: "Failed to load order ledger." });
+    req2.log.error({ err }, "Failed to list admin orders");
+    res.status(500).json({ error: "Failed to list orders." });
   }
 });
 router4.get("/v1/admin/orders/stats", async (req2, res) => {
@@ -127772,7 +128214,7 @@ router4.get("/v1/admin/orders/stats", async (req2, res) => {
     res.status(500).json({ error: "Failed to fetch order statistics." });
   }
 });
-router4.post("/v1/admin/orders/:id/cancel", async (req2, res) => {
+router4.post("/v1/admin/orders/:id/cancel", requirePermission("orders"), async (req2, res) => {
   const id = req2.params.id;
   try {
     const found = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
@@ -127785,6 +128227,13 @@ router4.post("/v1/admin/orders/:id/cancel", async (req2, res) => {
       return;
     }
     await db.update(ordersTable).set({ status: "cancelled", updatedAt: /* @__PURE__ */ new Date() }).where(eq(ordersTable.id, id));
+    logAuditEvent(req2, {
+      action: "ORDER_CANCELLED_BY_ADMIN",
+      resource: "orders",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { previousStatus: found[0].status }
+    });
     res.json({ success: true, orderId: id, status: "cancelled", message: "Order has been cancelled." });
   } catch (err) {
     req2.log.error({ err }, "Error cancelling order (admin)");
@@ -129859,7 +130308,7 @@ var checkout_default = router6;
 var import_express8 = __toESM(require_express2(), 1);
 var router7 = (0, import_express8.Router)();
 router7.use(requireAdmin);
-router7.get("/approvals", async (req2, res) => {
+router7.get("/approvals", requirePermission("approvals"), async (req2, res) => {
   try {
     const pendingProducts = await db.select().from(productsTable).where(eq(productsTable.approvalStatus, "pending_approval"));
     res.status(200).json(pendingProducts);

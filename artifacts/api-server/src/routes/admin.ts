@@ -17,10 +17,84 @@ import {
   UpdateRegistrationPolicyResponse,
 } from "@workspace/api-zod";
 import { requireAdmin } from "../middlewares/auth";
+import { requirePermission } from "../middlewares/permission-guard";
+import { validate } from "../middlewares/validate";
+import { logAuditEvent } from "../utils/audit-logger";
 import { discountResponse } from "./storefront";
 import { getStaffFromToken } from "./staff-admin";
 import { filterOrders } from "../utils/order-filters";
 import { clearTransporterCache, sendEmail } from "../utils/mailer";
+import { z } from "zod";
+
+const SECRET_MASK = "••••••••••••••••";
+
+export const UpdateShopSettingsSchema = z.object({
+  shopName: z.string().min(1).max(100).optional(),
+  shopDomain: z.string().min(1).max(100).optional(),
+  shopAddress: z.string().max(255).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  deliveryRadiusKm: z.number().positive().max(500).optional(),
+  isDeliveryEnabled: z.boolean().optional(),
+  razorpayKeyId: z.string().max(100).optional(),
+  razorpayKeySecret: z.string().max(255).optional(),
+  r2AccountId: z.string().max(100).optional(),
+  r2AccessKeyId: z.string().max(100).optional(),
+  r2SecretAccessKey: z.string().max(255).optional(),
+  r2BucketName: z.string().max(100).optional(),
+  r2PublicUrl: z.string().max(255).optional(),
+  smtpHost: z.string().max(100).optional(),
+  smtpPort: z.number().int().min(1).max(65535).optional(),
+  smtpUser: z.string().max(100).optional(),
+  smtpPass: z.string().max(255).optional(),
+  smtpFrom: z.string().max(255).optional(),
+  supportEmail: z.string().email().or(z.literal("")).optional(),
+  contactEmail: z.string().email().or(z.literal("")).optional(),
+  ordersEmail: z.string().email().or(z.literal("")).optional(),
+  hostingerApiToken: z.string().max(255).optional(),
+  hostingerMailboxResourceId: z.string().max(100).optional(),
+  notificationSmtpHost: z.string().max(100).optional(),
+  notificationSmtpPort: z.number().int().min(1).max(65535).optional(),
+  notificationSmtpUser: z.string().max(100).optional(),
+  notificationSmtpPass: z.string().max(255).optional(),
+  notificationSmtpFrom: z.string().max(255).optional(),
+  socialLinkedin: z.string().max(255).optional(),
+  socialInstagram: z.string().max(255).optional(),
+  socialFacebook: z.string().max(255).optional(),
+  socialPinterest: z.string().max(255).optional(),
+  socialTwitter: z.string().max(255).optional(),
+  availableInLocation: z.string().max(100).optional(),
+  aboutUsText: z.string().max(1000).optional(),
+  isStoreOpen: z.boolean().optional(),
+  minOrderCents: z.number().int().min(0).optional(),
+  isCodEnabled: z.boolean().optional(),
+  flatDeliveryFeeCents: z.number().int().min(0).optional(),
+  freeDeliveryThresholdCents: z.number().int().min(0).optional(),
+  packagingFeeCents: z.number().int().min(0).optional(),
+}).strict();
+
+function sanitizeShopSettings(settings: typeof shopSettingsTable.$inferSelect) {
+  return {
+    ...settings,
+    razorpayKeySecret: settings.razorpayKeySecret ? SECRET_MASK : "",
+    r2SecretAccessKey: settings.r2SecretAccessKey ? SECRET_MASK : "",
+    smtpPass: settings.smtpPass ? SECRET_MASK : "",
+    notificationSmtpPass: settings.notificationSmtpPass ? SECRET_MASK : "",
+    hostingerApiToken: settings.hostingerApiToken ? SECRET_MASK : "",
+    hasRazorpaySecret: Boolean(settings.razorpayKeySecret && settings.razorpayKeySecret.trim().length > 0),
+    hasR2Secret: Boolean(settings.r2SecretAccessKey && settings.r2SecretAccessKey.trim().length > 0),
+    hasSmtpPass: Boolean(settings.smtpPass && settings.smtpPass.trim().length > 0),
+    hasNotificationSmtpPass: Boolean(settings.notificationSmtpPass && settings.notificationSmtpPass.trim().length > 0),
+    hasHostingerToken: Boolean(settings.hostingerApiToken && settings.hostingerApiToken.trim().length > 0),
+  };
+}
+
+function resolveSecretField(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (trimmed === SECRET_MASK) return undefined; // Protect existing secret against mask overwrite
+  return trimmed;
+}
 
 const router: IRouter = Router();
 router.use("/v1/admin", requireAdmin);
@@ -173,7 +247,7 @@ router.get("/v1/admin/products", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/v1/admin/products", async (req, res): Promise<void> => {
+router.post("/v1/admin/products", requirePermission("products"), async (req, res): Promise<void> => {
   const staff = await getStaffFromToken(req.headers.authorization);
   const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
 
@@ -302,48 +376,53 @@ const handleUpdateProduct = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-router.patch("/v1/admin/products/:productId", handleUpdateProduct);
-router.put("/v1/admin/products/:productId", handleUpdateProduct);
+router.patch("/v1/admin/products/:productId", requirePermission("products"), handleUpdateProduct);
+router.put("/v1/admin/products/:productId", requirePermission("products"), handleUpdateProduct);
 
-// Soft Delete (Move to Recycle Bin)
-router.delete("/v1/admin/products/:productId", async (req, res): Promise<void> => {
+router.delete("/v1/admin/products/:productId", requirePermission("products"), async (req, res): Promise<void> => {
   const { productId } = req.params;
   try {
-    await db.update(productsTable).set({ status: "archived", deletedAt: new Date(), updatedAt: new Date() }).where(eq(productsTable.id, productId));
+    await db
+      .update(productsTable)
+      .set({ status: "archived", deletedAt: new Date() })
+      .where(eq(productsTable.id, productId));
   } catch (err) {
     // Ignore error in demo mode
   }
-  res.json({ success: true, message: "Product moved to Recycle Bin. You can restore it within 30 days." });
+  res.json({ success: true, message: "Product moved to trash." });
 });
 
-// Restore Product from Recycle Bin
-router.post("/v1/admin/products/:productId/restore", async (req, res): Promise<void> => {
+router.post("/v1/admin/products/:productId/restore", requirePermission("products"), async (req, res): Promise<void> => {
   const { productId } = req.params;
   try {
-    const [restored] = await db
+    await db
       .update(productsTable)
-      .set({ status: "active", deletedAt: null, updatedAt: new Date() })
-      .where(eq(productsTable.id, productId))
-      .returning();
-    res.json({ success: true, message: "Product restored to active catalog.", product: restored ? productResponse(restored) : null });
+      .set({ status: "active", deletedAt: null })
+      .where(eq(productsTable.id, productId));
+    res.json({ success: true, message: "Product restored to active catalog." });
   } catch (err) {
     res.json({ success: true, message: "Product restored to active catalog." });
   }
 });
 
 // Permanent Delete (Purge from DB)
-router.delete("/v1/admin/products/:productId/permanent", async (req, res): Promise<void> => {
+router.delete("/v1/admin/products/:productId/permanent", requirePermission("products"), async (req, res): Promise<void> => {
   const { productId } = req.params;
   try {
     await db.delete(productsTable).where(eq(productsTable.id, productId));
+    logAuditEvent(req, {
+      action: "PRODUCT_PERMANENTLY_DELETED",
+      resource: "products",
+      resourceId: productId,
+      status: "SUCCESS",
+    });
   } catch (err) {
     // Ignore error in demo mode
   }
   res.json({ success: true, message: "Product permanently deleted." });
 });
 
-
-router.get("/v1/admin/discounts", async (_req, res): Promise<void> => {
+router.get("/v1/admin/discounts", requirePermission("discounts"), async (_req, res): Promise<void> => {
   try {
     const discounts = await db.select().from(discountsTable).orderBy(desc(discountsTable.startsAt));
     res.json(ListDiscountsResponse.parse(discounts.map(discountResponse)));
@@ -379,44 +458,48 @@ router.get("/v1/admin/discounts", async (_req, res): Promise<void> => {
   }
 });
 
-router.post("/v1/admin/discounts", async (req, res): Promise<void> => {
+router.post("/v1/admin/discounts", requirePermission("discounts"), async (req, res): Promise<void> => {
   const parsed = CreateDiscountBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const discount = parsed.data;
+  const payload = parsed.data;
+  const id = randomUUID();
   try {
-    const [created] = await db
+    const [inserted] = await db
       .insert(discountsTable)
       .values({
-        ...discount,
-        code: discount.code.trim().toUpperCase(),
-        minimumSubtotalCents: Math.round(discount.minimumSubtotalCents),
-        usageLimit: discount.usageLimit == null ? null : Math.round(discount.usageLimit),
-        startsAt: new Date(discount.startsAt),
-        expiresAt: discount.expiresAt ? new Date(discount.expiresAt) : null,
+        id,
+        code: payload.code.trim().toUpperCase(),
+        type: payload.type,
+        value: payload.value,
+        minimumSubtotalCents: payload.minimumSubtotalCents ?? 0,
+        usageLimit: payload.usageLimit ?? 100,
+        usageCount: 0,
+        active: payload.active ?? true,
+        startsAt: payload.startsAt ? new Date(payload.startsAt) : new Date(),
+        expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null,
       })
       .returning();
-    res.status(201).json(CreateDiscountResponse.parse(discountResponse(created)));
+    res.status(201).json(CreateDiscountResponse.parse(discountResponse(inserted)));
   } catch (err) {
     res.status(201).json({
-      id: `disc_${Date.now()}`,
-      code: discount.code.trim().toUpperCase(),
-      type: discount.type || "percentage",
-      value: discount.value,
-      minimumSubtotalCents: Math.round(discount.minimumSubtotalCents),
-      usageLimit: discount.usageLimit == null ? null : Math.round(discount.usageLimit),
+      id,
+      code: payload.code.trim().toUpperCase(),
+      type: payload.type,
+      value: payload.value,
+      minimumSubtotalCents: payload.minimumSubtotalCents ?? 0,
+      usageLimit: payload.usageLimit ?? 100,
       usageCount: 0,
-      startsAt: discount.startsAt,
-      expiresAt: discount.expiresAt || null,
-      active: discount.active ?? true,
-      firstOrderOnly: discount.firstOrderOnly ?? false
+      active: payload.active ?? true,
+      startsAt: payload.startsAt ?? new Date().toISOString(),
+      expiresAt: payload.expiresAt ?? null,
     });
   }
 });
 
-router.patch("/v1/admin/discounts/:discountId", async (req, res): Promise<void> => {
+router.patch("/v1/admin/discounts/:discountId", requirePermission("discounts"), async (req, res): Promise<void> => {
   const params = UpdateDiscountParams.safeParse(req.params);
   const body = UpdateDiscountBody.safeParse(req.body);
   if (!params.success) {
@@ -464,26 +547,39 @@ router.patch("/v1/admin/discounts/:discountId", async (req, res): Promise<void> 
   }
 });
 
-router.get("/v1/admin/registrations", async (_req, res): Promise<void> => {
+router.get("/v1/admin/registrations", requirePermission("registrations"), async (_req, res): Promise<void> => {
   try {
-    const policies = await db.select().from(registrationPoliciesTable).orderBy(desc(registrationPoliciesTable.updatedAt));
-    res.json(ListRegistrationPoliciesResponse.parse(policies.map(policyResponse)));
-  } catch (err) {
-    res.json([
-      {
-        id: "policy_1",
-        name: "Welcome offer",
-        description: "Give first-time shoppers a warm welcome without stacking offers.",
-        offerCode: "WELCOME10",
-        active: true,
-        windowDays: 14,
-        registrationsCount: 0
-      }
+    const [policies, claims] = await Promise.all([
+      db.select().from(registrationPoliciesTable),
+      db.select().from(registrationClaimsTable).orderBy(desc(registrationClaimsTable.createdAt)),
     ]);
+    res.json({
+      policies: ListRegistrationPoliciesResponse.parse(policies.map(policyResponse)),
+      claims: claims.map((claim) => ({
+        ...claim,
+        createdAt: iso(claim.createdAt) as string,
+        expiresAt: iso(claim.expiresAt) as string,
+      })),
+    });
+  } catch (err) {
+    res.json({
+      policies: [
+        {
+          id: "policy_default",
+          name: "New Customer 10% Welcome",
+          description: "Default welcome offer for all verified customers",
+          offerCode: "WELCOME10",
+          active: true,
+          windowDays: 30,
+          registrationsCount: 0,
+        },
+      ],
+      claims: [],
+    });
   }
 });
 
-router.patch("/v1/admin/registrations", async (req, res): Promise<void> => {
+router.patch("/v1/admin/registrations", requirePermission("registrations"), async (req, res): Promise<void> => {
   const parsed = UpdateRegistrationPolicyBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -516,7 +612,7 @@ router.patch("/v1/admin/registrations", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/v1/admin/shop-settings", async (_req, res): Promise<void> => {
+router.get("/v1/admin/shop-settings", requirePermission("settings"), async (_req, res): Promise<void> => {
   try {
     let settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     if (!settings) {
@@ -526,91 +622,123 @@ router.get("/v1/admin/shop-settings", async (_req, res): Promise<void> => {
         .returning();
       settings = inserted;
     }
-    res.json(settings);
+    res.json(sanitizeShopSettings(settings));
   } catch (err: unknown) {
     req.log.error({ err }, "Failed to load shop settings");
     res.status(500).json({ error: "Failed to load shop settings." });
   }
 });
 
-router.put("/v1/admin/shop-settings", async (req, res): Promise<void> => {
-  const {
-    shopName, shopDomain, shopAddress, latitude, longitude, deliveryRadiusKm, isDeliveryEnabled,
-    razorpayKeyId, razorpayKeySecret,
-    r2AccountId, r2AccessKeyId, r2SecretAccessKey, r2BucketName, r2PublicUrl,
-    smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom,
-  } = req.body;
+router.put(
+  "/v1/admin/shop-settings",
+  requirePermission("settings"),
+  validate({ body: UpdateShopSettingsSchema }),
+  async (req, res): Promise<void> => {
+    const {
+      shopName, shopDomain, shopAddress, latitude, longitude, deliveryRadiusKm, isDeliveryEnabled,
+      razorpayKeyId, razorpayKeySecret,
+      r2AccountId, r2AccessKeyId, r2SecretAccessKey, r2BucketName, r2PublicUrl,
+      smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom,
+      supportEmail, contactEmail, ordersEmail,
+      hostingerApiToken, hostingerMailboxResourceId,
+      notificationSmtpHost, notificationSmtpPort, notificationSmtpUser, notificationSmtpPass, notificationSmtpFrom,
+      socialLinkedin, socialInstagram, socialFacebook, socialPinterest, socialTwitter,
+      availableInLocation, aboutUsText, isStoreOpen, minOrderCents, isCodEnabled,
+      flatDeliveryFeeCents, freeDeliveryThresholdCents, packagingFeeCents,
+    } = req.body;
 
-  try {
-    const updateData: Partial<typeof shopSettingsTable.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-    if (typeof shopName === "string") updateData.shopName = shopName.trim();
-    if (typeof shopDomain === "string") updateData.shopDomain = shopDomain.trim();
-    if (typeof shopAddress === "string") updateData.shopAddress = shopAddress.trim();
-    if (typeof latitude === "number" && !isNaN(latitude)) updateData.latitude = latitude;
-    if (typeof longitude === "number" && !isNaN(longitude)) updateData.longitude = longitude;
-    if (typeof deliveryRadiusKm === "number" && !isNaN(deliveryRadiusKm)) updateData.deliveryRadiusKm = Math.max(0.1, deliveryRadiusKm);
-    if (typeof isDeliveryEnabled === "boolean") updateData.isDeliveryEnabled = isDeliveryEnabled;
-    if (typeof razorpayKeyId === "string" && razorpayKeyId.trim()) updateData.razorpayKeyId = razorpayKeyId.trim();
-    if (typeof razorpayKeySecret === "string" && razorpayKeySecret.trim()) updateData.razorpayKeySecret = razorpayKeySecret.trim();
+    try {
+      const updateData: Partial<typeof shopSettingsTable.$inferInsert> = {
+        updatedAt: new Date(),
+      };
+      if (typeof shopName === "string") updateData.shopName = shopName.trim();
+      if (typeof shopDomain === "string") updateData.shopDomain = shopDomain.trim();
+      if (typeof shopAddress === "string") updateData.shopAddress = shopAddress.trim();
+      if (typeof latitude === "number" && !isNaN(latitude)) updateData.latitude = latitude;
+      if (typeof longitude === "number" && !isNaN(longitude)) updateData.longitude = longitude;
+      if (typeof deliveryRadiusKm === "number" && !isNaN(deliveryRadiusKm)) updateData.deliveryRadiusKm = Math.max(0.1, deliveryRadiusKm);
+      if (typeof isDeliveryEnabled === "boolean") updateData.isDeliveryEnabled = isDeliveryEnabled;
+      if (typeof razorpayKeyId === "string" && razorpayKeyId.trim()) updateData.razorpayKeyId = razorpayKeyId.trim();
 
-    // Cloudflare R2
-    if (r2AccountId !== undefined) updateData.r2AccountId = r2AccountId.trim();
-    if (r2AccessKeyId !== undefined) updateData.r2AccessKeyId = r2AccessKeyId.trim();
-    if (r2SecretAccessKey !== undefined) updateData.r2SecretAccessKey = r2SecretAccessKey.trim();
-    if (r2BucketName !== undefined) updateData.r2BucketName = r2BucketName.trim();
-    if (r2PublicUrl !== undefined) updateData.r2PublicUrl = r2PublicUrl.trim();
+      // Protected secrets resolution: never overwrite existing secret if mask sent
+      const resolvedRzpSecret = resolveSecretField(razorpayKeySecret);
+      if (resolvedRzpSecret !== undefined) updateData.razorpayKeySecret = resolvedRzpSecret;
 
-    // Nodemailer SMTP
-    if (smtpHost !== undefined) updateData.smtpHost = smtpHost.trim();
-    if (smtpPort !== undefined) updateData.smtpPort = Number(smtpPort) || 465;
-    if (smtpUser !== undefined) updateData.smtpUser = smtpUser.trim();
-    if (smtpPass !== undefined) updateData.smtpPass = smtpPass.trim();
-    if (smtpFrom !== undefined) updateData.smtpFrom = smtpFrom.trim();
-    // Hostinger REST Mail API
-    if (req.body.hostingerApiToken !== undefined) updateData.hostingerApiToken = req.body.hostingerApiToken.trim();
-    if (req.body.hostingerMailboxResourceId !== undefined) updateData.hostingerMailboxResourceId = req.body.hostingerMailboxResourceId.trim();
+      // Cloudflare R2
+      if (r2AccountId !== undefined) updateData.r2AccountId = r2AccountId.trim();
+      if (r2AccessKeyId !== undefined) updateData.r2AccessKeyId = r2AccessKeyId.trim();
+      const resolvedR2Secret = resolveSecretField(r2SecretAccessKey);
+      if (resolvedR2Secret !== undefined) updateData.r2SecretAccessKey = resolvedR2Secret;
+      if (r2BucketName !== undefined) updateData.r2BucketName = r2BucketName.trim();
+      if (r2PublicUrl !== undefined) updateData.r2PublicUrl = r2PublicUrl.trim();
 
-    // System Notifications Mailer (Gmail / Custom Nodemailer SMTP)
-    if (req.body.notificationSmtpHost !== undefined) updateData.notificationSmtpHost = req.body.notificationSmtpHost.trim();
-    if (req.body.notificationSmtpPort !== undefined) updateData.notificationSmtpPort = Number(req.body.notificationSmtpPort) || 465;
-    if (req.body.notificationSmtpUser !== undefined) updateData.notificationSmtpUser = req.body.notificationSmtpUser.trim();
-    if (req.body.notificationSmtpPass !== undefined) updateData.notificationSmtpPass = req.body.notificationSmtpPass.trim();
-    if (req.body.notificationSmtpFrom !== undefined) updateData.notificationSmtpFrom = req.body.notificationSmtpFrom.trim();
+      // Nodemailer Hostinger SMTP
+      if (smtpHost !== undefined) updateData.smtpHost = smtpHost.trim();
+      if (smtpPort !== undefined) updateData.smtpPort = Number(smtpPort) || 465;
+      if (smtpUser !== undefined) updateData.smtpUser = smtpUser.trim();
+      const resolvedSmtpPass = resolveSecretField(smtpPass);
+      if (resolvedSmtpPass !== undefined) updateData.smtpPass = resolvedSmtpPass;
+      if (smtpFrom !== undefined) updateData.smtpFrom = smtpFrom.trim();
 
-    // Multi-Mailbox Config
-    if (req.body.supportEmail !== undefined) updateData.supportEmail = req.body.supportEmail.trim();
-    if (req.body.contactEmail !== undefined) updateData.contactEmail = req.body.contactEmail.trim();
-    if (req.body.ordersEmail !== undefined) updateData.ordersEmail = req.body.ordersEmail.trim();
+      // Hostinger REST Mail API
+      const resolvedHostingerToken = resolveSecretField(hostingerApiToken);
+      if (resolvedHostingerToken !== undefined) updateData.hostingerApiToken = resolvedHostingerToken;
+      if (hostingerMailboxResourceId !== undefined) updateData.hostingerMailboxResourceId = hostingerMailboxResourceId.trim();
 
-    // Footer, Social & Operational Settings
-    if (req.body.socialLinkedin !== undefined) updateData.socialLinkedin = req.body.socialLinkedin.trim();
-    if (req.body.socialInstagram !== undefined) updateData.socialInstagram = req.body.socialInstagram.trim();
-    if (req.body.socialFacebook !== undefined) updateData.socialFacebook = req.body.socialFacebook.trim();
-    if (req.body.socialPinterest !== undefined) updateData.socialPinterest = req.body.socialPinterest.trim();
-    if (req.body.socialTwitter !== undefined) updateData.socialTwitter = req.body.socialTwitter.trim();
-    if (req.body.availableInLocation !== undefined) updateData.availableInLocation = req.body.availableInLocation.trim();
-    if (req.body.aboutUsText !== undefined) updateData.aboutUsText = req.body.aboutUsText.trim();
-    if (typeof req.body.isStoreOpen === "boolean") updateData.isStoreOpen = req.body.isStoreOpen;
-    if (typeof req.body.minOrderCents === "number") updateData.minOrderCents = Math.max(0, req.body.minOrderCents);
-    if (typeof req.body.isCodEnabled === "boolean") updateData.isCodEnabled = req.body.isCodEnabled;
-    if (typeof req.body.flatDeliveryFeeCents === "number") updateData.flatDeliveryFeeCents = Math.max(0, req.body.flatDeliveryFeeCents);
-    if (typeof req.body.freeDeliveryThresholdCents === "number") updateData.freeDeliveryThresholdCents = Math.max(0, req.body.freeDeliveryThresholdCents);
-    if (typeof req.body.packagingFeeCents === "number") updateData.packagingFeeCents = Math.max(0, req.body.packagingFeeCents);
+      // System Notifications Mailer
+      if (notificationSmtpHost !== undefined) updateData.notificationSmtpHost = notificationSmtpHost.trim();
+      if (notificationSmtpPort !== undefined) updateData.notificationSmtpPort = Number(notificationSmtpPort) || 465;
+      if (notificationSmtpUser !== undefined) updateData.notificationSmtpUser = notificationSmtpUser.trim();
+      const resolvedNotifPass = resolveSecretField(notificationSmtpPass);
+      if (resolvedNotifPass !== undefined) updateData.notificationSmtpPass = resolvedNotifPass;
+      if (notificationSmtpFrom !== undefined) updateData.notificationSmtpFrom = notificationSmtpFrom.trim();
 
-    await db.update(shopSettingsTable).set(updateData).where(eq(shopSettingsTable.id, "default_shop"));
-    clearTransporterCache();
+      // Multi-Mailbox Config
+      if (supportEmail !== undefined) updateData.supportEmail = supportEmail.trim();
+      if (contactEmail !== undefined) updateData.contactEmail = contactEmail.trim();
+      if (ordersEmail !== undefined) updateData.ordersEmail = ordersEmail.trim();
 
-    const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-    res.json({ success: true, settings: updated });
-  } catch (err: unknown) {
-    req.log.error({ err }, "Failed to update shop settings");
-    res.status(500).json({ error: "Failed to update shop settings." });
+      // Footer, Social & Operational Settings
+      if (socialLinkedin !== undefined) updateData.socialLinkedin = socialLinkedin.trim();
+      if (socialInstagram !== undefined) updateData.socialInstagram = socialInstagram.trim();
+      if (socialFacebook !== undefined) updateData.socialFacebook = socialFacebook.trim();
+      if (socialPinterest !== undefined) updateData.socialPinterest = socialPinterest.trim();
+      if (socialTwitter !== undefined) updateData.socialTwitter = socialTwitter.trim();
+      if (availableInLocation !== undefined) updateData.availableInLocation = availableInLocation.trim();
+      if (aboutUsText !== undefined) updateData.aboutUsText = aboutUsText.trim();
+      if (typeof isStoreOpen === "boolean") updateData.isStoreOpen = isStoreOpen;
+      if (typeof minOrderCents === "number") updateData.minOrderCents = Math.max(0, minOrderCents);
+      if (typeof isCodEnabled === "boolean") updateData.isCodEnabled = isCodEnabled;
+      if (typeof flatDeliveryFeeCents === "number") updateData.flatDeliveryFeeCents = Math.max(0, flatDeliveryFeeCents);
+      if (typeof freeDeliveryThresholdCents === "number") updateData.freeDeliveryThresholdCents = Math.max(0, freeDeliveryThresholdCents);
+      if (typeof packagingFeeCents === "number") updateData.packagingFeeCents = Math.max(0, packagingFeeCents);
+
+      await db.update(shopSettingsTable).set(updateData).where(eq(shopSettingsTable.id, "default_shop"));
+      clearTransporterCache();
+
+      // Log structured security audit event
+      logAuditEvent(req, {
+        action: "SHOP_SETTINGS_UPDATED",
+        resource: "shop_settings",
+        resourceId: "default_shop",
+        status: "SUCCESS",
+        details: {
+          updatedFields: Object.keys(updateData).filter(
+            (k) => !k.toLowerCase().includes("secret") && !k.toLowerCase().includes("pass") && !k.toLowerCase().includes("token")
+          ),
+        },
+      });
+
+      const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+      res.json({ success: true, settings: sanitizeShopSettings(updated) });
+    } catch (err: unknown) {
+      req.log.error({ err }, "Failed to update shop settings");
+      res.status(500).json({ error: "Failed to update shop settings." });
+    }
   }
-});
+);
 
-router.post("/v1/admin/test-email", async (req, res): Promise<void> => {
+router.post("/v1/admin/test-email", requirePermission("settings"), async (req, res): Promise<void> => {
   const { toEmail, provider } = req.body;
   if (!toEmail || typeof toEmail !== "string" || !toEmail.includes("@")) {
     res.status(400).json({ error: "Valid recipient email address is required." });
@@ -650,13 +778,14 @@ router.post("/v1/admin/test-email", async (req, res): Promise<void> => {
 // The operations console reads ALL customers' orders here; the customer-facing
 // /v1/checkout/orders route is scoped to the signed-in user only.
 
-router.get("/v1/admin/orders", async (req, res): Promise<void> => {
+router.get("/v1/admin/orders", requirePermission("orders"), async (req, res): Promise<void> => {
   try {
-    const allOrders = await db.select().from(ordersTable);
-    res.json(filterOrders(allOrders, req.query));
+    const orders = await db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt));
+    const filtered = filterOrders(orders, req.query);
+    res.json(filtered);
   } catch (err: unknown) {
-    req.log.error({ err }, "Error listing admin orders");
-    res.status(500).json({ error: "Failed to load order ledger." });
+    req.log.error({ err }, "Failed to list admin orders");
+    res.status(500).json({ error: "Failed to list orders." });
   }
 });
 
@@ -678,7 +807,7 @@ router.get("/v1/admin/orders/stats", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/v1/admin/orders/:id/cancel", async (req, res): Promise<void> => {
+router.post("/v1/admin/orders/:id/cancel", requirePermission("orders"), async (req, res): Promise<void> => {
   const id = req.params.id as string;
   try {
     const found = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
@@ -691,6 +820,15 @@ router.post("/v1/admin/orders/:id/cancel", async (req, res): Promise<void> => {
       return;
     }
     await db.update(ordersTable).set({ status: "cancelled", updatedAt: new Date() }).where(eq(ordersTable.id, id));
+
+    logAuditEvent(req, {
+      action: "ORDER_CANCELLED_BY_ADMIN",
+      resource: "orders",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { previousStatus: found[0].status },
+    });
+
     res.json({ success: true, orderId: id, status: "cancelled", message: "Order has been cancelled." });
   } catch (err: unknown) {
     req.log.error({ err }, "Error cancelling order (admin)");
