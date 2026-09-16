@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, ilike, lt } from "drizzle-orm";
 import { db, discountsTable, ordersTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable } from "@workspace/db";
+import { seedStoreData } from "../lib/seed";
 import {
   CreateDiscountBody,
   CreateDiscountResponse,

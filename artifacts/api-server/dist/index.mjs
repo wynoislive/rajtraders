@@ -124191,6 +124191,156 @@ async function ensureDbReady() {
 ensureDbReady().catch((e) => console.warn("ensureDbReady startup error:", e));
 var db = dbInstance;
 
+// artifacts/api-server/src/lib/logger.ts
+var import_pino = __toESM(require_pino(), 1);
+var logger2 = (0, import_pino.default)({
+  level: process.env.LOG_LEVEL ?? "info",
+  redact: [
+    "req.headers.authorization",
+    "req.headers.cookie",
+    "res.headers['set-cookie']"
+  ]
+});
+
+// artifacts/api-server/src/lib/seed.ts
+async function seedStoreData() {
+  const [existingProduct] = await db.select({ id: productsTable.id }).from(productsTable).limit(1);
+  if (existingProduct) return;
+  await db.insert(productsTable).values([
+    {
+      id: "prod_cake_belgian_choco",
+      name: "Belgian Chocolate Truffle Cake (1kg)",
+      slug: "belgian-chocolate-truffle-cake",
+      description: "Rich 55% dark Belgian chocolate truffle cake decorated with edible gold leaf and cocoa nibs. Perfect for birthdays & anniversaries.",
+      priceCents: 129900,
+      compareAtPriceCents: 149900,
+      category: "Cakes",
+      imageUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80",
+      status: "active",
+      featured: true,
+      inventory: 25,
+      prepTimeMinutes: 45,
+      isBestseller: true,
+      isVeg: true,
+      approvalStatus: "approved"
+    },
+    {
+      id: "prod_cake_strawberry_bliss",
+      name: "Fresh Strawberry Cream Cake (1kg)",
+      slug: "fresh-strawberry-cream-cake",
+      description: "Fresh Mahabaleshwar strawberries layered with vanilla sponge and light whipping cream.",
+      priceCents: 109900,
+      compareAtPriceCents: 129900,
+      category: "Cakes",
+      imageUrl: "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=800&q=80",
+      status: "active",
+      featured: true,
+      inventory: 18,
+      prepTimeMinutes: 30,
+      isBestseller: true,
+      isVeg: true,
+      approvalStatus: "approved"
+    },
+    {
+      id: "prod_party_balloon_arch",
+      name: "Metallic Gold & Pastel Balloon Arch Set (100 Pcs)",
+      slug: "metallic-gold-pastel-balloon-arch",
+      description: "Complete DIY birthday & wedding balloon garland kit including arch tape, glue dots, and 100 thick latex balloons.",
+      priceCents: 49900,
+      compareAtPriceCents: 79900,
+      category: "Decorations",
+      imageUrl: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=800&q=80",
+      status: "active",
+      featured: true,
+      inventory: 50,
+      prepTimeMinutes: 15,
+      isBestseller: true,
+      isVeg: true,
+      approvalStatus: "approved"
+    },
+    {
+      id: "prod_decor_led_fairylights",
+      name: "Warm White LED Curtain Fairy Lights (10x10 Ft)",
+      slug: "warm-white-led-curtain-fairy-lights",
+      description: "Waterproof 300 LED string curtain lights with 8 flashing modes for wedding backdrop and party decor.",
+      priceCents: 69900,
+      compareAtPriceCents: 99900,
+      category: "Decorations",
+      imageUrl: "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=800&q=80",
+      status: "active",
+      featured: false,
+      inventory: 40,
+      prepTimeMinutes: 10,
+      isBestseller: false,
+      isVeg: true,
+      approvalStatus: "approved"
+    },
+    {
+      id: "prod_cake_custom_wedding",
+      name: "3-Tier Floral Wedding Fondant Cake (3kg)",
+      slug: "3-tier-floral-wedding-fondant-cake",
+      description: "Custom handcrafted 3-tier wedding cake with sugar roses, red velvet tiers, and vanilla bean buttercream.",
+      priceCents: 449900,
+      compareAtPriceCents: 499900,
+      category: "Cakes",
+      imageUrl: "https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=800&q=80",
+      status: "active",
+      featured: true,
+      inventory: 10,
+      prepTimeMinutes: 120,
+      isBestseller: false,
+      isVeg: true,
+      approvalStatus: "approved"
+    },
+    {
+      id: "prod_party_banner_hbd",
+      name: "Acrylic Glitter Happy Birthday Cake Topper & Banner Combo",
+      slug: "acrylic-glitter-happy-birthday-banner-combo",
+      description: "Rose gold mirror finish acrylic cake topper with matching foil bunting banner.",
+      priceCents: 29900,
+      compareAtPriceCents: 49900,
+      category: "Decorations",
+      imageUrl: "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=800&q=80",
+      status: "active",
+      featured: false,
+      inventory: 75,
+      prepTimeMinutes: 5,
+      isBestseller: true,
+      isVeg: true,
+      approvalStatus: "approved"
+    }
+  ]);
+  await db.insert(discountsTable).values([
+    {
+      code: "WELCOME10",
+      type: "percentage",
+      value: 10,
+      minimumSubtotalCents: 2500,
+      usageLimit: 500,
+      active: true,
+      firstOrderOnly: true
+    },
+    {
+      code: "PARTY15",
+      type: "fixed",
+      value: 1500,
+      minimumSubtotalCents: 9e3,
+      usageLimit: 100,
+      active: true,
+      firstOrderOnly: false
+    }
+  ]);
+  await db.insert(registrationPoliciesTable).values({
+    name: "First Order Welcome Offer",
+    description: "Give first-time celebration shoppers 10% off their first cake or decor purchase.",
+    offerCode: "WELCOME10",
+    active: true,
+    windowDays: 14,
+    registrationsCount: 0
+  });
+  logger2.info("Seeded celebration cakes, decorations, discounts, and registration policy");
+}
+
 // artifacts/api-server/src/utils/discounts.ts
 function computeDiscount(discount, subtotalCents, isFirstOrder, now = Date.now()) {
   const valid = Boolean(
@@ -124231,7 +124381,11 @@ router2.get("/v1/products", async (req, res) => {
       ...category ? [eq(productsTable.category, category)] : [],
       ...search ? [or(ilike(productsTable.name, `%${search}%`), ilike(productsTable.description, `%${search}%`))] : []
     ];
-    const products = await db.select().from(productsTable).where(and(...conditions)).orderBy(asc(productsTable.featured), asc(productsTable.createdAt));
+    let products = await db.select().from(productsTable).where(and(...conditions)).orderBy(asc(productsTable.featured), asc(productsTable.createdAt));
+    if (products.length === 0 && !search && !category) {
+      await seedStoreData();
+      products = await db.select().from(productsTable).where(and(...conditions)).orderBy(asc(productsTable.featured), asc(productsTable.createdAt));
+    }
     res.json(ListProductsResponse.parse(products.map(productResponse)));
   } catch (err) {
     try {
@@ -124489,19 +124643,6 @@ var import_express5 = __toESM(require_express2(), 1);
 
 // artifacts/api-server/src/lib/redis.ts
 var import_ioredis = __toESM(require_built3(), 1);
-
-// artifacts/api-server/src/lib/logger.ts
-var import_pino = __toESM(require_pino(), 1);
-var logger2 = (0, import_pino.default)({
-  level: process.env.LOG_LEVEL ?? "info",
-  redact: [
-    "req.headers.authorization",
-    "req.headers.cookie",
-    "res.headers['set-cookie']"
-  ]
-});
-
-// artifacts/api-server/src/lib/redis.ts
 var redisInstance = null;
 function getRedisClient() {
   if (redisInstance) return redisInstance;
@@ -131241,145 +131382,6 @@ app.get("/", (_req, res) => {
 app.use("/api", routes_default);
 app.use(globalErrorHandler);
 var app_default = app;
-
-// artifacts/api-server/src/lib/seed.ts
-async function seedStoreData() {
-  const [existingProduct] = await db.select({ id: productsTable.id }).from(productsTable).limit(1);
-  if (existingProduct) return;
-  await db.insert(productsTable).values([
-    {
-      id: "prod_cake_belgian_choco",
-      name: "Belgian Chocolate Truffle Cake (1kg)",
-      slug: "belgian-chocolate-truffle-cake",
-      description: "Rich 55% dark Belgian chocolate truffle cake decorated with edible gold leaf and cocoa nibs. Perfect for birthdays & anniversaries.",
-      priceCents: 129900,
-      compareAtPriceCents: 149900,
-      category: "Cakes",
-      imageUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80",
-      status: "active",
-      featured: true,
-      inventory: 25,
-      prepTimeMinutes: 45,
-      isBestseller: true,
-      isVeg: true,
-      approvalStatus: "approved"
-    },
-    {
-      id: "prod_cake_strawberry_bliss",
-      name: "Fresh Strawberry Cream Cake (1kg)",
-      slug: "fresh-strawberry-cream-cake",
-      description: "Fresh Mahabaleshwar strawberries layered with vanilla sponge and light whipping cream.",
-      priceCents: 109900,
-      compareAtPriceCents: 129900,
-      category: "Cakes",
-      imageUrl: "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=800&q=80",
-      status: "active",
-      featured: true,
-      inventory: 18,
-      prepTimeMinutes: 30,
-      isBestseller: true,
-      isVeg: true,
-      approvalStatus: "approved"
-    },
-    {
-      id: "prod_party_balloon_arch",
-      name: "Metallic Gold & Pastel Balloon Arch Set (100 Pcs)",
-      slug: "metallic-gold-pastel-balloon-arch",
-      description: "Complete DIY birthday & wedding balloon garland kit including arch tape, glue dots, and 100 thick latex balloons.",
-      priceCents: 49900,
-      compareAtPriceCents: 79900,
-      category: "Decorations",
-      imageUrl: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=800&q=80",
-      status: "active",
-      featured: true,
-      inventory: 50,
-      prepTimeMinutes: 15,
-      isBestseller: true,
-      isVeg: true,
-      approvalStatus: "approved"
-    },
-    {
-      id: "prod_decor_led_fairylights",
-      name: "Warm White LED Curtain Fairy Lights (10x10 Ft)",
-      slug: "warm-white-led-curtain-fairy-lights",
-      description: "Waterproof 300 LED string curtain lights with 8 flashing modes for wedding backdrop and party decor.",
-      priceCents: 69900,
-      compareAtPriceCents: 99900,
-      category: "Decorations",
-      imageUrl: "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=800&q=80",
-      status: "active",
-      featured: false,
-      inventory: 40,
-      prepTimeMinutes: 10,
-      isBestseller: false,
-      isVeg: true,
-      approvalStatus: "approved"
-    },
-    {
-      id: "prod_cake_custom_wedding",
-      name: "3-Tier Floral Wedding Fondant Cake (3kg)",
-      slug: "3-tier-floral-wedding-fondant-cake",
-      description: "Custom handcrafted 3-tier wedding cake with sugar roses, red velvet tiers, and vanilla bean buttercream.",
-      priceCents: 449900,
-      compareAtPriceCents: 499900,
-      category: "Cakes",
-      imageUrl: "https://images.unsplash.com/photo-1535141192574-5d4897c13136?auto=format&fit=crop&w=800&q=80",
-      status: "active",
-      featured: true,
-      inventory: 10,
-      prepTimeMinutes: 120,
-      isBestseller: false,
-      isVeg: true,
-      approvalStatus: "approved"
-    },
-    {
-      id: "prod_party_banner_hbd",
-      name: "Acrylic Glitter Happy Birthday Cake Topper & Banner Combo",
-      slug: "acrylic-glitter-happy-birthday-banner-combo",
-      description: "Rose gold mirror finish acrylic cake topper with matching foil bunting banner.",
-      priceCents: 29900,
-      compareAtPriceCents: 49900,
-      category: "Decorations",
-      imageUrl: "https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=800&q=80",
-      status: "active",
-      featured: false,
-      inventory: 75,
-      prepTimeMinutes: 5,
-      isBestseller: true,
-      isVeg: true,
-      approvalStatus: "approved"
-    }
-  ]);
-  await db.insert(discountsTable).values([
-    {
-      code: "WELCOME10",
-      type: "percentage",
-      value: 10,
-      minimumSubtotalCents: 2500,
-      usageLimit: 500,
-      active: true,
-      firstOrderOnly: true
-    },
-    {
-      code: "PARTY15",
-      type: "fixed",
-      value: 1500,
-      minimumSubtotalCents: 9e3,
-      usageLimit: 100,
-      active: true,
-      firstOrderOnly: false
-    }
-  ]);
-  await db.insert(registrationPoliciesTable).values({
-    name: "First Order Welcome Offer",
-    description: "Give first-time celebration shoppers 10% off their first cake or decor purchase.",
-    offerCode: "WELCOME10",
-    active: true,
-    windowDays: 14,
-    registrationsCount: 0
-  });
-  logger2.info("Seeded celebration cakes, decorations, discounts, and registration policy");
-}
 
 // artifacts/api-server/src/index.ts
 var rawPort = process.env["PORT"];

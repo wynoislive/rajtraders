@@ -255,17 +255,68 @@ export default function App() {
   const [products, setProducts] = useState<any[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
 
+  const fallbackCelebrationProducts = useMemo(() => [
+    {
+      id: "prod_cake_belgian_choco",
+      name: "Belgian Chocolate Truffle Cake (1kg)",
+      slug: "belgian-chocolate-truffle-cake",
+      description: "Rich 55% dark Belgian chocolate truffle cake decorated with edible gold leaf and cocoa nibs.",
+      priceCents: 129900,
+      compareAtPriceCents: 149900,
+      category: "Bakery",
+      imageUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80",
+      status: "active",
+      featured: true,
+      inventory: 25,
+      prepTimeMinutes: 45,
+      isBestseller: true,
+      isVeg: true,
+    },
+    {
+      id: "prod_cake_strawberry_bliss",
+      name: "Fresh Strawberry Cream Cake (1kg)",
+      slug: "fresh-strawberry-cream-cake",
+      description: "Fresh Mahabaleshwar strawberries layered with vanilla sponge and light whipping cream.",
+      priceCents: 109900,
+      compareAtPriceCents: 129900,
+      category: "Bakery",
+      imageUrl: "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=800&q=80",
+      status: "active",
+      featured: true,
+      inventory: 18,
+      prepTimeMinutes: 30,
+      isBestseller: true,
+      isVeg: true,
+    },
+    {
+      id: "prod_party_balloon_arch",
+      name: "Metallic Gold & Pastel Balloon Arch Set (100 Pcs)",
+      slug: "metallic-gold-pastel-balloon-arch",
+      description: "Complete DIY birthday & wedding balloon garland kit including arch tape and glue dots.",
+      priceCents: 49900,
+      compareAtPriceCents: 79900,
+      category: "Home",
+      imageUrl: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=800&q=80",
+      status: "active",
+      featured: true,
+      inventory: 50,
+      prepTimeMinutes: 15,
+      isBestseller: true,
+      isVeg: true,
+    },
+  ], []);
+
   // Initial Fetch of Products
   useEffect(() => {
     fetch(getApiUrl('/api/v1/products'))
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
-        if (Array.isArray(data)) setProducts(data);
-        else setProducts([]);
+        if (Array.isArray(data) && data.length > 0) setProducts(data);
+        else setProducts(fallbackCelebrationProducts);
       })
-      .catch(() => setProducts([]))
+      .catch(() => setProducts(fallbackCelebrationProducts))
       .finally(() => setProductsLoading(false));
-  }, []);
+  }, [fallbackCelebrationProducts]);
 
   const currentProduct = useMemo(() => {
     if (!params?.slug) return null;

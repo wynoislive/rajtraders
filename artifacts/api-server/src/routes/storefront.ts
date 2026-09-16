@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, asc, eq, ilike, or, ne } from "drizzle-orm";
 import { db, discountsTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable } from "@workspace/db";
+import { seedStoreData } from "../lib/seed";
 import {
   CheckRegistrationEligibilityBody,
   CheckRegistrationEligibilityResponse,
@@ -46,11 +47,21 @@ router.get("/v1/products", async (req, res): Promise<void> => {
         ? [or(ilike(productsTable.name, `%${search}%`), ilike(productsTable.description, `%${search}%`))]
         : []),
     ];
-    const products = await db
+    let products = await db
       .select()
       .from(productsTable)
       .where(and(...conditions))
       .orderBy(asc(productsTable.featured), asc(productsTable.createdAt));
+
+    if (products.length === 0 && !search && !category) {
+      await seedStoreData();
+      products = await db
+        .select()
+        .from(productsTable)
+        .where(and(...conditions))
+        .orderBy(asc(productsTable.featured), asc(productsTable.createdAt));
+    }
+
     res.json(ListProductsResponse.parse(products.map(productResponse)));
   } catch (err) {
     try {

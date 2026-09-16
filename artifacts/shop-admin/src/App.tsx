@@ -613,7 +613,9 @@ function Products() {
     },
   ], []);
 
-  const rawProductsList = adminProducts.data ?? (adminProducts.isError ? defaultProductsList : []);
+  const rawProductsList = (adminProducts.data && adminProducts.data.length > 0)
+    ? adminProducts.data
+    : defaultProductsList;
   const trashCount = rawProductsList.filter((item: any) => item.status === 'archived').length;
 
   const products = useMemo(
