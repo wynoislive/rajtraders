@@ -123482,11 +123482,11 @@ __export(schema_exports, {
 });
 
 // lib/db/src/schema/products.ts
-import { randomUUID } from "node:crypto";
+import { randomUUID as randomUUID2 } from "node:crypto";
 var productsTable = pgTable(
   "products",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID),
+    id: text("id").primaryKey().$defaultFn(randomUUID2),
     name: text("name").notNull(),
     slug: text("slug").notNull().unique(),
     description: text("description").notNull(),
@@ -123517,9 +123517,9 @@ var productsTable = pgTable(
 );
 
 // lib/db/src/schema/discounts.ts
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID as randomUUID3 } from "node:crypto";
 var discountsTable = pgTable("discounts", {
-  id: text("id").primaryKey().$defaultFn(randomUUID2),
+  id: text("id").primaryKey().$defaultFn(randomUUID3),
   code: text("code").notNull().unique(),
   type: text("type").notNull().default("percentage"),
   value: real("value").notNull(),
@@ -123533,9 +123533,9 @@ var discountsTable = pgTable("discounts", {
 });
 
 // lib/db/src/schema/registrations.ts
-import { randomUUID as randomUUID3 } from "node:crypto";
+import { randomUUID as randomUUID4 } from "node:crypto";
 var registrationPoliciesTable = pgTable("registration_policies", {
-  id: text("id").primaryKey().$defaultFn(randomUUID3),
+  id: text("id").primaryKey().$defaultFn(randomUUID4),
   name: text("name").notNull(),
   description: text("description").notNull(),
   offerCode: text("offer_code").notNull(),
@@ -123546,20 +123546,20 @@ var registrationPoliciesTable = pgTable("registration_policies", {
 });
 
 // lib/db/src/schema/registration-claims.ts
-import { randomUUID as randomUUID4 } from "node:crypto";
+import { randomUUID as randomUUID5 } from "node:crypto";
 var registrationClaimsTable = pgTable("registration_claims", {
-  id: text("id").primaryKey().$defaultFn(randomUUID4),
+  id: text("id").primaryKey().$defaultFn(randomUUID5),
   email: text("email").notNull().unique(),
   policyId: text("policy_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
 // lib/db/src/schema/orders.ts
-import { randomUUID as randomUUID5 } from "node:crypto";
+import { randomUUID as randomUUID6 } from "node:crypto";
 var ordersTable = pgTable(
   "orders",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID5),
+    id: text("id").primaryKey().$defaultFn(randomUUID6),
     idempotencyKey: text("idempotency_key").notNull().unique(),
     razorpayOrderId: text("razorpay_order_id").notNull().unique(),
     razorpayPaymentId: text("razorpay_payment_id"),
@@ -123589,9 +123589,9 @@ var ordersTable = pgTable(
 );
 
 // lib/db/src/schema/users.ts
-import { randomUUID as randomUUID6 } from "node:crypto";
+import { randomUUID as randomUUID7 } from "node:crypto";
 var usersTable = pgTable("users", {
-  id: text("id").primaryKey().$defaultFn(randomUUID6),
+  id: text("id").primaryKey().$defaultFn(randomUUID7),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   mobileNumber: text("mobile_number").notNull().unique(),
@@ -123659,10 +123659,10 @@ var shopSettingsTable = pgTable("shop_settings", {
 });
 
 // lib/db/src/schema/admin-users.ts
-import { randomUUID as randomUUID7 } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 var adminRoles = ["MAIN_ADMIN", "ADMIN", "SUB_ADMIN", "MODERATOR"];
 var adminUsersTable = pgTable("admin_users", {
-  id: text("id").primaryKey().$defaultFn(randomUUID7),
+  id: text("id").primaryKey().$defaultFn(randomUUID8),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
@@ -123677,11 +123677,11 @@ var adminUsersTable = pgTable("admin_users", {
 });
 
 // lib/db/src/schema/security-compliance.ts
-import { randomUUID as randomUUID8 } from "node:crypto";
+import { randomUUID as randomUUID9 } from "node:crypto";
 var deletedAccountsLogTable = pgTable(
   "deleted_accounts_log",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID8),
+    id: text("id").primaryKey().$defaultFn(randomUUID9),
     email: text("email").notNull(),
     mobileNumber: text("mobile_number").notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
@@ -123695,7 +123695,7 @@ var deletedAccountsLogTable = pgTable(
 var passwordResetsTable = pgTable(
   "password_resets",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID8),
+    id: text("id").primaryKey().$defaultFn(randomUUID9),
     userId: text("user_id").notNull(),
     email: text("email").notNull(),
     tokenHash: text("token_hash").notNull(),
@@ -123710,7 +123710,7 @@ var passwordResetsTable = pgTable(
   ]
 );
 var passwordLockoutsTable = pgTable("password_lockouts", {
-  id: text("id").primaryKey().$defaultFn(randomUUID8),
+  id: text("id").primaryKey().$defaultFn(randomUUID9),
   email: text("email").notNull().unique(),
   lockedUntil: timestamp("locked_until", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
@@ -123718,7 +123718,7 @@ var passwordLockoutsTable = pgTable("password_lockouts", {
 var emailVerificationsTable = pgTable(
   "email_verifications",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID8),
+    id: text("id").primaryKey().$defaultFn(randomUUID9),
     userId: text("user_id").notNull(),
     email: text("email").notNull(),
     otpCode: text("otp_code").notNull(),
@@ -123735,11 +123735,11 @@ var emailVerificationsTable = pgTable(
 );
 
 // lib/db/src/schema/totp-secrets.ts
-import { randomUUID as randomUUID9 } from "node:crypto";
+import { randomUUID as randomUUID10 } from "node:crypto";
 var totpSecretsTable = pgTable(
   "totp_secrets",
   {
-    id: text("id").primaryKey().$defaultFn(() => randomUUID9()),
+    id: text("id").primaryKey().$defaultFn(() => randomUUID10()),
     userId: text("user_id").notNull(),
     encryptedSecret: text("encrypted_secret").notNull(),
     isEnabled: boolean("is_enabled").notNull().default(false),
@@ -123754,11 +123754,11 @@ var totpSecretsTable = pgTable(
 );
 
 // lib/db/src/schema/customer-addresses.ts
-import { randomUUID as randomUUID10 } from "node:crypto";
+import { randomUUID as randomUUID11 } from "node:crypto";
 var customerAddressesTable = pgTable(
   "customer_addresses",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID10),
+    id: text("id").primaryKey().$defaultFn(randomUUID11),
     userId: text("user_id").notNull(),
     label: text("label").notNull().default("Home"),
     // Home, Work, Other
@@ -123782,11 +123782,11 @@ var customerAddressesTable = pgTable(
 );
 
 // lib/db/src/schema/customer-favorites.ts
-import { randomUUID as randomUUID11 } from "node:crypto";
+import { randomUUID as randomUUID12 } from "node:crypto";
 var customerFavoritesTable = pgTable(
   "customer_favorites",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID11),
+    id: text("id").primaryKey().$defaultFn(randomUUID12),
     userId: text("user_id").notNull(),
     productId: text("product_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
@@ -123798,11 +123798,11 @@ var customerFavoritesTable = pgTable(
 );
 
 // lib/db/src/schema/customer-notifications.ts
-import { randomUUID as randomUUID12 } from "node:crypto";
+import { randomUUID as randomUUID13 } from "node:crypto";
 var customerNotificationsTable = pgTable(
   "customer_notifications",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID12),
+    id: text("id").primaryKey().$defaultFn(randomUUID13),
     userId: text("user_id").notNull(),
     title: text("title").notNull(),
     message: text("message").notNull(),
@@ -124657,7 +124657,7 @@ var requireAdmin = async (req, res, next) => {
 
 // artifacts/api-server/src/routes/staff-admin.ts
 var import_express4 = __toESM(require_express2(), 1);
-import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID14 } from "node:crypto";
 
 // artifacts/api-server/src/middlewares/validate.ts
 function validate(schemas) {
@@ -126442,7 +126442,7 @@ router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodyS
       res.status(401).json({ error: "Invalid staff email or password." });
       return;
     }
-    const token = `staff_${randomUUID13().replace(/-/g, "")}`;
+    const token = `staff_${randomUUID14().replace(/-/g, "")}`;
     const session = {
       userId: staff.id,
       name: staff.name,
@@ -126514,7 +126514,7 @@ router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req, re
       const parsed = new Date(expiresAtDate);
       if (!isNaN(parsed.getTime())) expirationDate = parsed;
     }
-    const id = randomUUID13();
+    const id = randomUUID14();
     const passwordHash = hashPassword(password);
     await db.insert(adminUsersTable).values({
       id,
@@ -127099,22 +127099,29 @@ router4.get("/v1/admin/products", async (req, res) => {
 router4.post("/v1/admin/products", async (req, res) => {
   const staff = await getStaffFromToken(req.headers.authorization);
   const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
-  if (!name || !description || priceCents === void 0 || !category || !imageUrl) {
-    res.status(400).json({ error: "Missing required product fields (name, description, priceCents, category, imageUrl)." });
+  const cleanName = (name || "").trim();
+  if (!cleanName) {
+    res.status(400).json({ error: "Product name is required." });
     return;
   }
+  const cleanCategory = (category || "").trim() || "Cakes & Desserts";
+  const cleanDescription = (description || "").trim() || "Handcrafted celebration item for your special event.";
+  const cleanImageUrl = (imageUrl || "").trim() || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80";
+  const parsedPrice = priceCents !== void 0 ? Math.max(0, Math.round(Number(priceCents))) : 5e3;
   const isSubAdminOrMod = staff && (staff.role === "SUB_ADMIN" || staff.role === "MODERATOR");
   const approvalStatus = isSubAdminOrMod ? "pending_approval" : "approved";
   const initialStatus = isSubAdminOrMod ? "draft" : status ?? "active";
+  const baseSlug = slugify(cleanName) || "product";
+  const uniqueSlug = `${baseSlug}-${randomUUID().substring(0, 6)}`;
   try {
     const [created] = await db.insert(productsTable).values({
-      name: name.trim(),
-      slug: slugify(name),
-      description: description.trim(),
-      priceCents: Math.round(Number(priceCents)),
+      name: cleanName,
+      slug: uniqueSlug,
+      description: cleanDescription,
+      priceCents: parsedPrice,
       compareAtPriceCents: compareAtPriceCents == null ? null : Math.round(Number(compareAtPriceCents)),
-      category: category.trim(),
-      imageUrl: imageUrl.trim(),
+      category: cleanCategory,
+      imageUrl: cleanImageUrl,
       status: initialStatus,
       featured: Boolean(featured),
       inventory: Math.max(0, Math.round(Number(inventory || 0))),
@@ -127127,27 +127134,8 @@ router4.post("/v1/admin/products", async (req, res) => {
     }).returning();
     res.status(201).json(productResponse2(created));
   } catch (err) {
-    res.status(201).json({
-      id: `prod_${Date.now()}`,
-      name: name.trim(),
-      slug: slugify(name),
-      description: description.trim(),
-      priceCents: Math.round(Number(priceCents)),
-      compareAtPriceCents: compareAtPriceCents == null ? null : Math.round(Number(compareAtPriceCents)),
-      category: category.trim(),
-      imageUrl: imageUrl.trim(),
-      status: initialStatus,
-      featured: Boolean(featured),
-      inventory: Math.max(0, Math.round(Number(inventory || 0))),
-      prepTimeMinutes: Math.max(1, Math.round(Number(prepTimeMinutes || 30))),
-      isBestseller: Boolean(isBestseller),
-      isVeg: isVeg !== false,
-      approvalStatus,
-      submittedBy: staff?.userId || null,
-      approvedBy: !isSubAdminOrMod ? staff?.userId || "main_admin_01" : null,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
+    console.error("Product creation DB insert failed:", err);
+    res.status(500).json({ error: "Failed to create product in database: " + (err.message || String(err)) });
   }
 });
 var handleUpdateProduct = async (req, res) => {
@@ -127562,7 +127550,7 @@ var admin_default = router4;
 
 // artifacts/api-server/src/routes/checkout.ts
 var import_express7 = __toESM(require_express2(), 1);
-import { createHmac as createHmac2, randomUUID as randomUUID15 } from "node:crypto";
+import { createHmac as createHmac2, randomUUID as randomUUID16 } from "node:crypto";
 
 // artifacts/api-server/src/utils/geo.ts
 function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -127577,7 +127565,7 @@ function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
 
 // artifacts/api-server/src/routes/customer-auth.ts
 var import_express6 = __toESM(require_express2(), 1);
-import { randomBytes as randomBytes5, scryptSync as scryptSync3, timingSafeEqual as timingSafeEqual5, randomUUID as randomUUID14, createHash as createHash2, randomInt as randomInt2 } from "node:crypto";
+import { randomBytes as randomBytes5, scryptSync as scryptSync3, timingSafeEqual as timingSafeEqual5, randomUUID as randomUUID15, createHash as createHash2, randomInt as randomInt2 } from "node:crypto";
 
 // artifacts/api-server/src/lib/totp.ts
 import { createCipheriv, createDecipheriv, randomBytes as randomBytes4, scryptSync as scryptSync2, timingSafeEqual as timingSafeEqual4, randomInt } from "node:crypto";
@@ -128397,7 +128385,7 @@ var SESSION_TTL_MS = securityConfig.sessionTtlMs;
 var SESSION_TTL_SECONDS = securityConfig.sessionTtlSeconds;
 var fallbackSessionStore = /* @__PURE__ */ new Map();
 async function createSession(userId) {
-  const token = `auth_${randomUUID14().replace(/-/g, "")}`;
+  const token = `auth_${randomUUID15().replace(/-/g, "")}`;
   const session = { userId, expiresAt: Date.now() + SESSION_TTL_MS };
   const redis = getRedisClient();
   if (redis) {
@@ -128465,7 +128453,7 @@ async function issueVerificationOtp(req, res, user, cleanEmail, extra) {
   const otpCode = randomInt2(1e5, 999999).toString();
   const expiresAt = new Date(Date.now() + OTP_VALIDITY_MS);
   await db.insert(emailVerificationsTable).values({
-    id: randomUUID14(),
+    id: randomUUID15(),
     userId: user.id,
     email: cleanEmail,
     otpCode,
@@ -128509,7 +128497,7 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
     const now = /* @__PURE__ */ new Date();
     const deletedLogs = await db.select().from(deletedAccountsLogTable).where(and(eq(deletedAccountsLogTable.email, cleanEmail), gt(deletedAccountsLogTable.penaltyExpiresAt, now))).limit(1);
     let hasLockdownPenalty = deletedLogs.length > 0;
-    const userId = randomUUID14();
+    const userId = randomUUID15();
     const passwordHash = hashPassword2(password);
     await db.transaction(async (tx) => {
       await tx.insert(usersTable).values({
@@ -128521,7 +128509,7 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
         passwordHash
       });
       if (hasLockdownPenalty) {
-        await tx.insert(registrationClaimsTable).values({ id: randomUUID14(), email: cleanEmail, policyId: "forfeited_due_to_deletion_penalty" }).onConflictDoNothing({ target: registrationClaimsTable.email });
+        await tx.insert(registrationClaimsTable).values({ id: randomUUID15(), email: cleanEmail, policyId: "forfeited_due_to_deletion_penalty" }).onConflictDoNothing({ target: registrationClaimsTable.email });
         req.log.warn({ cleanEmail }, "User re-registered within 15-day deletion penalty; welcome offers forfeited.");
       }
     });
@@ -128731,7 +128719,7 @@ router5.delete("/delete-account", async (req, res) => {
     const user = foundUsers[0];
     const deletedAt = /* @__PURE__ */ new Date();
     const penaltyExpiresAt = new Date(deletedAt.getTime() + 15 * 24 * 60 * 60 * 1e3);
-    await db.insert(deletedAccountsLogTable).values({ id: randomUUID14(), email: user.email, mobileNumber: user.mobileNumber, deletedAt, penaltyExpiresAt });
+    await db.insert(deletedAccountsLogTable).values({ id: randomUUID15(), email: user.email, mobileNumber: user.mobileNumber, deletedAt, penaltyExpiresAt });
     await db.delete(usersTable).where(eq(usersTable.id, userId));
     await db.delete(totpSecretsTable).where(eq(totpSecretsTable.userId, userId));
     await deleteSession(req.headers.authorization);
@@ -128765,7 +128753,7 @@ router5.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPasswor
     const tokenHash = createHash2("sha256").update(rawToken).digest("hex");
     const now = Date.now();
     const expiresAt = new Date(now + 60 * 60 * 1e3);
-    await db.insert(passwordResetsTable).values({ id: randomUUID14(), userId: user.id, email: cleanEmail, tokenHash, expiresAt });
+    await db.insert(passwordResetsTable).values({ id: randomUUID15(), userId: user.id, email: cleanEmail, tokenHash, expiresAt });
     const shopSettings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const shopDomain = shopSettings?.shopDomain || "myshop.com";
     const resetUrl = `https://${shopDomain}/reset-password?token=${rawToken}&email=${encodeURIComponent(cleanEmail)}`;
@@ -128797,7 +128785,7 @@ router5.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordB
     await db.update(usersTable).set({ passwordHash: newPasswordHash, updatedAt: now }).where(eq(usersTable.id, resetRecord.userId));
     await db.update(passwordResetsTable).set({ usedAt: now }).where(eq(passwordResetsTable.id, resetRecord.id));
     const lockoutUntil = new Date(now.getTime() + 15 * 60 * 1e3);
-    await db.insert(passwordLockoutsTable).values({ id: randomUUID14(), email: cleanEmail, lockedUntil: lockoutUntil }).onConflictDoUpdate({ target: passwordLockoutsTable.email, set: { lockedUntil: lockoutUntil } });
+    await db.insert(passwordLockoutsTable).values({ id: randomUUID15(), email: cleanEmail, lockedUntil: lockoutUntil }).onConflictDoUpdate({ target: passwordLockoutsTable.email, set: { lockedUntil: lockoutUntil } });
     req.log.info({ email: cleanEmail }, "Password successfully reset; 15-min lockout enacted");
     res.status(200).json({ success: true, message: "Password reset successful! You may now sign in with your new password." });
   } catch (err) {
@@ -128829,7 +128817,7 @@ router5.post("/totp/setup", async (req, res) => {
       await db.delete(totpSecretsTable).where(eq(totpSecretsTable.userId, userId));
     }
     await db.insert(totpSecretsTable).values({
-      id: randomUUID14(),
+      id: randomUUID15(),
       userId,
       encryptedSecret: encrypted,
       isEnabled: false,
@@ -129415,7 +129403,7 @@ router6.post("/create-order", async (req, res) => {
       }
     }
     const totalCents = Math.max(100, subtotalCents - discountCents);
-    const internalOrderId = randomUUID15();
+    const internalOrderId = randomUUID16();
     const rzpKeyId = settings.razorpayKeyId;
     const rzpKeySecret = settings.razorpayKeySecret;
     let razorpayOrderId;
@@ -129675,14 +129663,14 @@ var approvals_default = router7;
 
 // artifacts/api-server/src/routes/storage.ts
 var import_express9 = __toESM(require_express2(), 1);
-import { randomUUID as randomUUID16 } from "node:crypto";
+import { randomUUID as randomUUID17 } from "node:crypto";
 var router8 = (0, import_express9.Router)();
 router8.use(requireAdmin);
 router8.post("/storage/upload", async (req, res) => {
   const { filename, contentType, base64Data, imageUrl } = req.body;
   try {
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-    const uniqueKey = `products/${randomUUID16()}_${(filename || "cake-photo.jpg").replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    const uniqueKey = `products/${randomUUID17()}_${(filename || "cake-photo.jpg").replace(/[^a-zA-Z0-9.-]/g, "_")}`;
     if (settings?.r2AccountId && settings?.r2AccessKeyId && settings?.r2SecretAccessKey) {
       const publicBase = settings.r2PublicUrl || `https://pub-${settings.r2AccountId.substring(0, 8)}.r2.dev`;
       const finalUrl = `${publicBase.replace(/\/$/, "")}/${uniqueKey}`;
@@ -131113,10 +131101,10 @@ function clerkProxyMiddleware() {
 }
 
 // artifacts/api-server/src/middlewares/request-id.ts
-import { randomUUID as randomUUID17 } from "node:crypto";
+import { randomUUID as randomUUID18 } from "node:crypto";
 var requestIdMiddleware = (req, res, next) => {
   const existingId = req.headers["x-request-id"];
-  const requestId = typeof existingId === "string" && existingId.length > 0 ? existingId : `req_${randomUUID17().replace(/-/g, "")}`;
+  const requestId = typeof existingId === "string" && existingId.length > 0 ? existingId : `req_${randomUUID18().replace(/-/g, "")}`;
   req.id = requestId;
   res.setHeader("X-Request-Id", requestId);
   next();

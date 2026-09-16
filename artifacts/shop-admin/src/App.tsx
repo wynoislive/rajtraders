@@ -658,11 +658,11 @@ function Products() {
   const submit = async () => {
     const payload = {
       name: form.name.trim(),
-      description: form.description.trim(),
-      priceCents: Math.round(Number(form.price || 0) * 100),
+      description: form.description.trim() || 'Handcrafted celebration item for your special event.',
+      priceCents: Math.max(0, Math.round(Number(form.price || 0) * 100)),
       compareAtPriceCents: form.compareAt ? Math.round(Number(form.compareAt) * 100) : null,
-      category: form.category.trim(),
-      imageUrl: form.imageUrl.trim(),
+      category: form.category.trim() || 'Cakes & Desserts',
+      imageUrl: form.imageUrl.trim() || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80',
       inventory: Math.max(0, Number(form.inventory || 0)),
       prepTimeMinutes: Math.max(1, Number(form.prepTimeMinutes || 30)),
       status: form.status,
@@ -674,19 +674,25 @@ function Products() {
     try {
       const path = editingId ? `/api/v1/admin/products/${editingId}` : '/api/v1/admin/products';
       const method = editingId ? 'PATCH' : 'POST';
-      await fetch(getApiUrl(path), {
+      const res = await fetch(getApiUrl(path), {
         method,
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(payload),
       });
-    } catch (e) {
-      console.error(e);
-    } finally {
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || `Server error (${res.status})`);
+      }
+
       setDialog(null);
-      setNotice(editingId ? 'Product updated successfully.' : 'New product created.');
+      setNotice(editingId ? 'Product updated successfully.' : 'New product created successfully.');
       client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
       client.invalidateQueries({ queryKey: getListProductsQueryKey() });
       client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
+    } catch (e: any) {
+      console.error(e);
+      setNotice(`Failed to save product: ${e.message || String(e)}`);
     }
   };
 

@@ -175,27 +175,36 @@ router.post("/v1/admin/products", async (req, res): Promise<void> => {
   const staff = await getStaffFromToken(req.headers.authorization);
   const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
 
-  if (!name || !description || priceCents === undefined || !category || !imageUrl) {
-    res.status(400).json({ error: "Missing required product fields (name, description, priceCents, category, imageUrl)." });
+  const cleanName = (name || "").trim();
+  if (!cleanName) {
+    res.status(400).json({ error: "Product name is required." });
     return;
   }
+
+  const cleanCategory = (category || "").trim() || "Cakes & Desserts";
+  const cleanDescription = (description || "").trim() || "Handcrafted celebration item for your special event.";
+  const cleanImageUrl = (imageUrl || "").trim() || "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80";
+  const parsedPrice = priceCents !== undefined ? Math.max(0, Math.round(Number(priceCents))) : 5000;
 
   // RBAC Approval Rule: If Sub-Admin or Moderator, product goes into 'pending_approval' state
   const isSubAdminOrMod = staff && (staff.role === "SUB_ADMIN" || staff.role === "MODERATOR");
   const approvalStatus = isSubAdminOrMod ? "pending_approval" : "approved";
   const initialStatus = isSubAdminOrMod ? "draft" : status ?? "active";
 
+  const baseSlug = slugify(cleanName) || "product";
+  const uniqueSlug = `${baseSlug}-${randomUUID().substring(0, 6)}`;
+
   try {
     const [created] = await db
       .insert(productsTable)
       .values({
-        name: name.trim(),
-        slug: slugify(name),
-        description: description.trim(),
-        priceCents: Math.round(Number(priceCents)),
+        name: cleanName,
+        slug: uniqueSlug,
+        description: cleanDescription,
+        priceCents: parsedPrice,
         compareAtPriceCents: compareAtPriceCents == null ? null : Math.round(Number(compareAtPriceCents)),
-        category: category.trim(),
-        imageUrl: imageUrl.trim(),
+        category: cleanCategory,
+        imageUrl: cleanImageUrl,
         status: initialStatus,
         featured: Boolean(featured),
         inventory: Math.max(0, Math.round(Number(inventory || 0))),
@@ -210,27 +219,8 @@ router.post("/v1/admin/products", async (req, res): Promise<void> => {
 
     res.status(201).json(productResponse(created));
   } catch (err: any) {
-    res.status(201).json({
-      id: `prod_${Date.now()}`,
-      name: name.trim(),
-      slug: slugify(name),
-      description: description.trim(),
-      priceCents: Math.round(Number(priceCents)),
-      compareAtPriceCents: compareAtPriceCents == null ? null : Math.round(Number(compareAtPriceCents)),
-      category: category.trim(),
-      imageUrl: imageUrl.trim(),
-      status: initialStatus,
-      featured: Boolean(featured),
-      inventory: Math.max(0, Math.round(Number(inventory || 0))),
-      prepTimeMinutes: Math.max(1, Math.round(Number(prepTimeMinutes || 30))),
-      isBestseller: Boolean(isBestseller),
-      isVeg: isVeg !== false,
-      approvalStatus,
-      submittedBy: staff?.userId || null,
-      approvedBy: !isSubAdminOrMod ? staff?.userId || "main_admin_01" : null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
+    console.error("Product creation DB insert failed:", err);
+    res.status(500).json({ error: "Failed to create product in database: " + (err.message || String(err)) });
   }
 });
 
