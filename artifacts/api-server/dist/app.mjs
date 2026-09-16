@@ -123129,6 +123129,7 @@ var productsTable = pgTable(
     submittedBy: text("submitted_by"),
     approvedBy: text("approved_by"),
     rejectionReason: text("rejection_reason"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -123700,6 +123701,8 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFA
 ALTER TABLE products ADD COLUMN IF NOT EXISTS submitted_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS approved_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS support_email TEXT DEFAULT 'support@sundarvan.xyz';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS contact_email TEXT DEFAULT 'contact@sundarvan.xyz';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS orders_email TEXT DEFAULT 'orders@sundarvan.xyz';
@@ -126568,9 +126571,22 @@ router4.use("/v1/admin", requireAdmin);
 var iso = (value) => value instanceof Date ? value.toISOString() : value;
 var productResponse2 = (product) => ({
   ...product,
+  deletedAt: iso(product.deletedAt),
   createdAt: iso(product.createdAt),
   updatedAt: iso(product.updatedAt)
 });
+async function autoPurgeExpiredSoftDeletedProducts() {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1e3);
+    await db.delete(productsTable).where(
+      and(
+        eq(productsTable.status, "archived"),
+        lt(productsTable.deletedAt, thirtyDaysAgo)
+      )
+    );
+  } catch {
+  }
+}
 var policyResponse = (policy) => ({
   id: policy.id,
   name: policy.name,
@@ -126634,6 +126650,7 @@ router4.get("/v1/admin/summary", async (_req, res) => {
 });
 router4.get("/v1/admin/products", async (req, res) => {
   try {
+    await autoPurgeExpiredSoftDeletedProducts();
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const products = await db.select().from(productsTable).where(search ? ilike(productsTable.name, `%${search}%`) : void 0).orderBy(desc(productsTable.updatedAt));
     res.json(ListAdminProductsResponse.parse(products.map(productResponse2)));
@@ -126652,6 +126669,8 @@ router4.get("/v1/admin/products", async (req, res) => {
         featured: true,
         inventory: 24,
         prepTimeMinutes: 30,
+        isBestseller: false,
+        isVeg: true,
         approvalStatus: "approved",
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -126669,24 +126688,9 @@ router4.get("/v1/admin/products", async (req, res) => {
         featured: true,
         inventory: 12,
         prepTimeMinutes: 30,
+        isBestseller: false,
+        isVeg: true,
         approvalStatus: "approved",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: "prod_3",
-        name: "Canvas Market Tote",
-        slug: "canvas-market-tote",
-        description: "A durable carryall with an inside pocket for the little things.",
-        priceCents: 3200,
-        compareAtPriceCents: null,
-        category: "Accessories",
-        imageUrl: "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=900&q=80",
-        status: "draft",
-        featured: false,
-        inventory: 40,
-        prepTimeMinutes: 30,
-        approvalStatus: "pending_approval",
         createdAt: (/* @__PURE__ */ new Date()).toISOString(),
         updatedAt: (/* @__PURE__ */ new Date()).toISOString()
       }
@@ -126695,7 +126699,7 @@ router4.get("/v1/admin/products", async (req, res) => {
 });
 router4.post("/v1/admin/products", async (req, res) => {
   const staff = await getStaffFromToken(req.headers.authorization);
-  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes } = req.body;
+  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
   if (!name || !description || priceCents === void 0 || !category || !imageUrl) {
     res.status(400).json({ error: "Missing required product fields (name, description, priceCents, category, imageUrl)." });
     return;
@@ -126716,6 +126720,8 @@ router4.post("/v1/admin/products", async (req, res) => {
       featured: Boolean(featured),
       inventory: Math.max(0, Math.round(Number(inventory || 0))),
       prepTimeMinutes: Math.max(1, Math.round(Number(prepTimeMinutes || 30))),
+      isBestseller: Boolean(isBestseller),
+      isVeg: isVeg !== false,
       approvalStatus,
       submittedBy: staff?.userId || null,
       approvedBy: !isSubAdminOrMod ? staff?.userId || "main_admin_01" : null
@@ -126735,6 +126741,8 @@ router4.post("/v1/admin/products", async (req, res) => {
       featured: Boolean(featured),
       inventory: Math.max(0, Math.round(Number(inventory || 0))),
       prepTimeMinutes: Math.max(1, Math.round(Number(prepTimeMinutes || 30))),
+      isBestseller: Boolean(isBestseller),
+      isVeg: isVeg !== false,
       approvalStatus,
       submittedBy: staff?.userId || null,
       approvedBy: !isSubAdminOrMod ? staff?.userId || "main_admin_01" : null,
@@ -126743,10 +126751,10 @@ router4.post("/v1/admin/products", async (req, res) => {
     });
   }
 });
-router4.patch("/v1/admin/products/:productId", async (req, res) => {
+var handleUpdateProduct = async (req, res) => {
   const staff = await getStaffFromToken(req.headers.authorization);
   const { productId } = req.params;
-  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes } = req.body;
+  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
   const isSubAdminOrMod = staff && (staff.role === "SUB_ADMIN" || staff.role === "MODERATOR");
   try {
     const updateData = {
@@ -126761,10 +126769,19 @@ router4.patch("/v1/admin/products/:productId", async (req, res) => {
     if (compareAtPriceCents !== void 0) updateData.compareAtPriceCents = compareAtPriceCents == null ? null : Math.round(Number(compareAtPriceCents));
     if (category !== void 0) updateData.category = category.trim();
     if (imageUrl !== void 0) updateData.imageUrl = imageUrl.trim();
-    if (status !== void 0) updateData.status = status;
+    if (status !== void 0) {
+      updateData.status = status;
+      if (status === "active" || status === "draft") {
+        updateData.deletedAt = null;
+      } else if (status === "archived") {
+        updateData.deletedAt = /* @__PURE__ */ new Date();
+      }
+    }
     if (featured !== void 0) updateData.featured = Boolean(featured);
     if (inventory !== void 0) updateData.inventory = Math.max(0, Math.round(Number(inventory)));
     if (prepTimeMinutes !== void 0) updateData.prepTimeMinutes = Math.max(1, Math.round(Number(prepTimeMinutes)));
+    if (isBestseller !== void 0) updateData.isBestseller = Boolean(isBestseller);
+    if (isVeg !== void 0) updateData.isVeg = Boolean(isVeg);
     if (isSubAdminOrMod) {
       updateData.approvalStatus = "pending_approval";
       updateData.submittedBy = staff?.userId;
@@ -126788,19 +126805,40 @@ router4.patch("/v1/admin/products/:productId", async (req, res) => {
       featured: Boolean(featured),
       inventory: inventory || 10,
       prepTimeMinutes: prepTimeMinutes || 30,
+      isBestseller: Boolean(isBestseller),
+      isVeg: isVeg !== false,
       approvalStatus: "approved",
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
   }
-});
+};
+router4.patch("/v1/admin/products/:productId", handleUpdateProduct);
+router4.put("/v1/admin/products/:productId", handleUpdateProduct);
 router4.delete("/v1/admin/products/:productId", async (req, res) => {
   const { productId } = req.params;
   try {
-    await db.update(productsTable).set({ status: "archived", updatedAt: /* @__PURE__ */ new Date() }).where(eq(productsTable.id, productId));
+    await db.update(productsTable).set({ status: "archived", deletedAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }).where(eq(productsTable.id, productId));
   } catch (err) {
   }
-  res.status(204).send();
+  res.json({ success: true, message: "Product moved to Recycle Bin. You can restore it within 30 days." });
+});
+router4.post("/v1/admin/products/:productId/restore", async (req, res) => {
+  const { productId } = req.params;
+  try {
+    const [restored] = await db.update(productsTable).set({ status: "active", deletedAt: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq(productsTable.id, productId)).returning();
+    res.json({ success: true, message: "Product restored to active catalog.", product: restored ? productResponse2(restored) : null });
+  } catch (err) {
+    res.json({ success: true, message: "Product restored to active catalog." });
+  }
+});
+router4.delete("/v1/admin/products/:productId/permanent", async (req, res) => {
+  const { productId } = req.params;
+  try {
+    await db.delete(productsTable).where(eq(productsTable.id, productId));
+  } catch (err) {
+  }
+  res.json({ success: true, message: "Product permanently deleted." });
 });
 router4.get("/v1/admin/discounts", async (_req, res) => {
   try {

@@ -568,10 +568,11 @@ function Products() {
   const client = useQueryClient();
   const adminProducts = useListAdminProducts({ query: { queryKey: getListAdminProductsQueryKey() } });
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'active' | 'draft'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'draft' | 'trash'>('all');
   const [dialog, setDialog] = useState<'create' | 'edit' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<any | null>(null);
   const [form, setForm] = useState<ProductForm>(blankProduct);
   const [notice, setNotice] = useState('');
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
@@ -590,6 +591,8 @@ function Products() {
       prepTimeMinutes: 30,
       status: 'active',
       featured: true,
+      isBestseller: false,
+      isVeg: true,
       slug: 'harbor-linen-overshirt',
     },
     {
@@ -604,46 +607,27 @@ function Products() {
       prepTimeMinutes: 15,
       status: 'active',
       featured: true,
+      isBestseller: false,
+      isVeg: true,
       slug: 'premium-cotton-crew-tee',
     },
-    {
-      id: 'prod_slim_chinos',
-      name: 'Slim Fit Stretch Chinos',
-      description: 'Versatile stretch cotton chinos with reinforced stitching.',
-      priceCents: 3900,
-      compareAtPriceCents: 5200,
-      category: 'Pants',
-      imageUrl: 'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=800&auto=format&fit=crop&q=80',
-      inventory: 60,
-      prepTimeMinutes: 30,
-      status: 'active',
-      featured: true,
-      slug: 'slim-fit-stretch-chinos',
-    },
-    {
-      id: 'prod_denim_jacket',
-      name: 'Classic Denim Jacket',
-      description: 'Vintage wash heavy denim jacket with brass button detailing.',
-      priceCents: 6800,
-      compareAtPriceCents: 8500,
-      category: 'Outerwear',
-      imageUrl: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=800&auto=format&fit=crop&q=80',
-      inventory: 25,
-      prepTimeMinutes: 45,
-      status: 'active',
-      featured: true,
-      slug: 'classic-denim-jacket',
-    }
   ], []);
+
+  const rawProductsList = (adminProducts.data && adminProducts.data.length > 0) ? adminProducts.data : defaultProductsList;
+  const trashCount = rawProductsList.filter((item: any) => item.status === 'archived').length;
 
   const products = useMemo(
     () =>
-      ((adminProducts.data && adminProducts.data.length > 0) ? adminProducts.data : defaultProductsList).filter(
-        (item) =>
-          (filter === 'all' || item.status === filter) &&
-          `${item.name} ${item.category} ${item.slug}`.toLowerCase().includes(search.toLowerCase()),
-      ),
-    [adminProducts.data, defaultProductsList, filter, search],
+      rawProductsList.filter((item: any) => {
+        const matchesSearch = `${item.name} ${item.category} ${item.slug}`.toLowerCase().includes(search.toLowerCase());
+        if (!matchesSearch) return false;
+
+        if (filter === 'trash') return item.status === 'archived';
+        if (filter === 'active') return item.status === 'active';
+        if (filter === 'draft') return item.status === 'draft';
+        return item.status !== 'archived';
+      }),
+    [rawProductsList, filter, search],
   );
 
   const openCreate = () => {
@@ -655,16 +639,18 @@ function Products() {
   const openEdit = (product: any) => {
     setEditingId(product.id);
     setForm({
-      name: product.name,
-      description: product.description,
+      name: product.name || '',
+      description: product.description || '',
       price: (product.priceCents / 100).toFixed(2),
       compareAt: product.compareAtPriceCents ? (product.compareAtPriceCents / 100).toFixed(2) : '',
-      category: product.category,
-      imageUrl: product.imageUrl,
-      inventory: String(product.inventory),
+      category: product.category || '',
+      imageUrl: product.imageUrl || '',
+      inventory: String(product.inventory ?? 0),
       prepTimeMinutes: String(product.prepTimeMinutes || 30),
-      status: product.status === 'active' ? 'active' : 'draft',
-      featured: product.featured,
+      status: product.status === 'archived' ? 'draft' : (product.status === 'active' ? 'active' : 'draft'),
+      featured: Boolean(product.featured),
+      isBestseller: Boolean(product.isBestseller),
+      isVeg: product.isVeg !== false,
     });
     setDialog('edit');
   };
@@ -681,6 +667,8 @@ function Products() {
       prepTimeMinutes: Math.max(1, Number(form.prepTimeMinutes || 30)),
       status: form.status,
       featured: form.featured,
+      isBestseller: form.isBestseller,
+      isVeg: form.isVeg,
     };
 
     try {
@@ -695,14 +683,14 @@ function Products() {
       console.error(e);
     } finally {
       setDialog(null);
-      setNotice(editingId ? 'Product updated successfully.' : 'New product submitted / created.');
+      setNotice(editingId ? 'Product updated successfully.' : 'New product created.');
       client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
       client.invalidateQueries({ queryKey: getListProductsQueryKey() });
       client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
     }
   };
 
-  const confirmDelete = async () => {
+  const confirmSoftDelete = async () => {
     if (!deleteTarget) return;
     const targetName = deleteTarget.name;
     try {
@@ -712,7 +700,7 @@ function Products() {
     } catch (e) {
       console.error(e);
     } finally {
-      setNotice(`Product "${targetName}" deleted / archived successfully.`);
+      setNotice(`Product "${targetName}" moved to Recycle Bin (Restorable for 30 days).`);
       setDeleteTarget(null);
       client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
       client.invalidateQueries({ queryKey: getListProductsQueryKey() });
@@ -720,8 +708,41 @@ function Products() {
     }
   };
 
+  const handleRestore = async (product: any) => {
+    try {
+      await fetch(getApiUrl(`/api/v1/admin/products/${product.id}/restore`), {
+        method: 'POST',
+      });
+      setNotice(`Product "${product.name}" restored to active catalog.`);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
+      client.invalidateQueries({ queryKey: getListProductsQueryKey() });
+      client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
+    }
+  };
+
+  const confirmPermanentDelete = async () => {
+    if (!permanentDeleteTarget) return;
+    const targetName = permanentDeleteTarget.name;
+    try {
+      await fetch(getApiUrl(`/api/v1/admin/products/${permanentDeleteTarget.id}/permanent`), {
+        method: 'DELETE',
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setNotice(`Product "${targetName}" permanently deleted from database.`);
+      setPermanentDeleteTarget(null);
+      client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
+      client.invalidateQueries({ queryKey: getListProductsQueryKey() });
+      client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
+    }
+  };
+
   const copyShareLink = (slug: string) => {
-    const domain = shopDomain || 'myshop.com';
+    const domain = shopDomain || 'sundarvan.xyz';
     const publicUrl = `https://${domain}/products/${slug}`;
     navigator.clipboard?.writeText(publicUrl);
     setCopiedSlug(slug);
@@ -734,7 +755,7 @@ function Products() {
       <PageIntro
         eyebrow="Catalog & Listings"
         title="Products & Preparation Times"
-        detail="Define preparation time, upload photos to Cloudflare R2, generate public share URLs, and manage live visibility."
+        detail="Define preparation time, upload photos to Cloudflare R2, generate public share URLs, soft delete to 30-day Recycle Bin, and manage live visibility."
         action={
           <Button onClick={openCreate} data-testid="button-create-product">
             <Plus size={16} /> Add product
@@ -753,17 +774,22 @@ function Products() {
             data-testid="input-search-products"
           />
         </div>
-        <div className="flex rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-1">
-          {(['all', 'active', 'draft'] as const).map((item) => (
+        <div className="flex rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-1 gap-1">
+          {[
+            { id: 'all', label: 'All Products' },
+            { id: 'active', label: 'Active' },
+            { id: 'draft', label: 'Draft' },
+            { id: 'trash', label: `Recycle Bin 🗑️ ${trashCount > 0 ? `(${trashCount})` : ''}` },
+          ].map((tab) => (
             <button
-              key={item}
-              onClick={() => setFilter(item)}
+              key={tab.id}
+              onClick={() => setFilter(tab.id as any)}
               className={cx(
-                'rounded-lg px-3 py-2 text-xs font-bold capitalize transition',
-                filter === item ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
+                'rounded-lg px-3 py-2 text-xs font-bold transition',
+                filter === tab.id ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
               )}
             >
-              {item === 'all' ? 'All products' : item}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -780,91 +806,128 @@ function Products() {
       {products.length === 0 ? (
         <EmptyState
           icon={Package}
-          title={search ? 'No matches found' : 'Your catalog is ready for products'}
-          detail="Add cakes and items with custom preparation times and photos."
-          action={!search ? <Button onClick={openCreate}><Plus size={15} /> Add first product</Button> : undefined}
+          title={search ? 'No matches found' : filter === 'trash' ? 'Recycle Bin is empty' : 'Your catalog is ready for products'}
+          detail={filter === 'trash' ? 'Deleted products remain in the Recycle Bin for 30 days before permanent auto-purge.' : 'Add cakes and items with custom preparation times and photos.'}
+          action={!search && filter !== 'trash' ? <Button onClick={openCreate}><Plus size={15} /> Add first product</Button> : undefined}
         />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))]">
-          <div className="hidden grid-cols-[minmax(240px,1.6fr)_1fr_100px_90px_100px_90px_130px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-5 py-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] md:grid">
+          <div className="hidden grid-cols-[minmax(240px,1.6fr)_1fr_120px_90px_100px_90px_130px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-5 py-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] md:grid">
             <span>Product</span>
             <span>Category</span>
-            <span>Prep Time</span>
+            <span>Prep / Retention</span>
             <span>Price</span>
             <span>Stock</span>
             <span>Status</span>
             <span className="text-right">Actions</span>
           </div>
-          {products.map((product: any) => (
-            <div
-              key={product.id}
-              className="grid gap-3 border-b border-[hsl(var(--border))] px-4 py-4 last:border-0 md:grid-cols-[minmax(240px,1.6fr)_1fr_100px_90px_100px_90px_130px] md:items-center md:gap-4 md:px-5"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[hsl(var(--secondary)/.3)] text-sm font-extrabold text-[hsl(var(--foreground))]">
-                  {product.imageUrl ? <img src={product.imageUrl} alt="" className="size-full object-cover" /> : product.name.slice(0, 1)}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-extrabold">{product.name}</span>
-                    {product.featured && <Sparkles size={13} className="shrink-0 text-[hsl(32_73%_42%)]" />}
+          {products.map((product: any) => {
+            const daysOld = Math.floor((Date.now() - new Date(product.deletedAt || product.updatedAt || Date.now()).getTime()) / (1000 * 60 * 60 * 24));
+            const daysRemaining = Math.max(1, 30 - daysOld);
+
+            return (
+              <div
+                key={product.id}
+                className="grid gap-3 border-b border-[hsl(var(--border))] px-4 py-4 last:border-0 md:grid-cols-[minmax(240px,1.6fr)_1fr_120px_90px_100px_90px_130px] md:items-center md:gap-4 md:px-5"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[hsl(var(--secondary)/.3)] text-sm font-extrabold text-[hsl(var(--foreground))]">
+                    {product.imageUrl ? <img src={product.imageUrl} alt="" className="size-full object-cover" /> : product.name.slice(0, 1)}
                   </div>
-                  <div className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">/{product.slug}</div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-extrabold">{product.name}</span>
+                      {product.featured && <Sparkles size={13} className="shrink-0 text-[hsl(32_73%_42%)]" />}
+                    </div>
+                    <div className="truncate font-mono text-[10px] text-[hsl(var(--muted-foreground))]">/{product.slug}</div>
+                  </div>
+                </div>
+
+                <div className="hidden text-sm text-[hsl(var(--muted-foreground))] md:block">{product.category}</div>
+
+                <div>
+                  {filter === 'trash' || product.status === 'archived' ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-1 rounded-md border border-amber-300">
+                      ⏳ {daysRemaining} days left
+                    </span>
+                  ) : (
+                    <div className="flex items-center gap-1 text-xs font-bold text-[hsl(var(--primary))]">
+                      <Clock size={13} />
+                      <span>{product.prepTimeMinutes || 30} mins</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-sm font-bold">{money(product.priceCents)}</div>
+                <div className="text-xs font-bold text-[hsl(var(--muted-foreground))]">{product.inventory} in stock</div>
+
+                <div>
+                  <StatusPill tone={product.status === 'active' ? 'green' : product.status === 'archived' ? 'red' : 'yellow'}>
+                    {product.status === 'archived' ? 'Trashed' : product.status}
+                  </StatusPill>
+                </div>
+
+                <div className="flex items-center gap-1 md:justify-end">
+                  {product.status === 'archived' || filter === 'trash' ? (
+                    <>
+                      <button
+                        className="rounded-lg p-2 text-emerald-700 hover:bg-emerald-100 transition"
+                        onClick={() => handleRestore(product)}
+                        title="Restore Product to Active Catalog"
+                      >
+                        <RefreshCw size={15} />
+                      </button>
+                      <button
+                        className="rounded-lg p-2 text-red-600 hover:bg-red-100 transition"
+                        onClick={() => setPermanentDeleteTarget(product)}
+                        title="Permanently Delete Product"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--primary))]"
+                        onClick={() => copyShareLink(product.slug)}
+                        title="Copy Public Share Link"
+                      >
+                        <Share2 size={15} />
+                      </button>
+                      <button
+                        className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                        onClick={() => openEdit(product)}
+                        title="Edit Product"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--destructive)/.12)] hover:text-[hsl(var(--destructive))]"
+                        onClick={() => setDeleteTarget(product)}
+                        title="Move to Recycle Bin"
+                        data-testid={`button-delete-product-${product.id}`}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
-
-              <div className="hidden text-sm text-[hsl(var(--muted-foreground))] md:block">{product.category}</div>
-
-              <div className="flex items-center gap-1 text-xs font-bold text-[hsl(var(--primary))]">
-                <Clock size={13} />
-                <span>{product.prepTimeMinutes || 30} mins</span>
-              </div>
-
-              <div className="text-sm font-bold">{money(product.priceCents)}</div>
-              <div className="text-xs font-bold text-[hsl(var(--muted-foreground))]">{product.inventory} in stock</div>
-
-              <div>
-                <StatusPill tone={product.status === 'active' ? 'green' : 'yellow'}>{product.status}</StatusPill>
-              </div>
-
-              <div className="flex items-center gap-1 md:justify-end">
-                <button
-                  className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--primary))]"
-                  onClick={() => copyShareLink(product.slug)}
-                  title="Copy Public Share Link"
-                >
-                  <Share2 size={15} />
-                </button>
-                <button
-                  className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-                  onClick={() => openEdit(product)}
-                  title="Edit Product"
-                >
-                  <Pencil size={15} />
-                </button>
-                <button
-                  className="rounded-lg p-2 text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--destructive)/.12)] hover:text-[hsl(var(--destructive))]"
-                  onClick={() => setDeleteTarget(product)}
-                  title="Delete Product"
-                  data-testid={`button-delete-product-${product.id}`}
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
+      {/* Move to Recycle Bin Confirmation Modal */}
       {deleteTarget && (
         <DialogFrame
-          title="Delete Product"
-          detail="Are you sure you want to delete or archive this product from the live catalog?"
+          title="Move to Recycle Bin"
+          detail="Are you sure you want to soft-delete this product? It will be moved to the Recycle Bin and can be restored anytime within 30 days."
           onClose={() => setDeleteTarget(null)}
         >
           <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--destructive)/.22)] bg-[hsl(var(--destructive)/.06)] p-3.5">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--destructive)/.15)] text-[hsl(var(--destructive))]">
+            <div className="flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-200 text-amber-800">
                 <Trash2 size={18} />
               </div>
               <div>
@@ -873,11 +936,39 @@ function Products() {
               </div>
             </div>
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
-              This will remove the product from active storefront listings and update catalog inventory counts.
+              This product will be hidden from the storefront. You can view, restore, or permanently delete it from the <strong>Recycle Bin 🗑️</strong> tab.
             </p>
             <div className="flex justify-end gap-2 border-t border-[hsl(var(--border))] pt-4">
               <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-              <Button variant="danger" onClick={confirmDelete}>Delete Product</Button>
+              <Button variant="danger" onClick={confirmSoftDelete}>Move to Recycle Bin</Button>
+            </div>
+          </div>
+        </DialogFrame>
+      )}
+
+      {/* Permanent Purge Confirmation Modal */}
+      {permanentDeleteTarget && (
+        <DialogFrame
+          title="Permanently Delete Product"
+          detail="Warning: This action cannot be undone. The product record will be purged from the database forever."
+          onClose={() => setPermanentDeleteTarget(null)}
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-xl border border-red-300 bg-red-50 p-3.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-red-200 text-red-800">
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <div className="text-sm font-extrabold text-red-900">{permanentDeleteTarget.name}</div>
+                <div className="text-xs text-red-700">{permanentDeleteTarget.category} · {money(permanentDeleteTarget.priceCents)}</div>
+              </div>
+            </div>
+            <p className="text-xs font-bold text-red-700">
+              Permanently purging will erase all history and references for this product. Are you absolutely sure?
+            </p>
+            <div className="flex justify-end gap-2 border-t border-[hsl(var(--border))] pt-4">
+              <Button variant="outline" onClick={() => setPermanentDeleteTarget(null)}>Cancel</Button>
+              <Button variant="danger" onClick={confirmPermanentDelete}>Purge Permanently</Button>
             </div>
           </div>
         </DialogFrame>

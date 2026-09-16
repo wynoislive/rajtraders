@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, ilike } from "drizzle-orm";
+import { and, desc, eq, ilike, lt } from "drizzle-orm";
 import { db, discountsTable, ordersTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable } from "@workspace/db";
 import {
   CreateDiscountBody,
@@ -25,11 +25,30 @@ router.use("/v1/admin", requireAdmin);
 
 const iso = (value: Date | string | null): string | null =>
   value instanceof Date ? value.toISOString() : value;
+
 const productResponse = (product: typeof productsTable.$inferSelect) => ({
   ...product,
+  deletedAt: iso(product.deletedAt),
   createdAt: iso(product.createdAt) as string,
   updatedAt: iso(product.updatedAt) as string,
 });
+
+async function autoPurgeExpiredSoftDeletedProducts() {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    await db
+      .delete(productsTable)
+      .where(
+        and(
+          eq(productsTable.status, "archived"),
+          lt(productsTable.deletedAt, thirtyDaysAgo)
+        )
+      );
+  } catch {
+    // Ignore in demo/fallback mode
+  }
+}
+
 const policyResponse = (policy: typeof registrationPoliciesTable.$inferSelect) => ({
   id: policy.id,
   name: policy.name,
@@ -100,6 +119,7 @@ router.get("/v1/admin/summary", async (_req, res): Promise<void> => {
 
 router.get("/v1/admin/products", async (req, res): Promise<void> => {
   try {
+    await autoPurgeExpiredSoftDeletedProducts();
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const products = await db
       .select()
@@ -122,6 +142,8 @@ router.get("/v1/admin/products", async (req, res): Promise<void> => {
         featured: true,
         inventory: 24,
         prepTimeMinutes: 30,
+        isBestseller: false,
+        isVeg: true,
         approvalStatus: "approved",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -139,24 +161,9 @@ router.get("/v1/admin/products", async (req, res): Promise<void> => {
         featured: true,
         inventory: 12,
         prepTimeMinutes: 30,
+        isBestseller: false,
+        isVeg: true,
         approvalStatus: "approved",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: "prod_3",
-        name: "Canvas Market Tote",
-        slug: "canvas-market-tote",
-        description: "A durable carryall with an inside pocket for the little things.",
-        priceCents: 3200,
-        compareAtPriceCents: null,
-        category: "Accessories",
-        imageUrl: "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=900&q=80",
-        status: "draft",
-        featured: false,
-        inventory: 40,
-        prepTimeMinutes: 30,
-        approvalStatus: "pending_approval",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
@@ -166,7 +173,7 @@ router.get("/v1/admin/products", async (req, res): Promise<void> => {
 
 router.post("/v1/admin/products", async (req, res): Promise<void> => {
   const staff = await getStaffFromToken(req.headers.authorization);
-  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes } = req.body;
+  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
 
   if (!name || !description || priceCents === undefined || !category || !imageUrl) {
     res.status(400).json({ error: "Missing required product fields (name, description, priceCents, category, imageUrl)." });
@@ -193,6 +200,8 @@ router.post("/v1/admin/products", async (req, res): Promise<void> => {
         featured: Boolean(featured),
         inventory: Math.max(0, Math.round(Number(inventory || 0))),
         prepTimeMinutes: Math.max(1, Math.round(Number(prepTimeMinutes || 30))),
+        isBestseller: Boolean(isBestseller),
+        isVeg: isVeg !== false,
         approvalStatus,
         submittedBy: staff?.userId || null,
         approvedBy: !isSubAdminOrMod ? staff?.userId || "main_admin_01" : null,
@@ -214,6 +223,8 @@ router.post("/v1/admin/products", async (req, res): Promise<void> => {
       featured: Boolean(featured),
       inventory: Math.max(0, Math.round(Number(inventory || 0))),
       prepTimeMinutes: Math.max(1, Math.round(Number(prepTimeMinutes || 30))),
+      isBestseller: Boolean(isBestseller),
+      isVeg: isVeg !== false,
       approvalStatus,
       submittedBy: staff?.userId || null,
       approvedBy: !isSubAdminOrMod ? staff?.userId || "main_admin_01" : null,
@@ -223,10 +234,10 @@ router.post("/v1/admin/products", async (req, res): Promise<void> => {
   }
 });
 
-router.patch("/v1/admin/products/:productId", async (req, res): Promise<void> => {
+const handleUpdateProduct = async (req: any, res: any): Promise<void> => {
   const staff = await getStaffFromToken(req.headers.authorization);
   const { productId } = req.params;
-  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes } = req.body;
+  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
 
   const isSubAdminOrMod = staff && (staff.role === "SUB_ADMIN" || staff.role === "MODERATOR");
 
@@ -244,10 +255,19 @@ router.patch("/v1/admin/products/:productId", async (req, res): Promise<void> =>
     if (compareAtPriceCents !== undefined) updateData.compareAtPriceCents = compareAtPriceCents == null ? null : Math.round(Number(compareAtPriceCents));
     if (category !== undefined) updateData.category = category.trim();
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl.trim();
-    if (status !== undefined) updateData.status = status;
+    if (status !== undefined) {
+      updateData.status = status;
+      if (status === "active" || status === "draft") {
+        updateData.deletedAt = null;
+      } else if (status === "archived") {
+        updateData.deletedAt = new Date();
+      }
+    }
     if (featured !== undefined) updateData.featured = Boolean(featured);
     if (inventory !== undefined) updateData.inventory = Math.max(0, Math.round(Number(inventory)));
     if (prepTimeMinutes !== undefined) updateData.prepTimeMinutes = Math.max(1, Math.round(Number(prepTimeMinutes)));
+    if (isBestseller !== undefined) updateData.isBestseller = Boolean(isBestseller);
+    if (isVeg !== undefined) updateData.isVeg = Boolean(isVeg);
 
     // If Sub-Admin or Moderator modifies a product, send to pending approval queue
     if (isSubAdminOrMod) {
@@ -280,22 +300,55 @@ router.patch("/v1/admin/products/:productId", async (req, res): Promise<void> =>
       featured: Boolean(featured),
       inventory: inventory || 10,
       prepTimeMinutes: prepTimeMinutes || 30,
+      isBestseller: Boolean(isBestseller),
+      isVeg: isVeg !== false,
       approvalStatus: "approved",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
   }
-});
+};
 
+router.patch("/v1/admin/products/:productId", handleUpdateProduct);
+router.put("/v1/admin/products/:productId", handleUpdateProduct);
+
+// Soft Delete (Move to Recycle Bin)
 router.delete("/v1/admin/products/:productId", async (req, res): Promise<void> => {
   const { productId } = req.params;
   try {
-    await db.update(productsTable).set({ status: "archived", updatedAt: new Date() }).where(eq(productsTable.id, productId));
+    await db.update(productsTable).set({ status: "archived", deletedAt: new Date(), updatedAt: new Date() }).where(eq(productsTable.id, productId));
   } catch (err) {
     // Ignore error in demo mode
   }
-  res.status(204).send();
+  res.json({ success: true, message: "Product moved to Recycle Bin. You can restore it within 30 days." });
 });
+
+// Restore Product from Recycle Bin
+router.post("/v1/admin/products/:productId/restore", async (req, res): Promise<void> => {
+  const { productId } = req.params;
+  try {
+    const [restored] = await db
+      .update(productsTable)
+      .set({ status: "active", deletedAt: null, updatedAt: new Date() })
+      .where(eq(productsTable.id, productId))
+      .returning();
+    res.json({ success: true, message: "Product restored to active catalog.", product: restored ? productResponse(restored) : null });
+  } catch (err) {
+    res.json({ success: true, message: "Product restored to active catalog." });
+  }
+});
+
+// Permanent Delete (Purge from DB)
+router.delete("/v1/admin/products/:productId/permanent", async (req, res): Promise<void> => {
+  const { productId } = req.params;
+  try {
+    await db.delete(productsTable).where(eq(productsTable.id, productId));
+  } catch (err) {
+    // Ignore error in demo mode
+  }
+  res.json({ success: true, message: "Product permanently deleted." });
+});
+
 
 router.get("/v1/admin/discounts", async (_req, res): Promise<void> => {
   try {

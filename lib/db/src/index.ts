@@ -266,6 +266,8 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFA
 ALTER TABLE products ADD COLUMN IF NOT EXISTS submitted_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS approved_by TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS support_email TEXT DEFAULT 'support@sundarvan.xyz';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS contact_email TEXT DEFAULT 'contact@sundarvan.xyz';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS orders_email TEXT DEFAULT 'orders@sundarvan.xyz';

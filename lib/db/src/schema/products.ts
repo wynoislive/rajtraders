@@ -22,9 +22,11 @@ export const productsTable = pgTable(
     submittedBy: text("submitted_by"),
     approvedBy: text("approved_by"),
     rejectionReason: text("rejection_reason"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
+
   (table) => [
     index("idx_products_status_approval").on(table.status, table.approvalStatus),
     index("idx_products_slug").on(table.slug),
