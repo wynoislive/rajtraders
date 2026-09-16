@@ -580,40 +580,40 @@ function Products() {
 
   const defaultProductsList = useMemo(() => [
     {
-      id: 'prod_harbor_linen',
-      name: 'Harbor Linen Overshirt',
-      description: 'Breathable European linen overshirt with double flap pockets.',
-      priceCents: 4900,
-      compareAtPriceCents: 6500,
-      category: 'Shirts',
-      imageUrl: 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=800&auto=format&fit=crop&q=80',
-      inventory: 45,
-      prepTimeMinutes: 30,
+      id: 'prod_cake_belgian_choco',
+      name: 'Belgian Chocolate Truffle Cake (1kg)',
+      description: 'Rich 55% dark Belgian chocolate truffle cake decorated with edible gold leaf and cocoa nibs.',
+      priceCents: 129900,
+      compareAtPriceCents: 149900,
+      category: 'Cakes',
+      imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800&auto=format&fit=crop&q=80',
+      inventory: 25,
+      prepTimeMinutes: 45,
       status: 'active',
       featured: true,
-      isBestseller: false,
+      isBestseller: true,
       isVeg: true,
-      slug: 'harbor-linen-overshirt',
+      slug: 'belgian-chocolate-truffle-cake',
     },
     {
-      id: 'prod_premium_tee',
-      name: 'Premium Cotton Crew Tee',
-      description: 'Heavyweight organic cotton tee with tailored shoulders.',
-      priceCents: 2400,
-      compareAtPriceCents: 3200,
-      category: 'Tops',
-      imageUrl: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80',
-      inventory: 120,
+      id: 'prod_party_balloon_arch',
+      name: 'Metallic Gold & Pastel Balloon Arch Set (100 Pcs)',
+      description: 'Complete DIY birthday & wedding balloon garland kit including arch tape and glue dots.',
+      priceCents: 49900,
+      compareAtPriceCents: 79900,
+      category: 'Decorations',
+      imageUrl: 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800&auto=format&fit=crop&q=80',
+      inventory: 50,
       prepTimeMinutes: 15,
       status: 'active',
       featured: true,
-      isBestseller: false,
+      isBestseller: true,
       isVeg: true,
-      slug: 'premium-cotton-crew-tee',
+      slug: 'metallic-gold-pastel-balloon-arch',
     },
   ], []);
 
-  const rawProductsList = (adminProducts.data && adminProducts.data.length > 0) ? adminProducts.data : defaultProductsList;
+  const rawProductsList = adminProducts.data ?? (adminProducts.isError ? defaultProductsList : []);
   const trashCount = rawProductsList.filter((item: any) => item.status === 'archived').length;
 
   const products = useMemo(
