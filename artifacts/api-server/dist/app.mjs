@@ -124111,34 +124111,8 @@ var storefront_default = router2;
 // artifacts/api-server/src/routes/admin.ts
 var import_express5 = __toESM(require_express2(), 1);
 
-// artifacts/api-server/src/middlewares/auth.ts
-var configuredAdminIds = new Set(
-  (process.env.ADMIN_CLERK_USER_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean)
-);
-var requireAdmin = (req, res, next) => {
-  if (!process.env.CLERK_SECRET_KEY) {
-    return next();
-  }
-  try {
-    const auth = getAuth(req);
-    const userId = "userId" in auth ? auth.userId : void 0;
-    if (!userId) {
-      res.status(401).json({ error: "Authentication required." });
-      return;
-    }
-    if (configuredAdminIds.size > 0 && !configuredAdminIds.has(userId)) {
-      res.status(403).json({ error: "Admin access required." });
-      return;
-    }
-    req.log.info({ userId }, "Authenticated admin request");
-    next();
-  } catch (err) {
-    res.status(401).json({ error: "Authentication required." });
-  }
-};
-
 // artifacts/api-server/src/routes/staff-admin.ts
-var import_express4 = __toESM(require_express2(), 1);
+var import_express3 = __toESM(require_express2(), 1);
 import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } from "node:crypto";
 
 // artifacts/api-server/src/lib/redis.ts
@@ -125881,7 +125855,16 @@ var allowedOrigins = new Set(
   (process.env.CORS_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean)
 );
 function isAllowedOrigin(origin) {
-  return !origin || allowedOrigins.size === 0 || allowedOrigins.has(origin);
+  if (!origin) return true;
+  if (allowedOrigins.has(origin)) return true;
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    if (hostname === "sundarvan.xyz" || hostname.endsWith(".sundarvan.xyz") || hostname === "localhost" || hostname === "127.0.0.1") {
+      return true;
+    }
+  } catch {
+  }
+  return allowedOrigins.size === 0;
 }
 function createLimiter(windowMs, limit, message) {
   return rate_limit_default({
@@ -125955,7 +125938,7 @@ var secureGateway = [
 ];
 
 // artifacts/api-server/src/routes/staff-admin.ts
-var router3 = (0, import_express4.Router)();
+var router3 = (0, import_express3.Router)();
 var StaffLoginBodySchema = external_exports.object({
   email: external_exports.string().email("Valid email required"),
   password: external_exports.string().min(1, "Password is required")
@@ -126184,6 +126167,44 @@ router3.delete("/staff/:id", async (req, res) => {
   }
 });
 var staff_admin_default = router3;
+
+// artifacts/api-server/src/middlewares/auth.ts
+var configuredAdminIds = new Set(
+  (process.env.ADMIN_CLERK_USER_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean)
+);
+var requireAdmin = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    try {
+      const staffSession = await getStaffFromToken(authHeader);
+      if (staffSession) {
+        req.staff = staffSession;
+        req.log?.info?.({ staffId: staffSession.userId, role: staffSession.role }, "Authenticated staff admin request");
+        return next();
+      }
+    } catch (err) {
+      req.log?.warn?.({ err }, "Error validating staff token");
+    }
+  }
+  if (process.env.CLERK_SECRET_KEY) {
+    try {
+      const auth = getAuth(req);
+      const userId = "userId" in auth ? auth.userId : void 0;
+      if (userId) {
+        if (configuredAdminIds.size > 0 && !configuredAdminIds.has(userId)) {
+          res.status(403).json({ error: "Admin access required." });
+          return;
+        }
+        req.log?.info?.({ userId }, "Authenticated Clerk admin request");
+        return next();
+      }
+    } catch (err) {
+    }
+    res.status(401).json({ error: "Authentication required." });
+    return;
+  }
+  next();
+};
 
 // artifacts/api-server/src/utils/order-filters.ts
 function filterOrders(orders, query) {

@@ -676,7 +676,7 @@ function Products() {
       const method = editingId ? 'PATCH' : 'POST';
       await fetch(getApiUrl(path), {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(payload),
       });
     } catch (e) {
@@ -696,6 +696,7 @@ function Products() {
     try {
       await fetch(getApiUrl(`/api/v1/admin/products/${deleteTarget.id}`), {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
     } catch (e) {
       console.error(e);
@@ -712,6 +713,7 @@ function Products() {
     try {
       await fetch(getApiUrl(`/api/v1/admin/products/${product.id}/restore`), {
         method: 'POST',
+        headers: getAuthHeaders(),
       });
       setNotice(`Product "${product.name}" restored to active catalog.`);
     } catch (e) {
@@ -729,6 +731,7 @@ function Products() {
     try {
       await fetch(getApiUrl(`/api/v1/admin/products/${permanentDeleteTarget.id}/permanent`), {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
     } catch (e) {
       console.error(e);
@@ -1079,7 +1082,9 @@ function Approvals() {
   const fetchApprovals = async () => {
     setLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/v1/admin/approvals'));
+      const res = await fetch(getApiUrl('/api/v1/admin/approvals'), {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setPending(data);
@@ -1097,7 +1102,10 @@ function Approvals() {
 
   const handleApprove = async (id: string) => {
     try {
-      await fetch(getApiUrl(`/api/v1/admin/approvals/${id}/approve`), { method: 'POST' });
+      await fetch(getApiUrl(`/api/v1/admin/approvals/${id}/approve`), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
     } catch (e) {
       console.error(e);
     } finally {
@@ -1113,7 +1121,7 @@ function Approvals() {
     try {
       await fetch(getApiUrl(`/api/v1/admin/approvals/${id}/reject`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ reason }),
       });
     } catch (e) {
@@ -1206,7 +1214,9 @@ function StaffManagement() {
   const fetchStaff = async () => {
     setLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/v1/admin/staff'));
+      const res = await fetch(getApiUrl('/api/v1/admin/staff'), {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setStaffList(data);
@@ -1232,7 +1242,7 @@ function StaffManagement() {
 
       const res = await fetch(getApiUrl('/api/v1/admin/staff'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           name: form.name,
           email: form.email,
@@ -1425,7 +1435,7 @@ function StoreSettings() {
     try {
       const res = await fetch(getApiUrl('/api/v1/admin/test-email'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ toEmail: testRecipient, provider }),
       });
       const data = await res.json();
@@ -1440,7 +1450,9 @@ function StoreSettings() {
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/v1/admin/shop-settings'));
+      const res = await fetch(getApiUrl('/api/v1/admin/shop-settings'), {
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setForm((prev) => ({
@@ -1472,7 +1484,7 @@ function StoreSettings() {
     try {
       const res = await fetch(getApiUrl('/api/v1/admin/shop-settings'), {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           ...form,
           latitude: Number(form.latitude),
@@ -1935,8 +1947,8 @@ function Orders() {
       if (search.trim()) params.append('search', search.trim());
 
       const [ordersRes, statsRes] = await Promise.all([
-        fetch(getApiUrl(`/api/v1/admin/orders?${params.toString()}`)),
-        fetch(getApiUrl('/api/v1/admin/orders/stats')),
+        fetch(getApiUrl(`/api/v1/admin/orders?${params.toString()}`), { headers: getAuthHeaders() }),
+        fetch(getApiUrl('/api/v1/admin/orders/stats'), { headers: getAuthHeaders() }),
       ]);
 
       if (ordersRes.ok) setOrders(await ordersRes.json());
@@ -1961,7 +1973,10 @@ function Orders() {
     if (!window.confirm('Are you sure you want to cancel this pending order?')) return;
     setCancellingId(orderId);
     try {
-      const res = await fetch(getApiUrl(`/api/v1/admin/orders/${orderId}/cancel`), { method: 'POST' });
+      const res = await fetch(getApiUrl(`/api/v1/admin/orders/${orderId}/cancel`), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
       if (res.ok) fetchOrdersData();
     } catch (err) {
       console.error(err);
@@ -2043,7 +2058,7 @@ function Discounts() {
   const fetchDiscounts = () => {
     setLoading(true);
     setError(false);
-    fetch(getApiUrl('/api/v1/admin/discounts'))
+    fetch(getApiUrl('/api/v1/admin/discounts'), { headers: getAuthHeaders() })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((items) => setData(Array.isArray(items) && items.length > 0 ? items : defaultDiscounts))
       .catch(() => setData(defaultDiscounts))
@@ -2109,7 +2124,7 @@ function Discounts() {
     try {
       await fetch(getApiUrl('/api/v1/admin/discounts'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(payload),
       });
     } catch (err) {
@@ -2335,7 +2350,7 @@ function Registrations() {
   const fetchPolicies = () => {
     setLoading(true);
     setError(false);
-    fetch(getApiUrl('/api/v1/admin/registrations'))
+    fetch(getApiUrl('/api/v1/admin/registrations'), { headers: getAuthHeaders() })
       .then((r) => r.ok ? r.json() : Promise.reject())
       .then((items) => setData(Array.isArray(items) ? items : []))
       .catch(() => setError(true))

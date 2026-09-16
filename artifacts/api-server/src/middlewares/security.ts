@@ -13,7 +13,15 @@ const allowedOrigins = new Set(
 );
 
 export function isAllowedOrigin(origin: string | undefined): boolean {
-  return !origin || allowedOrigins.size === 0 || allowedOrigins.has(origin);
+  if (!origin) return true;
+  if (allowedOrigins.has(origin)) return true;
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    if (hostname === "sundarvan.xyz" || hostname.endsWith(".sundarvan.xyz") || hostname === "localhost" || hostname === "127.0.0.1") {
+      return true;
+    }
+  } catch {}
+  return allowedOrigins.size === 0;
 }
 
 // ── Rate limit store (Redis or in-memory fallback) ──────────
