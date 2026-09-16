@@ -124111,10 +124111,6 @@ var storefront_default = router2;
 // artifacts/api-server/src/routes/admin.ts
 var import_express5 = __toESM(require_express2(), 1);
 
-// artifacts/api-server/src/routes/staff-admin.ts
-var import_express3 = __toESM(require_express2(), 1);
-import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } from "node:crypto";
-
 // artifacts/api-server/src/lib/redis.ts
 var import_ioredis = __toESM(require_built3(), 1);
 
@@ -124212,6 +124208,80 @@ var securityConfig = {
     return this.sessionTtlDays * 24 * 60 * 60;
   }
 };
+
+// artifacts/api-server/src/lib/staff-session.ts
+var STAFF_SESSION_TTL = securityConfig.sessionTtlSeconds;
+var fallbackStaffSessions = /* @__PURE__ */ new Map();
+async function getStaffFromToken(token) {
+  if (!token) return null;
+  const clean = token.replace(/^Bearer\s+/i, "").trim();
+  const redis = getRedisClient();
+  if (redis) {
+    const data = await redis.get(`session:staff:${clean}`);
+    if (!data) return null;
+    const session2 = JSON.parse(data);
+    if (session2.expiresAt) {
+      const expiry = new Date(session2.expiresAt).getTime();
+      if (Date.now() > expiry) {
+        await redis.del(`session:staff:${clean}`);
+        return null;
+      }
+    }
+    return session2;
+  }
+  const session = fallbackStaffSessions.get(clean);
+  if (!session) return null;
+  if (session.expiresAt) {
+    const expiry = new Date(session.expiresAt).getTime();
+    if (Date.now() > expiry) {
+      fallbackStaffSessions.delete(clean);
+      return null;
+    }
+  }
+  return session;
+}
+
+// artifacts/api-server/src/middlewares/auth.ts
+var configuredAdminIds = new Set(
+  (process.env.ADMIN_CLERK_USER_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean)
+);
+var requireAdmin = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    try {
+      const staffSession = await getStaffFromToken(authHeader);
+      if (staffSession) {
+        req.staff = staffSession;
+        req.log?.info?.({ staffId: staffSession.userId, role: staffSession.role }, "Authenticated staff admin request");
+        return next();
+      }
+    } catch (err) {
+      req.log?.warn?.({ err }, "Error validating staff token");
+    }
+  }
+  if (process.env.CLERK_SECRET_KEY) {
+    try {
+      const auth = getAuth(req);
+      const userId = "userId" in auth ? auth.userId : void 0;
+      if (userId) {
+        if (configuredAdminIds.size > 0 && !configuredAdminIds.has(userId)) {
+          res.status(403).json({ error: "Admin access required." });
+          return;
+        }
+        req.log?.info?.({ userId }, "Authenticated Clerk admin request");
+        return next();
+      }
+    } catch (err) {
+    }
+    res.status(401).json({ error: "Authentication required." });
+    return;
+  }
+  next();
+};
+
+// artifacts/api-server/src/routes/staff-admin.ts
+var import_express4 = __toESM(require_express2(), 1);
+import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } from "node:crypto";
 
 // artifacts/api-server/src/middlewares/validate.ts
 function validate(schemas) {
@@ -125938,7 +126008,7 @@ var secureGateway = [
 ];
 
 // artifacts/api-server/src/routes/staff-admin.ts
-var router3 = (0, import_express3.Router)();
+var router3 = (0, import_express4.Router)();
 var StaffLoginBodySchema = external_exports.object({
   email: external_exports.string().email("Valid email required"),
   password: external_exports.string().min(1, "Password is required")
@@ -125972,36 +126042,6 @@ function verifyPassword(password, storedHash) {
   } catch {
     return false;
   }
-}
-var STAFF_SESSION_TTL = securityConfig.sessionTtlSeconds;
-var fallbackStaffSessions = /* @__PURE__ */ new Map();
-async function getStaffFromToken(token) {
-  if (!token) return null;
-  const clean = token.replace(/^Bearer\s+/i, "").trim();
-  const redis = getRedisClient();
-  if (redis) {
-    const data = await redis.get(`session:staff:${clean}`);
-    if (!data) return null;
-    const session2 = JSON.parse(data);
-    if (session2.expiresAt) {
-      const expiry = new Date(session2.expiresAt).getTime();
-      if (Date.now() > expiry) {
-        await redis.del(`session:staff:${clean}`);
-        return null;
-      }
-    }
-    return session2;
-  }
-  const session = fallbackStaffSessions.get(clean);
-  if (!session) return null;
-  if (session.expiresAt) {
-    const expiry = new Date(session.expiresAt).getTime();
-    if (Date.now() > expiry) {
-      fallbackStaffSessions.delete(clean);
-      return null;
-    }
-  }
-  return session;
 }
 router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodySchema }), async (req, res) => {
   const { email, password } = req.body;
@@ -126167,44 +126207,6 @@ router3.delete("/staff/:id", async (req, res) => {
   }
 });
 var staff_admin_default = router3;
-
-// artifacts/api-server/src/middlewares/auth.ts
-var configuredAdminIds = new Set(
-  (process.env.ADMIN_CLERK_USER_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean)
-);
-var requireAdmin = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader) {
-    try {
-      const staffSession = await getStaffFromToken(authHeader);
-      if (staffSession) {
-        req.staff = staffSession;
-        req.log?.info?.({ staffId: staffSession.userId, role: staffSession.role }, "Authenticated staff admin request");
-        return next();
-      }
-    } catch (err) {
-      req.log?.warn?.({ err }, "Error validating staff token");
-    }
-  }
-  if (process.env.CLERK_SECRET_KEY) {
-    try {
-      const auth = getAuth(req);
-      const userId = "userId" in auth ? auth.userId : void 0;
-      if (userId) {
-        if (configuredAdminIds.size > 0 && !configuredAdminIds.has(userId)) {
-          res.status(403).json({ error: "Admin access required." });
-          return;
-        }
-        req.log?.info?.({ userId }, "Authenticated Clerk admin request");
-        return next();
-      }
-    } catch (err) {
-    }
-    res.status(401).json({ error: "Authentication required." });
-    return;
-  }
-  next();
-};
 
 // artifacts/api-server/src/utils/order-filters.ts
 function filterOrders(orders, query) {

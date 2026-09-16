@@ -52,55 +52,21 @@ function verifyPassword(password: string, storedHash: string): boolean {
   }
 }
 
-// ── Session store: Redis primary, in-memory fallback ────────
-export interface StaffSession {
-  userId: string;
-  name: string;
-  email: string;
-  role: AdminRole;
-  expiresAt: string | null;
-}
+import {
+  getStaffFromToken,
+  getStaffFromTokenAsync,
+  type StaffSession,
+  STAFF_SESSION_TTL,
+  fallbackStaffSessions,
+} from "../lib/staff-session";
 
-const STAFF_SESSION_TTL = securityConfig.sessionTtlSeconds;
-const fallbackStaffSessions = new Map<string, StaffSession>();
-
-export async function getStaffFromToken(token?: string): Promise<StaffSession | null> {
-  if (!token) return null;
-  const clean = token.replace(/^Bearer\s+/i, "").trim();
-
-  const redis = getRedisClient();
-  if (redis) {
-    const data = await redis.get(`session:staff:${clean}`);
-    if (!data) return null;
-    const session: StaffSession = JSON.parse(data);
-
-    // Check time-bound temporary access expiration
-    if (session.expiresAt) {
-      const expiry = new Date(session.expiresAt).getTime();
-      if (Date.now() > expiry) {
-        await redis.del(`session:staff:${clean}`);
-        return null;
-      }
-    }
-    return session;
-  }
-
-  // Fallback
-  const session = fallbackStaffSessions.get(clean);
-  if (!session) return null;
-  if (session.expiresAt) {
-    const expiry = new Date(session.expiresAt).getTime();
-    if (Date.now() > expiry) {
-      fallbackStaffSessions.delete(clean);
-      return null;
-    }
-  }
-  return session;
-}
-
-// Synchronous version for backwards compatibility with admin.ts
-// (admin.ts calls getStaffFromToken synchronously — this wrapper handles both)
-export { getStaffFromToken as getStaffFromTokenAsync };
+export {
+  getStaffFromToken,
+  getStaffFromTokenAsync,
+  type StaffSession,
+  STAFF_SESSION_TTL,
+  fallbackStaffSessions,
+};
 
 // 1. Staff Authentication
 router.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodySchema }), async (req: Request, res: Response) => {

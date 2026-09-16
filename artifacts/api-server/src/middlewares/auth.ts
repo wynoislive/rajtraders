@@ -1,6 +1,6 @@
 import { getAuth } from "@clerk/express";
 import type { RequestHandler } from "express";
-import { getStaffFromToken } from "../routes/staff-admin";
+import { getStaffFromToken } from "../lib/staff-session";
 
 const configuredAdminIds = new Set(
   (process.env.ADMIN_CLERK_USER_IDS ?? "")
