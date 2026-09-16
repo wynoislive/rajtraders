@@ -38,7 +38,13 @@ import {
   Twitter,
   Tag,
   Package,
-  LogOut
+  LogOut,
+  Truck,
+  Phone,
+  Download,
+  AlertCircle,
+  Building2,
+  ExternalLink
 } from 'lucide-react';
 
 export type StorefrontProduct = Product & {
@@ -75,6 +81,12 @@ export default function App() {
   // Storefront Public Settings
   const [shopSettings, setShopSettings] = useState<any>({
     shopName: 'RAJ TRADERS',
+    legalBusinessName: 'RAJ TRADERS',
+    gstinNumber: '23AAAAA0000A1Z5',
+    panNumber: 'AAAAA0000A',
+    stateCode: '23',
+    stateName: 'Madhya Pradesh',
+    allowedPincodesJson: '["484661", "484660"]',
     availableInLocation: 'BIRSINGPUR PALI',
     aboutUsText: 'Premium cakes, party decorations & artisanal local delights.',
     isStoreOpen: true,
@@ -98,8 +110,34 @@ export default function App() {
   }, []);
 
   // Store & Location State
-  const [pincode, setPincode] = useState('482004');
-  const [city, setCity] = useState('Jabalpur, MP');
+  const [pincode, setPincode] = useState('484661');
+  const [city, setCity] = useState('Birsingpur Pali, MP');
+  const [deliveryPincode, setDeliveryPincode] = useState('484661');
+  const [cancellationModalOrder, setCancellationModalOrder] = useState<any | null>(null);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [preferredRefundMethod, setPreferredRefundMethod] = useState<'store_credit' | 'original_source'>('store_credit');
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [activeLegalModal, setActiveLegalModal] = useState<'privacy' | 'terms' | 'refund' | 'shipping' | null>(null);
+  const [guestCartMerged, setGuestCartMerged] = useState(false);
+
+  const allowedPincodes: string[] = useMemo(() => {
+    try {
+      if (typeof shopSettings.allowedPincodesJson === 'string') {
+        return JSON.parse(shopSettings.allowedPincodesJson);
+      }
+      if (Array.isArray(shopSettings.allowedPincodesJson)) {
+        return shopSettings.allowedPincodesJson;
+      }
+      return ['484661', '484660'];
+    } catch {
+      return ['484661', '484660'];
+    }
+  }, [shopSettings.allowedPincodesJson]);
+
+  const isPincodeServiceable = useMemo(() => {
+    if (!deliveryPincode) return false;
+    return allowedPincodes.includes(deliveryPincode.trim());
+  }, [deliveryPincode, allowedPincodes]);
   const [pincodeResult, setPincodeResult] = useState<any>(null);
   const [pincodeChecking, setPincodeChecking] = useState(false);
   const [showPincodeModal, setShowPincodeModal] = useState(false);
@@ -229,6 +267,118 @@ export default function App() {
         .finally(() => setOrdersLoading(false));
     }
   }, [token, location]);
+
+  // Cloud Cart Sync when customer is authenticated
+  useEffect(() => {
+    if (token) {
+      const localCart = cart;
+      if (localCart.length > 0 && !guestCartMerged) {
+        fetch(getApiUrl('/api/v1/customer/cart/merge'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ items: localCart.map(i => ({ productId: i.product.id, quantity: i.quantity })) }),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(merged => {
+            if (merged && Array.isArray(merged.items)) {
+              setGuestCartMerged(true);
+            }
+          })
+          .catch(() => {});
+      } else {
+        fetch(getApiUrl('/api/v1/customer/cart'), {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(cloudCart => {
+            if (cloudCart && Array.isArray(cloudCart.items) && cloudCart.items.length > 0 && cart.length === 0) {
+              setCart(cloudCart.items.map((i: any) => ({
+                product: i.product,
+                quantity: i.quantity,
+              })));
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [token]);
+
+  // Sync cart mutations to cloud when logged in
+  useEffect(() => {
+    if (token && guestCartMerged) {
+      const timer = setTimeout(() => {
+        fetch(getApiUrl('/api/v1/customer/cart'), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ items: cart.map(i => ({ productId: i.product.id, quantity: i.quantity })) }),
+        }).catch(() => {});
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [cart, token, guestCartMerged]);
+
+  const handleDownloadInvoice = async (orderId: string, formattedOrderId?: string) => {
+    try {
+      showToast('Preparing tax invoice PDF...', 'info');
+      const res = await fetch(getApiUrl(`/api/v1/checkout/orders/${orderId}/invoice`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        showToast('Failed to download invoice PDF.', 'error');
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice-${formattedOrderId || orderId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showToast('Tax invoice downloaded successfully!', 'success');
+    } catch {
+      showToast('Error downloading tax invoice.', 'error');
+    }
+  };
+
+  const handleSubmitCancellation = async () => {
+    if (!cancellationModalOrder || !cancellationReason.trim()) {
+      showToast('Please specify a reason for cancellation.', 'error');
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/checkout/orders/${cancellationModalOrder.id}/cancel-request`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          reason: cancellationReason.trim(),
+          preferredRefundMethod,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('Cancellation request submitted for admin review.', 'success');
+        setCancellationModalOrder(null);
+        setCancellationReason('');
+        if (token) {
+          fetch(getApiUrl('/api/v1/auth/orders'), { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.ok ? r.json() : [])
+            .then(data => { if (Array.isArray(data)) setCustomerOrders(data); });
+        }
+      } else {
+        showToast(data.error || 'Failed to submit cancellation request.', 'error');
+      }
+    } catch {
+      showToast('Network error while requesting cancellation.', 'error');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   // Toast Notification State
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -678,6 +828,10 @@ export default function App() {
       showToast('Store is currently closed for new orders.', 'error');
       return;
     }
+    if (!isPincodeServiceable) {
+      showToast(`Delivery PIN ${deliveryPincode} is not serviceable. We only deliver to: ${allowedPincodes.join(', ')}`, 'error');
+      return;
+    }
     if (!shippingAddress || shippingAddress.length < 5) {
       showToast('Please enter a valid shipping address.', 'error');
       return;
@@ -695,7 +849,8 @@ export default function App() {
           customerEmail: user.email,
           customerName: `${user.firstName} ${user.lastName}`,
           customerMobile: user.mobileNumber,
-          shippingAddress,
+          shippingAddress: `${shippingAddress} (PIN: ${deliveryPincode})`,
+          pincode: deliveryPincode,
         }),
       });
 
@@ -706,6 +861,11 @@ export default function App() {
       }
 
       const orderData = await res.json();
+      if (!res.ok) {
+        showToast(orderData.error || 'Failed to place order.', 'error');
+        return;
+      }
+
       if (orderData.razorpayOrderId) {
         const verifyRes = await fetch(getApiUrl('/api/v1/checkout/verify-payment'), {
           method: 'POST',
@@ -720,7 +880,12 @@ export default function App() {
         setReceipt(receiptData);
         setCart([]);
         setShowCartDrawer(false);
-        showToast('Order placed successfully!', 'success');
+        showToast('Order placed successfully! Tax invoice sent to your email.', 'success');
+        if (token) {
+          fetch(getApiUrl('/api/v1/auth/orders'), { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.ok ? r.json() : [])
+            .then(data => { if (Array.isArray(data)) setCustomerOrders(data); });
+        }
       } else {
         showToast(orderData.error || 'Failed to place order.', 'error');
       }
@@ -732,13 +897,19 @@ export default function App() {
     }
   };
 
-  // Cart Calculations
+  // Cart Calculations & Reverse Tax Breakdown
   const cartTotalCents = cart.reduce((acc, i) => acc + i.product.priceCents * i.quantity, 0);
   const packagingFeeCents = shopSettings.packagingFeeCents || 1000;
   const isFreeDelivery = cartTotalCents >= (shopSettings.freeDeliveryThresholdCents || 50000);
   const deliveryFeeCents = isFreeDelivery ? 0 : (shopSettings.flatDeliveryFeeCents || 3000);
   const discountCents = discountResult?.valid ? discountResult.discountCents : 0;
   const finalPayableCents = Math.max(100, cartTotalCents + packagingFeeCents + deliveryFeeCents - discountCents);
+
+  // Reverse GST calculation (5% inclusive GST standard)
+  const taxableTotalCents = Math.round(cartTotalCents / 1.05);
+  const gstTotalCents = cartTotalCents - taxableTotalCents;
+  const cgstCents = Math.round(gstTotalCents / 2);
+  const sgstCents = gstTotalCents - cgstCents;
 
   return (
     <div className="min-h-screen bg-[#F7F2EA] text-[#0E3D42] font-sans flex flex-col justify-between">
@@ -1005,17 +1176,95 @@ export default function App() {
                       ) : (
                         <div className="space-y-4">
                           {customerOrders.map((order) => (
-                            <div key={order.id} className="p-5 rounded-2xl border border-gray-200 space-y-3 bg-gray-50/50">
+                            <div key={order.id} className="p-5 rounded-2xl border border-gray-200 space-y-4 bg-gray-50/50">
+                              {/* Order Header & Status Badges */}
                               <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 text-xs">
                                 <div>
-                                  <span className="font-black text-[#0E3D42]">{order.formattedOrderId}</span>
+                                  <span className="font-black text-[#0E3D42]">{order.formattedOrderId || order.id.slice(0, 12)}</span>
                                   <span className="text-gray-400 ml-2">{new Date(order.createdAt).toLocaleDateString()}</span>
                                 </div>
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${order.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                                  {order.status}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  {order.cancellationStatus === 'requested' && (
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                                      Cancellation Under Review
+                                    </span>
+                                  )}
+                                  {order.cancellationStatus === 'approved' && (
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-100 text-rose-800 border border-rose-300">
+                                      Cancelled & Refunded
+                                    </span>
+                                  )}
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                                    order.status === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
+                                    order.status === 'out_for_delivery' ? 'bg-blue-100 text-blue-800' :
+                                    order.status === 'packed' ? 'bg-indigo-100 text-indigo-800' :
+                                    order.status === 'paid' ? 'bg-emerald-100 text-emerald-800' :
+                                    order.status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {order.status === 'out_for_delivery' ? 'Out for Delivery' : order.status}
+                                  </span>
+                                </div>
                               </div>
 
+                              {/* Visual Delivery Stepper */}
+                              {order.status !== 'cancelled' && order.cancellationStatus !== 'approved' && (
+                                <div className="py-2 px-1">
+                                  <div className="grid grid-cols-4 gap-1 text-center text-[10px] font-bold">
+                                    {[
+                                      { key: 'paid', label: 'Order Placed', done: true },
+                                      { key: 'packed', label: 'Packed & Ready', done: ['packed', 'out_for_delivery', 'delivered'].includes(order.status) },
+                                      { key: 'out_for_delivery', label: 'Out for Delivery', done: ['out_for_delivery', 'delivered'].includes(order.status) },
+                                      { key: 'delivered', label: 'Delivered', done: order.status === 'delivered' },
+                                    ].map((step, idx) => (
+                                      <div key={idx} className="flex flex-col items-center">
+                                        <div className={`size-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 ${
+                                          step.done ? 'bg-[#0E3D42] text-white' : 'bg-gray-200 text-gray-400'
+                                        }`}>
+                                          {step.done ? <Check size={12} /> : idx + 1}
+                                        </div>
+                                        <span className={step.done ? 'text-[#0E3D42] font-extrabold' : 'text-gray-400'}>{step.label}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Local Fleet Rider Contact & Dispatch Info */}
+                              {(order.status === 'out_for_delivery' || order.status === 'delivered') && order.riderName && (
+                                <div className="bg-[#0E3D42]/5 border border-[#0E3D42]/15 p-3.5 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                                  <div className="flex items-center gap-3">
+                                    <div className="size-9 rounded-full bg-[#0E3D42] text-white flex items-center justify-center">
+                                      <Truck size={18} />
+                                    </div>
+                                    <div>
+                                      <p className="font-black text-[#0E3D42]">Local Dispatch Rider: {order.riderName}</p>
+                                      <p className="text-[11px] text-gray-600 font-medium">Slot: {order.dispatchSlot || 'Local Pali Fleet'}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {order.riderPhone && (
+                                      <a
+                                        href={`tel:${order.riderPhone}`}
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-xs flex items-center gap-1.5 hover:bg-emerald-700 shadow-sm transition"
+                                      >
+                                        <Phone size={13} /> Call Rider ({order.riderPhone})
+                                      </a>
+                                    )}
+                                    {order.trackingUrl && (
+                                      <a
+                                        href={order.trackingUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="px-3 py-1.5 rounded-lg bg-[#0E3D42] text-white font-bold text-xs flex items-center gap-1.5 hover:bg-[#0E3D42]/90 shadow-sm transition"
+                                      >
+                                        <MapPin size={13} /> Live Map
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Items Breakdown */}
                               <div className="space-y-2 text-xs">
                                 {Array.isArray(order.items) && order.items.map((item: OrderItem, idx: number) => (
                                   <div key={idx} className="flex justify-between font-semibold">
@@ -1025,11 +1274,38 @@ export default function App() {
                                 ))}
                               </div>
 
-                              <div className="flex items-center justify-between pt-2 text-xs font-bold border-t">
-                                <span>Total: {money(order.totalCents)}</span>
-                                <a href={`mailto:${shopSettings.supportEmail}?subject=Order Cancellation Query ${order.formattedOrderId}`} className="text-xs font-bold text-[#0E3D42] hover:underline">
-                                  Contact Support for Cancellation
-                                </a>
+                              {/* Total & Action Toolbar */}
+                              <div className="flex flex-wrap items-center justify-between pt-3 text-xs font-bold border-t gap-3">
+                                <div>
+                                  <span className="text-[#0E3D42] font-black text-sm">Total: {money(order.totalCents)}</span>
+                                  {order.taxableAmountCents ? (
+                                    <span className="text-[10px] text-gray-500 ml-2 font-medium block sm:inline">
+                                      (Taxable: {money(order.taxableAmountCents)} + GST: {money((order.cgstCents || 0) + (order.sgstCents || 0))})
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleDownloadInvoice(order.id, order.formattedOrderId)}
+                                    className="px-3 py-1.5 rounded-lg bg-white border border-gray-300 text-[#0E3D42] hover:bg-gray-50 font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
+                                  >
+                                    <Download size={13} /> Tax Invoice (PDF)
+                                  </button>
+
+                                  {(order.status === 'paid' || order.status === 'packed') && !order.cancellationStatus && (
+                                    <button
+                                      onClick={() => {
+                                        setCancellationModalOrder(order);
+                                        setCancellationReason('');
+                                        setPreferredRefundMethod('store_credit');
+                                      }}
+                                      className="px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 font-bold text-xs transition"
+                                    >
+                                      Request Cancellation
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -1430,16 +1706,37 @@ export default function App() {
 
       {/* Swiggy-Inspired Footer Section */}
       <footer className="bg-[#0E3D42] text-white pt-16 pb-8 border-t border-[#E2A93B]/20">
-        <div className="max-w-7xl mx-auto px-6 sm:px-8 grid grid-cols-1 md:grid-cols-4 gap-10">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 grid grid-cols-1 md:grid-cols-5 gap-8">
           {/* Company / About Us */}
-          <div className="space-y-4">
+          <div className="space-y-4 md:col-span-2">
             <div className="flex items-center gap-3">
               <img src="/RAJTRADERS-LOGO.png" alt="RAJ TRADERS" className="size-10 object-contain rounded-xl border border-[#E2A93B]" />
-              <span className="text-xl font-black tracking-tight text-white">RAJ TRADERS</span>
+              <span className="text-xl font-black tracking-tight text-white">{shopSettings.legalBusinessName || 'RAJ TRADERS'}</span>
             </div>
             <p className="text-xs text-white/70 leading-relaxed font-medium">
               {shopSettings.aboutUsText || 'Premium cakes, party decorations & artisanal local delights.'}
             </p>
+            {/* Business GST & Registration Disclosure */}
+            <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl space-y-1 text-[11px] text-white/80">
+              <div className="flex items-center gap-1.5 font-bold text-white">
+                <Building2 size={13} className="text-[#E2A93B]" /> Registered Business Entity
+              </div>
+              <p>Legal Name: <strong className="text-white">{shopSettings.legalBusinessName || 'RAJ TRADERS'}</strong></p>
+              <p>GSTIN: <span className="font-mono text-[#E2A93B] font-bold">{shopSettings.gstinNumber || '23AAAAA0000A1Z5'}</span></p>
+              {shopSettings.panNumber && <p>PAN: <span className="font-mono text-white font-semibold">{shopSettings.panNumber}</span></p>}
+              <p>State: {shopSettings.stateName || 'Madhya Pradesh'} (Code: {shopSettings.stateCode || '23'})</p>
+            </div>
+          </div>
+
+          {/* Quick Legal & Policies */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Legal & Policies</h3>
+            <ul className="text-xs text-white/80 space-y-2 font-medium">
+              <li><button onClick={() => setActiveLegalModal('privacy')} className="hover:underline text-left">Privacy Policy</button></li>
+              <li><button onClick={() => setActiveLegalModal('terms')} className="hover:underline text-left">Terms & Conditions</button></li>
+              <li><button onClick={() => setActiveLegalModal('refund')} className="hover:underline text-left">Refund & Cancellation</button></li>
+              <li><button onClick={() => setActiveLegalModal('shipping')} className="hover:underline text-left">Shipping & Delivery</button></li>
+            </ul>
           </div>
 
           {/* Contact Us */}
@@ -1448,22 +1745,19 @@ export default function App() {
             <ul className="text-xs text-white/80 space-y-2 font-medium">
               <li><a href={`mailto:${shopSettings.supportEmail}`} className="hover:underline">Help & Support</a></li>
               <li><span>Email: {shopSettings.supportEmail}</span></li>
+              <li><span>Address: {shopSettings.shopAddress || 'Main Market, Pali'}</span></li>
             </ul>
           </div>
 
-          {/* Available In Location */}
+          {/* Available In Location & Social */}
           <div className="space-y-3">
-            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Available in</h3>
-            <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/10 p-3 rounded-xl border border-white/10 w-fit">
+            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Serviceable Area</h3>
+            <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/10 p-3 rounded-xl border border-white/10">
               <MapPin size={16} className="text-[#E2A93B]" />
-              <span>{shopSettings.availableInLocation || 'BIRSINGPUR PALI'}</span>
+              <span>{shopSettings.availableInLocation || 'BIRSINGPUR PALI'} ({allowedPincodes.join(', ')})</span>
             </div>
-          </div>
 
-          {/* Social Links */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Social Links</h3>
-            <div className="flex items-center gap-3">
+            <div className="pt-2 flex items-center gap-3">
               {shopSettings.socialLinkedin && <a href={shopSettings.socialLinkedin} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Linkedin size={18} /></a>}
               {shopSettings.socialInstagram && <a href={shopSettings.socialInstagram} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Instagram size={18} /></a>}
               {shopSettings.socialFacebook && <a href={shopSettings.socialFacebook} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Facebook size={18} /></a>}
@@ -1473,7 +1767,7 @@ export default function App() {
         </div>
 
         <div className="max-w-7xl mx-auto px-6 sm:px-8 border-t border-white/10 mt-12 pt-6 text-center text-xs font-bold text-white/50">
-          © 2026 RAJ TRADERS. All rights reserved. Built with excellence.
+          © 2026 {shopSettings.legalBusinessName || 'RAJ TRADERS'}. All rights reserved. Registered under GST Laws of India.
         </div>
       </footer>
 
@@ -1509,18 +1803,42 @@ export default function App() {
                     </div>
                   ))}
 
-                  {/* Fee Breakdown */}
+                  {/* Fee & Reverse GST Breakdown */}
                   <div className="bg-[#F7F2EA] p-4 rounded-2xl space-y-2 text-xs font-bold border border-[#0E3D42]/10">
-                    <div className="flex justify-between"><span>Items Subtotal:</span><span>{money(cartTotalCents)}</span></div>
-                    <div className="flex justify-between"><span>Packaging Fee:</span><span>{money(packagingFeeCents)}</span></div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between text-[#0E3D42]">
+                      <span>Items Subtotal (MRP Incl.):</span>
+                      <span>{money(cartTotalCents)}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-gray-500 pl-2">
+                      <span>└ Taxable Value:</span>
+                      <span>{money(taxableTotalCents)}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-gray-500 pl-2">
+                      <span>└ CGST (2.5%):</span>
+                      <span>{money(cgstCents)}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-gray-500 pl-2">
+                      <span>└ SGST (2.5%):</span>
+                      <span>{money(sgstCents)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-gray-200 pt-2 text-[#0E3D42]">
+                      <span>Packaging Fee:</span>
+                      <span>{money(packagingFeeCents)}</span>
+                    </div>
+                    <div className="flex justify-between text-[#0E3D42]">
                       <span>Delivery Fee:</span>
                       <span className={isFreeDelivery ? 'text-emerald-700' : ''}>{isFreeDelivery ? 'FREE' : money(deliveryFeeCents)}</span>
                     </div>
                     {discountResult?.valid && (
-                      <div className="flex justify-between text-emerald-700"><span>Discount ({discountResult.code}):</span><span>-{money(discountCents)}</span></div>
+                      <div className="flex justify-between text-emerald-700">
+                        <span>Discount ({discountResult.code}):</span>
+                        <span>-{money(discountCents)}</span>
+                      </div>
                     )}
-                    <div className="flex justify-between text-sm font-black border-t pt-2 text-[#0E3D42]"><span>Final Payable:</span><span>{money(finalPayableCents)}</span></div>
+                    <div className="flex justify-between text-sm font-black border-t pt-2 text-[#0E3D42]">
+                      <span>Final Total:</span>
+                      <span>{money(finalPayableCents)}</span>
+                    </div>
                   </div>
 
                   {/* Discount Code Input */}
@@ -1564,16 +1882,56 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Shipping Address Input */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-extrabold text-[#0E3D42]">Shipping Address & Pincode</label>
-                    <textarea
-                      rows={2}
-                      value={shippingAddress}
-                      onChange={(e) => setShippingAddress(e.target.value)}
-                      className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
-                      placeholder="Enter street, landmark, city, postal code"
-                    />
+                  {/* Pincode & Shipping Address Input with Live Serviceability Check */}
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-extrabold text-[#0E3D42]">Delivery PIN Code</label>
+                        <span className="text-[10px] text-gray-500 font-semibold">Serviceable: {allowedPincodes.join(', ')}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <input
+                          type="text"
+                          maxLength={6}
+                          value={deliveryPincode}
+                          onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, ''))}
+                          placeholder="484661"
+                          className="w-28 p-2.5 text-xs font-mono font-bold rounded-xl border border-gray-300"
+                        />
+                        <div className="flex-1">
+                          {deliveryPincode.length === 6 ? (
+                            isPincodeServiceable ? (
+                              <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                                <CheckCircle2 size={14} /> Serviceable (Pali Local Fleet)
+                              </span>
+                            ) : (
+                              <span className="text-xs font-bold text-red-600 flex items-center gap-1">
+                                <AlertCircle size={14} /> PIN Not Serviceable
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-[11px] text-gray-400">Enter 6-digit delivery PIN</span>
+                          )}
+                        </div>
+                      </div>
+                      {!isPincodeServiceable && deliveryPincode.length === 6 && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-[11px] text-red-700 font-semibold flex items-start gap-2">
+                          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                          <span>Delivery is exclusively available in Pali PINs ({allowedPincodes.join(', ')}). Orders outside this local zone cannot be fulfilled.</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-extrabold text-[#0E3D42]">Delivery Address & Landmark</label>
+                      <textarea
+                        rows={2}
+                        value={shippingAddress}
+                        onChange={(e) => setShippingAddress(e.target.value)}
+                        className="w-full mt-1 p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
+                        placeholder="House/Shop no., Landmark, Ward name, Pali, MP"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -1583,13 +1941,143 @@ export default function App() {
               <div className="border-t pt-4 space-y-4">
                 <button
                   onClick={handleCheckout}
-                  disabled={isCheckingOut || !shopSettings.isStoreOpen}
+                  disabled={isCheckingOut || !shopSettings.isStoreOpen || !isPincodeServiceable}
                   className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition disabled:bg-gray-400"
                 >
-                  {isCheckingOut ? 'Processing Order...' : `Pay & Complete Order · ${money(finalPayableCents)}`}
+                  {isCheckingOut ? 'Processing Order...' : !isPincodeServiceable ? `Enter Serviceable PIN (${allowedPincodes.join(', ')})` : `Pay & Complete Order · ${money(finalPayableCents)}`}
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Customer Cancellation Request Modal */}
+      {cancellationModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-lg font-black text-[#0E3D42]">Request Order Cancellation</h3>
+              <button onClick={() => setCancellationModalOrder(null)} className="p-2 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+            </div>
+
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-semibold space-y-1">
+              <p>Order: <strong>{cancellationModalOrder.formattedOrderId || cancellationModalOrder.id}</strong></p>
+              <p>Amount: <strong>{money(cancellationModalOrder.totalCents)}</strong></p>
+              <p className="text-[11px] text-amber-800">Fresh bakery items already in preparation cannot be cancelled after dispatch. Self-cancellation requests are reviewed instantly by staff.</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#0E3D42]">Reason for Cancellation *</label>
+              <textarea
+                rows={3}
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                placeholder="Please describe why you wish to cancel this order..."
+                className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#0E3D42]">Preferred Refund Method</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreferredRefundMethod('store_credit')}
+                  className={`p-3 rounded-xl border text-xs font-bold text-left transition ${preferredRefundMethod === 'store_credit' ? 'border-[#0E3D42] bg-[#0E3D42]/10 text-[#0E3D42]' : 'border-gray-200 text-gray-600'}`}
+                >
+                  <p className="font-extrabold">Instant Store Credit</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Immediate store credit</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreferredRefundMethod('original_source')}
+                  className={`p-3 rounded-xl border text-xs font-bold text-left transition ${preferredRefundMethod === 'original_source' ? 'border-[#0E3D42] bg-[#0E3D42]/10 text-[#0E3D42]' : 'border-gray-200 text-gray-600'}`}
+                >
+                  <p className="font-extrabold">Original Source</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Razorpay bank transfer</p>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setCancellationModalOrder(null)}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-200 transition"
+              >
+                Keep Order
+              </button>
+              <button
+                onClick={handleSubmitCancellation}
+                disabled={isCancelling || !cancellationReason.trim()}
+                className="flex-1 py-3 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-700 transition disabled:bg-gray-400"
+              >
+                {isCancelling ? 'Submitting...' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Legal & Compliance Policies Modals */}
+      {activeLegalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setActiveLegalModal(null)}>
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl space-y-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b pb-4">
+              <div className="flex items-center gap-2">
+                <FileText className="text-[#0E3D42]" size={20} />
+                <h3 className="text-lg font-black text-[#0E3D42]">
+                  {activeLegalModal === 'privacy' && 'Privacy Policy'}
+                  {activeLegalModal === 'terms' && 'Terms & Conditions'}
+                  {activeLegalModal === 'refund' && 'Cancellation, Return & Refund Policy'}
+                  {activeLegalModal === 'shipping' && 'Shipping & Local Fleet Delivery Policy'}
+                </h3>
+              </div>
+              <button onClick={() => setActiveLegalModal(null)} className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+            </div>
+
+            <div className="text-xs text-gray-700 space-y-4 leading-relaxed font-medium">
+              {activeLegalModal === 'privacy' && (
+                <>
+                  <p><strong>1. Introduction:</strong> {shopSettings.legalBusinessName || 'RAJ TRADERS'} ("We", "Our", "Store") values your personal privacy. We do not sell, rent, or lease your personal information to third parties.</p>
+                  <p><strong>2. Information We Collect:</strong> We collect customer names, phone numbers, delivery addresses, and order histories strictly for fulfilling bakery orders and generating GST-compliant tax invoices.</p>
+                  <p><strong>3. Payment Data Security:</strong> All digital transactions are processed through RBI-authorized payment aggregators (Razorpay). We never store raw debit/credit card credentials, CVVs, or bank PINs on our servers.</p>
+                  <p><strong>4. Local Fleet Coordinates:</strong> Delivery rider GPS tracking data is used strictly for routing active orders in Birsingpur Pali and is purged following successful delivery.</p>
+                </>
+              )}
+
+              {activeLegalModal === 'terms' && (
+                <>
+                  <p><strong>1. Scope:</strong> These Terms govern the purchase of baked goods, confectionery, and celebration supplies from {shopSettings.legalBusinessName || 'RAJ TRADERS'} in Birsingpur Pali, Madhya Pradesh.</p>
+                  <p><strong>2. Pricing & GST:</strong> All displayed store prices are inclusive of applicable Goods and Services Tax (GST). A vector tax invoice is emailed upon payment.</p>
+                  <p><strong>3. Order Acceptance:</strong> Orders are subject to inventory verification and production slot availability. In the rare event of inventory exhaustion, immediate full refunds are issued.</p>
+                  <p><strong>4. Dispute Resolution:</strong> Any legal disputes are subject to the exclusive jurisdiction of the competent courts in Umaria / Jabalpur, Madhya Pradesh.</p>
+                </>
+              )}
+
+              {activeLegalModal === 'refund' && (
+                <>
+                  <p><strong>1. Perishable Items (Cakes, Pastries, Fresh Snacks):</strong> Due to freshness constraints, fresh baked items can be reported within 24 hours of delivery if damaged or defective with photographic evidence. An immediate free replacement or refund will be authorized.</p>
+                  <p><strong>2. Non-Perishable Goods:</strong> Party decorations and packaged grocery items may be returned within 7 days of delivery in unopened original packaging.</p>
+                  <p><strong>3. Pre-Dispatch Cancellation:</strong> Customers may request order cancellation prior to dispatch. Once approved by our team, refunds are issued immediately via Instant Store Credit or processed back to the original payment source via Razorpay within 3–5 working days.</p>
+                </>
+              )}
+
+              {activeLegalModal === 'shipping' && (
+                <>
+                  <p><strong>1. Serviceable Locations:</strong> We fulfill local orders strictly within Birsingpur Pali PIN codes ({allowedPincodes.join(', ')}).</p>
+                  <p><strong>2. Dispatch Fleet:</strong> Deliveries are carried out by our dedicated local delivery staff. Customers receive the rider’s name and direct contact phone number once marked 'Out for Delivery'.</p>
+                  <p><strong>3. Delivery Fee:</strong> Orders exceeding {money(shopSettings.freeDeliveryThresholdCents || 50000)} qualify for Free Delivery. Below this threshold, a flat delivery fee of {money(shopSettings.flatDeliveryFeeCents || 3000)} applies.</p>
+                </>
+              )}
+            </div>
+
+            <div className="pt-3 border-t text-right">
+              <button onClick={() => setActiveLegalModal(null)} className="px-5 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl">
+                Close Policy
+              </button>
+            </div>
           </div>
         </div>
       )}

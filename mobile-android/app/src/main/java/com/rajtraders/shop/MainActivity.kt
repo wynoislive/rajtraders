@@ -2,6 +2,7 @@ package com.rajtraders.shop
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -1546,12 +1547,16 @@ private fun OrdersScreen(state: StorefrontUiState, padding: PaddingValues, viewM
                 }
             }
         } else {
+            val context = LocalContext.current
             state.orders.forEach { order ->
                 Card(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = RajCanvas)) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("Order #${order.id.take(12)}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                             val (badgeBg, badgeText) = when (order.status) {
+                                "delivered" -> Color(0xFF147A46) to "DELIVERED"
+                                "out_for_delivery" -> Color(0xFF0284C7) to "OUT FOR DELIVERY"
+                                "packed" -> Color(0xFF4F46E5) to "PACKED"
                                 "paid" -> Color(0xFF147A46) to "PAID"
                                 "created" -> Color(0xFFC08A12) to "PENDING"
                                 else -> Color(0xFFB84A3D) to "CANCELLED"
@@ -1561,10 +1566,82 @@ private fun OrdersScreen(state: StorefrontUiState, padding: PaddingValues, viewM
                             }
                         }
 
-                        Spacer(Modifier.height(6.dp))
-                        order.razorpayPaymentId?.let {
-                            Text("Razorpay Ref: $it", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        // Delivery Tracking Stepper
+                        if (order.status != "cancelled" && order.cancellationStatus != "approved") {
+                            Spacer(Modifier.height(10.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                val steps = listOf(
+                                    "Placed" to true,
+                                    "Packed" to (order.status in listOf("packed", "out_for_delivery", "delivered")),
+                                    "Dispatch" to (order.status in listOf("out_for_delivery", "delivered")),
+                                    "Delivered" to (order.status == "delivered")
+                                )
+                                steps.forEach { (label, done) ->
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (done) RajTeal else Color.LightGray,
+                                            modifier = Modifier.size(16.dp)
+                                        ) {}
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, color = if (done) RajTeal else Color.Gray, fontWeight = if (done) FontWeight.Bold else FontWeight.Normal)
+                                    }
+                                }
+                            }
                         }
+
+                        // Local Fleet Rider Card
+                        if ((order.status == "out_for_delivery" || order.status == "delivered") && !order.riderName.isNullOrBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            Surface(shape = RoundedCornerShape(8.dp), color = RajTeal.copy(alpha = 0.08f), modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("Local Fleet Rider: ${order.riderName}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                    order.dispatchSlot?.let { Text("Slot: $it", style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
+                                    Spacer(Modifier.height(6.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (!order.riderPhone.isNullOrBlank()) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${order.riderPhone}"))
+                                                    context.startActivity(intent)
+                                                },
+                                                modifier = Modifier.height(32.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp)
+                                            ) {
+                                                Text("Call Rider", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                        if (!order.trackingUrl.isNullOrBlank()) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(order.trackingUrl))
+                                                    context.startActivity(intent)
+                                                },
+                                                modifier = Modifier.height(32.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp)
+                                            ) {
+                                                Text("Live Route", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Cancellation Status Alert Badge
+                        if (order.cancellationStatus == "requested") {
+                            Spacer(Modifier.height(8.dp))
+                            Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFFFF3CD), modifier = Modifier.fillMaxWidth()) {
+                                Text("⚠️ Cancellation requested · Awaiting staff approval", color = Color(0xFF856404), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp))
+                            }
+                        } else if (order.cancellationStatus == "approved") {
+                            Spacer(Modifier.height(8.dp))
+                            Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFFFEAEA), modifier = Modifier.fillMaxWidth()) {
+                                Text("Order cancelled & refund issued", color = Color(0xFFB84A3D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(8.dp))
+                            }
+                        }
+
+                        Spacer(Modifier.height(6.dp))
                         order.shippingAddress?.let {
                             Text("Ship to: $it", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                         }
@@ -1574,12 +1651,43 @@ private fun OrdersScreen(state: StorefrontUiState, padding: PaddingValues, viewM
                         Spacer(Modifier.height(8.dp))
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Total Amount Paid:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Text("Total Paid (MRP Incl.):", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                             Text(money(order.totalCents), fontWeight = FontWeight.Bold, color = RajTeal, style = MaterialTheme.typography.titleMedium)
                         }
 
+                        Spacer(Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Invoice Download Button
+                            OutlinedButton(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.sundarvan.xyz/v1/checkout/orders/${order.id}/invoice"))
+                                    context.startActivity(intent)
+                                },
+                                modifier = Modifier.weight(1f).height(36.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp)
+                            ) {
+                                Text("Tax Invoice PDF", style = MaterialTheme.typography.labelSmall)
+                            }
+
+                            // Cancellation Request Button
+                            if ((order.status == "paid" || order.status == "packed") && order.cancellationStatus.isNullOrBlank()) {
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.requestOrderCancellation(order.id, "Customer requested cancellation via Android app")
+                                    },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB84A3D)),
+                                    modifier = Modifier.weight(1f).height(36.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 4.dp)
+                                ) {
+                                    Text("Cancel Order", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+
                         if (order.status == "created") {
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(8.dp))
                             Button(
                                 onClick = { viewModel.cancelPendingOrder(order.id) },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB84A3D)),

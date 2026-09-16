@@ -590,6 +590,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                     shippingAddress = _uiState.value.shippingAddress,
                     deliveryLatitude = _uiState.value.deliveryLatitude,
                     deliveryLongitude = _uiState.value.deliveryLongitude,
+                    pincode = _uiState.value.pincode,
                 )
 
                 val mockPaymentId = "pay_rzp_${System.currentTimeMillis()}"
@@ -666,6 +667,20 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                 fetchOrders()
             }.onFailure { err ->
                 _uiState.update { it.copy(orderNotice = err.message ?: "Failed to cancel order.") }
+            }
+        }
+    }
+
+    fun requestOrderCancellation(orderId: String, reason: String, preferredRefundMethod: String = "store_credit") {
+        val token = _uiState.value.authToken ?: return
+        viewModelScope.launch {
+            runCatching {
+                repository.requestCancellation(token, orderId, reason, preferredRefundMethod)
+            }.onSuccess {
+                _uiState.update { it.copy(orderNotice = "Cancellation request submitted for admin review.") }
+                fetchOrders()
+            }.onFailure { err ->
+                _uiState.update { it.copy(orderNotice = err.message ?: "Failed to submit cancellation request.") }
             }
         }
     }

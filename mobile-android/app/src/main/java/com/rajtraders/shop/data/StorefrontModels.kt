@@ -68,6 +68,7 @@ data class CreateOrderRequest(
     val shippingAddress: String? = null,
     val deliveryLatitude: Double? = null,
     val deliveryLongitude: Double? = null,
+    val pincode: String? = null,
 )
 
 data class CreateOrderResponse(
@@ -116,6 +117,16 @@ data class OrderHistoryItem(
     val itemsJson: String,
     val createdAt: String,
     val updatedAt: String,
+    val riderName: String? = null,
+    val riderPhone: String? = null,
+    val dispatchSlot: String? = null,
+    val trackingUrl: String? = null,
+    val cancellationStatus: String? = null,
+    val cancellationReason: String? = null,
+    val preferredRefundMethod: String? = null,
+    val taxableAmountCents: Int? = null,
+    val cgstCents: Int? = null,
+    val sgstCents: Int? = null,
 )
 
 // ─── Auth & Security Models ─────────────────────────────────

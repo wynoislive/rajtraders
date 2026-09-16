@@ -23,6 +23,28 @@ export const ordersTable = pgTable(
     currency: text("currency").notNull().default("INR"),
     status: text("status").notNull().default("created"),
     itemsJson: text("items_json").notNull().default("[]"),
+    // Local Fleet Rider & Logistics
+    riderName: text("rider_name"),
+    riderPhone: text("rider_phone"),
+    dispatchSlot: text("dispatch_slot"),
+    trackingUrl: text("tracking_url"),
+    // Cancellation & Refund Flow
+    cancellationStatus: text("cancellation_status").notNull().default("none"),
+    cancellationReason: text("cancellation_reason"),
+    preferredRefundMethod: text("preferred_refund_method"),
+    refundId: text("refund_id"),
+    refundAmountCents: integer("refund_amount_cents"),
+    // Reverse GST Breakdown & Fees
+    taxableAmountCents: integer("taxable_amount_cents"),
+    cgstCents: integer("cgst_cents"),
+    sgstCents: integer("sgst_cents"),
+    igstCents: integer("igst_cents"),
+    shippingFeeCents: integer("shipping_fee_cents").notNull().default(0),
+    packagingFeeCents: integer("packaging_fee_cents").notNull().default(0),
+    // Timestamps for Order Progress Tracking
+    packedAt: timestamp("packed_at", { withTimezone: true }),
+    dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -951,7 +951,7 @@ router.put("/addresses/:id", async (req: Request, res: Response) => {
       ...(deliveryInstructions !== undefined ? { deliveryInstructions } : {}),
       ...(isDefault !== undefined ? { isDefault: Boolean(isDefault) } : {}),
       updatedAt: new Date(),
-    }).where(eq(customerAddressesTable.id, id)).returning();
+    }).where(eq(customerAddressesTable.id, String(id))).returning();
 
     res.json(updated);
   } catch (err: unknown) {
@@ -964,7 +964,7 @@ router.delete("/addresses/:id", async (req: Request, res: Response) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
   const { id } = req.params;
   try {
-    await db.delete(customerAddressesTable).where(and(eq(customerAddressesTable.id, id), eq(customerAddressesTable.userId, userId)));
+    await db.delete(customerAddressesTable).where(and(eq(customerAddressesTable.id, String(id)), eq(customerAddressesTable.userId, userId)));
     res.json({ success: true, message: "Address deleted successfully." });
   } catch (err: unknown) {
     res.status(500).json({ error: "Failed to delete address." });
@@ -977,13 +977,13 @@ router.get("/favorites", async (req: Request, res: Response) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
   try {
     const favorites = await db.select().from(customerFavoritesTable).where(eq(customerFavoritesTable.userId, userId));
-    const productIds = favorites.map(f => f.productId);
+    const productIds = favorites.map((f: any) => f.productId);
     if (productIds.length === 0) {
       res.json([]);
       return;
     }
     const products = await db.select().from(productsTable).where(and(eq(productsTable.status, "active"), eq(productsTable.approvalStatus, "approved")));
-    const favProducts = products.filter(p => productIds.includes(p.id));
+    const favProducts = products.filter((p: any) => productIds.includes(p.id));
     res.json(favProducts);
   } catch (err: unknown) {
     res.status(500).json({ error: "Failed to fetch wishlist." });
@@ -1016,7 +1016,7 @@ router.get("/orders", async (req: Request, res: Response) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
   try {
     const orders = await db.select().from(ordersTable).where(eq(ordersTable.userId, userId)).orderBy(desc(ordersTable.createdAt));
-    res.json(orders.map(o => ({
+    res.json(orders.map((o: any) => ({
       ...o,
       formattedOrderId: `#RAJ-${o.id.substring(0, 6).toUpperCase()}`,
       estimatedEta: "30-45 mins",
@@ -1032,7 +1032,7 @@ router.get("/orders/:id", async (req: Request, res: Response) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
   const { id } = req.params;
   try {
-    const found = await db.select().from(ordersTable).where(and(eq(ordersTable.id, id), eq(ordersTable.userId, userId))).limit(1);
+    const found = await db.select().from(ordersTable).where(and(eq(ordersTable.id, String(id)), eq(ordersTable.userId, userId))).limit(1);
     if (found.length === 0) { res.status(404).json({ error: "Order not found." }); return; }
     const o = found[0];
     res.json({
@@ -1052,7 +1052,7 @@ router.get("/notifications", async (req: Request, res: Response) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
   try {
     const notifications = await db.select().from(customerNotificationsTable).where(eq(customerNotificationsTable.userId, userId)).orderBy(desc(customerNotificationsTable.createdAt)).limit(30);
-    const unreadCount = notifications.filter(n => !n.isRead).length;
+    const unreadCount = notifications.filter((n: any) => !n.isRead).length;
     res.json({ notifications, unreadCount });
   } catch (err: unknown) {
     res.status(500).json({ error: "Failed to fetch notifications." });

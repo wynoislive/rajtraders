@@ -292,8 +292,45 @@ ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS is_cod_enabled BOOLEAN DEFAUL
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS flat_delivery_fee_cents INTEGER DEFAULT 3000;
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS free_delivery_threshold_cents INTEGER DEFAULT 50000;
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS packaging_fee_cents INTEGER DEFAULT 1000;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS legal_business_name TEXT DEFAULT 'RAJ TRADERS';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS gstin_number TEXT DEFAULT '23AAAAA0000A1Z5';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS pan_number TEXT DEFAULT 'AAAAA0000A';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS state_code TEXT DEFAULT '23';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS state_name TEXT DEFAULT 'Madhya Pradesh';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS allowed_pincodes_json TEXT DEFAULT '["484661","484660"]';
 
+-- Products GST & HSN
+ALTER TABLE products ADD COLUMN IF NOT EXISTS gst_rate_percentage INTEGER NOT NULL DEFAULT 5;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS hsn_code TEXT DEFAULT '1905';
+
+-- Orders Logistics, Reverse Tax & Cancellations
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_name TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_phone TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispatch_slot TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_status TEXT DEFAULT 'none';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS preferred_refund_method TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_amount_cents INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS taxable_amount_cents INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS cgst_cents INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS sgst_cents INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS igst_cents INTEGER;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_fee_cents INTEGER DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS packaging_fee_cents INTEGER DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS packed_at TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispatched_at TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;
+
+-- Persistent Customer Cart
+CREATE TABLE IF NOT EXISTS customer_carts (
+  user_id TEXT PRIMARY KEY,
+  items_json TEXT NOT NULL DEFAULT '[]',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;
+
 
 /**
  * Syncs .env overrides into shop_settings on boot using parameterised

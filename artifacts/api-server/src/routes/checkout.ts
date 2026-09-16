@@ -1,11 +1,15 @@
 import { Router, type Request, type Response } from "express";
-import { db, ordersTable, productsTable, discountsTable, shopSettingsTable } from "@workspace/db";
+import { db, ordersTable, productsTable, discountsTable, shopSettingsTable, customerCartsTable } from "@workspace/db";
 import { eq, inArray, sql } from "drizzle-orm";
 import { createHmac, randomUUID } from "node:crypto";
 import { calculateHaversineDistanceKm } from "../utils/geo";
 import { getUserIdFromToken } from "./customer-auth";
 import { computeDiscount } from "../utils/discounts";
 import { filterOrders } from "../utils/order-filters";
+import { reserveInventory, commitInventoryReservation } from "../lib/inventory-lock";
+import { generateTaxInvoicePdf } from "../utils/invoice-generator";
+import { sendOrderConfirmationEmail } from "../utils/mailer";
+import { getRedisClient } from "../lib/redis";
 
 const router: Router = Router();
 
@@ -18,7 +22,7 @@ async function getRazorpayCredentials(): Promise<{ keyId: string; keySecret: str
   };
 }
 
-// Helper: fetch shop delivery settings
+// Helper: fetch shop delivery & tax settings
 async function getShopSettings() {
   const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
   return settings || {
@@ -28,7 +32,31 @@ async function getShopSettings() {
     isDeliveryEnabled: true,
     razorpayKeyId: "rzp_test_sandbox123456",
     razorpayKeySecret: "sandbox_secret",
+    shopName: "RAJ TRADERS",
+    legalBusinessName: "RAJ TRADERS",
+    gstinNumber: "23AAAAA0000A1Z5",
+    panNumber: "AAAAA0000A",
+    shopAddress: "Birsingpur Pali, MP",
+    stateCode: "23",
+    stateName: "Madhya Pradesh",
+    allowedPincodesJson: '["484661","484660"]',
+    flatDeliveryFeeCents: 3000,
+    freeDeliveryThresholdCents: 50000,
+    packagingFeeCents: 1000,
+    isCodEnabled: false,
+    isStoreOpen: true,
   };
+}
+
+function isPincodeServiceable(pincode: string, allowedPincodesJson?: string | null): boolean {
+  if (!allowedPincodesJson) return true;
+  try {
+    const list = JSON.parse(allowedPincodesJson);
+    if (!Array.isArray(list) || list.length === 0) return true;
+    return list.includes(pincode.trim());
+  } catch {
+    return true;
+  }
 }
 
 interface CheckoutItem {
@@ -129,33 +157,32 @@ router.post("/check-pincode", async (req: Request, res: Response) => {
   }
 
   const cleanPin = pincode.trim();
-  let locationName = "India";
-  const firstTwo = cleanPin.substring(0, 2);
-  const firstThree = cleanPin.substring(0, 3);
+  const settings = await getShopSettings();
+  const allowed = isPincodeServiceable(cleanPin, settings.allowedPincodesJson);
 
-  if (firstTwo === "48" || firstThree === "482") locationName = "Jabalpur, MP";
-  else if (firstTwo === "40") locationName = "Mumbai, MH";
-  else if (firstTwo === "11") locationName = "New Delhi, DL";
-  else if (firstTwo === "56") locationName = "Bengaluru, KA";
-  else if (firstTwo === "70") locationName = "Kolkata, WB";
-  else if (firstTwo === "60") locationName = "Chennai, TN";
-  else if (firstTwo === "50") locationName = "Hyderabad, TS";
-  else if (firstTwo === "38") locationName = "Ahmedabad, GJ";
-  else if (firstThree === "411") locationName = "Pune, MH";
-  else if (firstThree === "302") locationName = "Jaipur, RJ";
-  else if (cleanPin.startsWith("4")) locationName = "Central India (MP/MH)";
-  else if (cleanPin.startsWith("1") || cleanPin.startsWith("2")) locationName = "North India";
-  else if (cleanPin.startsWith("5") || cleanPin.startsWith("6")) locationName = "South India";
-  else if (cleanPin.startsWith("7") || cleanPin.startsWith("8")) locationName = "East India";
-  else if (cleanPin.startsWith("3")) locationName = "West India";
+  let allowedZones = "Birsingpur Pali (484661, 484660)";
+  try {
+    const list = JSON.parse(settings.allowedPincodesJson || "[]");
+    if (Array.isArray(list) && list.length > 0) {
+      allowedZones = list.join(", ");
+    }
+  } catch {}
+
+  if (!allowed) {
+    res.status(200).json({
+      allowed: false,
+      pincode: cleanPin,
+      message: `Sorry, delivery is currently not serviceable for PIN code ${cleanPin}. We deliver exclusively to: ${allowedZones}.`,
+    });
+    return;
+  }
 
   res.status(200).json({
     allowed: true,
     pincode: cleanPin,
-    city: locationName,
-    estimatedDays: "1-2 Days",
-    isExpressAvailable: cleanPin.startsWith("482") || cleanPin.startsWith("40"),
-    message: `Delivery available to ${cleanPin} (${locationName})`
+    estimatedDays: "Same Day / Scheduled Slot",
+    isExpressAvailable: true,
+    message: `Delivery available to PIN code ${cleanPin} via Local Fleet Dispatch.`,
   });
 });
 
@@ -187,17 +214,36 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     return;
   }
 
-  // Require shipping address
+  // Require shipping address & validate PIN code serviceability
   if (!shippingAddress || typeof shippingAddress !== "string" || shippingAddress.trim().length < 5) {
     res.status(400).json({ error: "Please provide a valid shipping address." });
     return;
   }
 
   try {
-    // Delivery radius check (Haversine)
-    let deliveryDistanceKm: number | null = null;
     const settings = await getShopSettings();
 
+    // Check PIN code serviceability from shipping address
+    const pinMatch = shippingAddress.match(/\b([1-9][0-9]{5})\b/);
+    if (pinMatch) {
+      const extractedPin = pinMatch[1];
+      const isAllowed = isPincodeServiceable(extractedPin, settings.allowedPincodesJson);
+      if (!isAllowed) {
+        let allowedZones = "Birsingpur Pali (484661, 484660)";
+        try {
+          const list = JSON.parse(settings.allowedPincodesJson || "[]");
+          if (Array.isArray(list) && list.length > 0) allowedZones = list.join(", ");
+        } catch {}
+        res.status(400).json({
+          error: `Sorry, delivery is currently not serviceable for PIN code ${extractedPin}. We deliver exclusively to: ${allowedZones}.`,
+          unserviceablePincode: extractedPin,
+        });
+        return;
+      }
+    }
+
+    // Delivery radius check (Haversine)
+    let deliveryDistanceKm: number | null = null;
     if (settings.isDeliveryEnabled && typeof deliveryLatitude === "number" && typeof deliveryLongitude === "number") {
       deliveryDistanceKm = calculateHaversineDistanceKm(
         settings.latitude,
@@ -254,7 +300,15 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     const productMap = new Map<string, any>(dbProducts.map((p: any) => [p.id, p]));
 
     let subtotalCents = 0;
-    const orderItems: Array<{ id: string; name: string; priceCents: number; quantity: number }> = [];
+    let taxableAmountCents = 0;
+    const orderItems: Array<{
+      id: string;
+      name: string;
+      priceCents: number;
+      quantity: number;
+      hsnCode: string;
+      gstRatePercentage: number;
+    }> = [];
 
     for (const item of items) {
       const product = productMap.get(item.productId);
@@ -273,19 +327,31 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
       }
 
       const qty = Math.max(1, Math.min(99, item.quantity || 1));
-      subtotalCents += product.priceCents * qty;
+      const itemGross = product.priceCents * qty;
+      const gstRate = product.gstRatePercentage || 5;
+      const itemTaxable = Math.round(itemGross / (1 + gstRate / 100));
+
+      subtotalCents += itemGross;
+      taxableAmountCents += itemTaxable;
+
       orderItems.push({
         id: product.id,
         name: product.name,
         priceCents: product.priceCents,
         quantity: qty,
+        hsnCode: product.hsnCode || "1905",
+        gstRatePercentage: gstRate,
       });
     }
 
-    // Calculate discount if present. Uses the SAME shared validator as
-    // `/v1/discounts/validate` so the money path enforces the full validity
-    // window (active, start/expiry, usage limit, minimum, first-order-only)
-    // and can never apply an expired/exhausted code or exceed the subtotal.
+    // Calculate delivery and packaging fees
+    const flatDeliveryFeeCents = settings.flatDeliveryFeeCents ?? 3000;
+    const freeDeliveryThresholdCents = settings.freeDeliveryThresholdCents ?? 50000;
+    const packagingFeeCents = settings.packagingFeeCents ?? 1000;
+
+    const shippingFeeCents = subtotalCents >= freeDeliveryThresholdCents ? 0 : flatDeliveryFeeCents;
+
+    // Calculate discount if present
     let discountCents = 0;
     let appliedDiscountId: string | null = null;
     if (discountCode && typeof discountCode === "string") {
@@ -297,8 +363,6 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
 
       if (foundDiscounts.length > 0) {
         const discount = foundDiscounts[0];
-        // "First order" is authoritative on the server: does this user have any
-        // prior order already recorded?
         const priorOrders = await db
           .select({ id: ordersTable.id })
           .from(ordersTable)
@@ -314,8 +378,28 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
       }
     }
 
-    const totalCents = Math.max(100, subtotalCents - discountCents);
+    // Total computation with fees and discounts
+    const grossTotal = subtotalCents + shippingFeeCents + packagingFeeCents;
+    const totalCents = Math.max(100, grossTotal - discountCents);
+
+    // Reverse GST split
+    const totalGstCents = Math.max(0, subtotalCents - taxableAmountCents);
+    const cgstCents = Math.round(totalGstCents / 2);
+    const sgstCents = totalGstCents - cgstCents;
+    const igstCents = 0;
+
     const internalOrderId = randomUUID();
+
+    // Stage 1: Acquire two-stage Redis inventory reservation lock (15-min TTL)
+    const reservation = await reserveInventory(internalOrderId, items, 900);
+    if (!reservation.success) {
+      res.status(409).json({
+        error: reservation.error || "Some items in your cart became unavailable.",
+        productId: reservation.failedProductId,
+        availableStock: reservation.availableStock,
+      });
+      return;
+    }
 
     // Create Razorpay Order using admin-configured credentials from DB
     const rzpKeyId = settings.razorpayKeyId;
@@ -358,7 +442,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
       razorpayOrderId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     }
 
-    // Save order in database with user + shipping + delivery data
+    // Save order in database with complete GST & fee breakdown
     await db.insert(ordersTable).values({
       id: internalOrderId,
       idempotencyKey,
@@ -377,10 +461,15 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
       currency: "INR",
       status: "created",
       itemsJson: JSON.stringify(orderItems),
+      taxableAmountCents,
+      cgstCents,
+      sgstCents,
+      igstCents,
+      shippingFeeCents,
+      packagingFeeCents,
+      cancellationStatus: "none",
     });
 
-    // Atomically record a use of the discount so per-code usage limits are
-    // actually enforced on the next order.
     if (appliedDiscountId) {
       await db
         .update(discountsTable)
@@ -497,6 +586,76 @@ router.post("/verify-payment", async (req: Request<{}, {}, VerifyPaymentBody>, r
 
     req.log.info({ orderId: order.id, razorpayPaymentId }, "Order paid and verified successfully");
 
+    // Commit inventory reservation to permanent stock decrement
+    try {
+      const orderItems = JSON.parse(order.itemsJson);
+      const itemsToCommit = orderItems.map((item: any) => ({
+        productId: item.id || item.productId,
+        quantity: item.quantity,
+      }));
+      await commitInventoryReservation(order.id, itemsToCommit);
+    } catch (invErr) {
+      req.log.error({ invErr, orderId: order.id }, "Failed committing inventory reservation");
+    }
+
+    // Clear persistent customer cart
+    if (order.userId) {
+      try {
+        await db.delete(customerCartsTable).where(eq(customerCartsTable.userId, order.userId)).catch(() => {});
+        const redis = getRedisClient();
+        if (redis) await redis.del(`cart:customer:${order.userId}`).catch(() => {});
+      } catch (cartErr) {
+        req.log.warn({ cartErr, userId: order.userId }, "Failed clearing persistent cart after order");
+      }
+    }
+
+    // Generate vector PDF tax invoice & dispatch confirmation email
+    try {
+      const settings = await getShopSettings();
+      const pdfInvoiceBuffer = await generateTaxInvoicePdf({
+        orderId: order.id,
+        invoiceNumber: `INV-${order.id.slice(0, 8).toUpperCase()}`,
+        invoiceDate: new Date(),
+        paymentId: razorpayPaymentId,
+        paymentMethod: "Online (Razorpay)",
+        customerName: order.customerName || "Valued Customer",
+        customerEmail: order.customerEmail || "",
+        customerMobile: order.customerMobile || undefined,
+        shippingAddress: order.shippingAddress || "",
+        items: JSON.parse(order.itemsJson),
+        subtotalCents: order.subtotalCents,
+        discountCents: order.discountCents,
+        shippingFeeCents: order.shippingFeeCents || 0,
+        packagingFeeCents: order.packagingFeeCents || 0,
+        totalCents: order.totalCents,
+        taxableAmountCents: order.taxableAmountCents || order.subtotalCents,
+        cgstCents: order.cgstCents || 0,
+        sgstCents: order.sgstCents || 0,
+        igstCents: order.igstCents || 0,
+        shopName: settings.shopName || "RAJ TRADERS",
+        legalBusinessName: settings.legalBusinessName || "RAJ TRADERS",
+        gstinNumber: settings.gstinNumber || "23AAAAA0000A1Z5",
+        panNumber: settings.panNumber || "AAAAA0000A",
+        shopAddress: settings.shopAddress || "Birsingpur Pali, MP",
+        stateCode: settings.stateCode || "23",
+        stateName: settings.stateName || "Madhya Pradesh",
+        contactEmail: settings.contactEmail || settings.supportEmail || "contact@rajtraders.shop",
+      });
+
+      if (order.customerEmail) {
+        await sendOrderConfirmationEmail(
+          order.customerEmail,
+          order.customerName || "Valued Customer",
+          order.id,
+          order.totalCents,
+          JSON.parse(order.itemsJson),
+          pdfInvoiceBuffer,
+        );
+      }
+    } catch (emailErr) {
+      req.log.error({ emailErr, orderId: order.id }, "Failed generating invoice PDF or sending confirmation email");
+    }
+
     res.status(200).json({
       success: true,
       orderId: order.id,
@@ -515,9 +674,6 @@ router.post("/verify-payment", async (req: Request<{}, {}, VerifyPaymentBody>, r
 });
 
 // 3. List the Signed-in Customer's Own Order History (Status / Duration / Range filters)
-//    Scoped strictly to the authenticated user — never returns other customers'
-//    orders or PII. Admin-wide order listing lives under the Clerk-protected
-//    /v1/admin/orders route instead.
 router.get("/orders", async (req: Request, res: Response) => {
   const userId = await getUserIdFromToken(req.headers.authorization);
   if (!userId) {
@@ -539,48 +695,126 @@ router.get("/orders", async (req: Request, res: Response) => {
   }
 });
 
-// 4. Cancel one of the Signed-in Customer's Own Pending Orders
-router.post("/orders/:id/cancel", async (req: Request, res: Response) => {
+// 4. Download Tax Invoice PDF for an Authenticated Order
+router.get("/orders/:id/invoice", async (req: Request, res: Response) => {
   const userId = await getUserIdFromToken(req.headers.authorization);
   if (!userId) {
-    res.status(401).json({ error: "Unauthorized. Please log in to cancel an order." });
+    res.status(401).json({ error: "Unauthorized. Please log in to download invoice." });
     return;
   }
 
   const id = req.params.id as string;
 
   try {
-    const found = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
 
-    // Treat "not yours" the same as "not found" so order ids can't be probed.
-    if (found.length === 0 || found[0].userId !== userId) {
+    if (!order || order.userId !== userId) {
       res.status(404).json({ error: "Order not found." });
       return;
     }
 
-    const order = found[0];
+    const settings = await getShopSettings();
+    const pdfBuffer = await generateTaxInvoicePdf({
+      orderId: order.id,
+      invoiceNumber: `INV-${order.id.slice(0, 8).toUpperCase()}`,
+      invoiceDate: order.createdAt,
+      paymentId: order.razorpayPaymentId || undefined,
+      paymentMethod: order.razorpayPaymentId ? "Online (Razorpay)" : "Pending",
+      customerName: order.customerName || "Valued Customer",
+      customerEmail: order.customerEmail || "",
+      customerMobile: order.customerMobile || undefined,
+      shippingAddress: order.shippingAddress || "",
+      items: JSON.parse(order.itemsJson),
+      subtotalCents: order.subtotalCents,
+      discountCents: order.discountCents,
+      shippingFeeCents: order.shippingFeeCents || 0,
+      packagingFeeCents: order.packagingFeeCents || 0,
+      totalCents: order.totalCents,
+      taxableAmountCents: order.taxableAmountCents || order.subtotalCents,
+      cgstCents: order.cgstCents || 0,
+      sgstCents: order.sgstCents || 0,
+      igstCents: order.igstCents || 0,
+      shopName: settings.shopName || "RAJ TRADERS",
+      legalBusinessName: settings.legalBusinessName || "RAJ TRADERS",
+      gstinNumber: settings.gstinNumber || "23AAAAA0000A1Z5",
+      panNumber: settings.panNumber || "AAAAA0000A",
+      shopAddress: settings.shopAddress || "Birsingpur Pali, MP",
+      stateCode: settings.stateCode || "23",
+      stateName: settings.stateName || "Madhya Pradesh",
+      contactEmail: settings.contactEmail || settings.supportEmail || "contact@rajtraders.shop",
+    });
 
-    if (order.status === "paid") {
-      res.status(400).json({ error: "Paid orders cannot be directly cancelled. Please process a refund." });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Tax_Invoice_${order.id.slice(0, 8).toUpperCase()}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err: unknown) {
+    req.log.error({ err, orderId: id }, "Error generating invoice PDF for download");
+    res.status(500).json({ error: "Failed to generate invoice PDF." });
+  }
+});
+
+// 5. Submit Cancellation & Refund Request (Customer-Directed Flow)
+router.post("/orders/:id/cancel-request", async (req: Request, res: Response) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized. Please log in to request cancellation." });
+    return;
+  }
+
+  const id = req.params.id as string;
+  const { reason, preferredRefundMethod } = req.body;
+
+  if (!reason || typeof reason !== "string" || reason.trim().length < 3) {
+    res.status(400).json({ error: "Please provide a valid cancellation reason." });
+    return;
+  }
+
+  const refundMethod = preferredRefundMethod === "wallet" ? "wallet" : "original";
+
+  try {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+
+    if (!order || order.userId !== userId) {
+      res.status(404).json({ error: "Order not found." });
+      return;
+    }
+
+    if (order.status === "cancelled") {
+      res.status(400).json({ error: "Order is already cancelled." });
+      return;
+    }
+
+    if (order.status === "out_for_delivery" || order.status === "delivered") {
+      res.status(400).json({ error: "Orders out for delivery or delivered cannot be cancelled. Please request an exchange/return pickup." });
+      return;
+    }
+
+    if (order.cancellationStatus === "requested") {
+      res.status(400).json({ error: "A cancellation request for this order is already pending admin review." });
       return;
     }
 
     await db
       .update(ordersTable)
-      .set({ status: "cancelled", updatedAt: new Date() })
+      .set({
+        cancellationStatus: "requested",
+        cancellationReason: reason.trim(),
+        preferredRefundMethod: refundMethod,
+        updatedAt: new Date(),
+      })
       .where(eq(ordersTable.id, id));
 
-    req.log.info({ orderId: id, userId }, "Order cancelled successfully");
+    req.log.info({ orderId: id, userId, refundMethod }, "Cancellation request submitted");
 
     res.status(200).json({
       success: true,
       orderId: id,
-      status: "cancelled",
-      message: "Order has been cancelled.",
+      cancellationStatus: "requested",
+      message: "Cancellation request submitted successfully. Our operations team will review and process your refund shortly.",
     });
   } catch (err: unknown) {
-    req.log.error({ err }, "Error cancelling order");
-    res.status(500).json({ error: "Failed to cancel order." });
+    req.log.error({ err, orderId: id }, "Error submitting cancellation request");
+    res.status(500).json({ error: "Failed to submit cancellation request." });
   }
 });
 

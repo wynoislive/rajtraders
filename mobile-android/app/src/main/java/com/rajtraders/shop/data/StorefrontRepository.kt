@@ -148,12 +148,13 @@ class StorefrontRepository(private val api: StorefrontApi) {
         shippingAddress: String? = null,
         deliveryLatitude: Double? = null,
         deliveryLongitude: Double? = null,
+        pincode: String? = null,
     ) = api.createOrder(
         token?.let { "Bearer $it" },
         CreateOrderRequest(
             idempotencyKey, items, discountCode, customerEmail,
             userId, customerName, customerMobile, shippingAddress,
-            deliveryLatitude, deliveryLongitude,
+            deliveryLatitude, deliveryLongitude, pincode
         )
     )
 
@@ -175,6 +176,13 @@ class StorefrontRepository(private val api: StorefrontApi) {
 
     suspend fun cancelOrder(token: String, orderId: String) =
         api.cancelOrder("Bearer $token", orderId)
+
+    suspend fun requestCancellation(token: String, orderId: String, reason: String, preferredRefundMethod: String) =
+        api.requestCancellation(
+            "Bearer $token",
+            orderId,
+            mapOf("reason" to reason, "preferredRefundMethod" to preferredRefundMethod)
+        )
 
     // ─── TOTP (2FA) ─────────────────────────────────────────
 

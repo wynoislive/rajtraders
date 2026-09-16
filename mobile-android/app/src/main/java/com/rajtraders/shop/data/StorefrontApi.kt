@@ -96,6 +96,13 @@ interface StorefrontApi {
         @Path("id") id: String,
     ): Map<String, Any>
 
+    @POST("v1/checkout/orders/{id}/cancel-request")
+    suspend fun requestCancellation(
+        @Header("Authorization") token: String,
+        @Path("id") id: String,
+        @Body body: Map<String, String>,
+    ): Map<String, Any>
+
     // ─── TOTP (Two-Factor Authentication) ───────────────────
 
     @POST("v1/auth/totp/setup")

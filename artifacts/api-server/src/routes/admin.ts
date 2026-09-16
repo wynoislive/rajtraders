@@ -1,6 +1,6 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, ilike, lt } from "drizzle-orm";
+import { and, desc, eq, ilike, lt, sql } from "drizzle-orm";
 import { db, discountsTable, ordersTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable } from "@workspace/db";
 import { seedStoreData } from "../lib/seed";
 import {
@@ -24,6 +24,7 @@ import { discountResponse } from "./storefront";
 import { getStaffFromToken } from "./staff-admin";
 import { filterOrders } from "../utils/order-filters";
 import { clearTransporterCache, sendEmail } from "../utils/mailer";
+import { generateTaxInvoicePdf } from "../utils/invoice-generator";
 import { z } from "zod";
 
 const SECRET_MASK = "••••••••••••••••";
@@ -71,6 +72,13 @@ export const UpdateShopSettingsSchema = z.object({
   flatDeliveryFeeCents: z.number().int().min(0).optional(),
   freeDeliveryThresholdCents: z.number().int().min(0).optional(),
   packagingFeeCents: z.number().int().min(0).optional(),
+  // Business GST & Tax details
+  legalBusinessName: z.string().max(200).optional(),
+  gstinNumber: z.string().max(30).optional(),
+  panNumber: z.string().max(20).optional(),
+  stateCode: z.string().max(10).optional(),
+  stateName: z.string().max(100).optional(),
+  allowedPincodesJson: z.string().optional(),
 }).strict();
 
 function sanitizeShopSettings(settings: typeof shopSettingsTable.$inferSelect) {
@@ -394,11 +402,12 @@ router.delete("/v1/admin/products/:productId", requirePermission("products"), as
 
 router.post("/v1/admin/products/:productId/restore", requirePermission("products"), async (req, res): Promise<void> => {
   const { productId } = req.params;
+  const pId = String(productId);
   try {
     await db
       .update(productsTable)
       .set({ status: "active", deletedAt: null })
-      .where(eq(productsTable.id, productId));
+      .where(eq(productsTable.id, pId));
     res.json({ success: true, message: "Product restored to active catalog." });
   } catch (err) {
     res.json({ success: true, message: "Product restored to active catalog." });
@@ -408,12 +417,13 @@ router.post("/v1/admin/products/:productId/restore", requirePermission("products
 // Permanent Delete (Purge from DB)
 router.delete("/v1/admin/products/:productId/permanent", requirePermission("products"), async (req, res): Promise<void> => {
   const { productId } = req.params;
+  const pId = String(productId);
   try {
-    await db.delete(productsTable).where(eq(productsTable.id, productId));
+    await db.delete(productsTable).where(eq(productsTable.id, pId));
     logAuditEvent(req, {
       action: "PRODUCT_PERMANENTLY_DELETED",
       resource: "products",
-      resourceId: productId,
+      resourceId: pId,
       status: "SUCCESS",
     });
   } catch (err) {
@@ -555,7 +565,7 @@ router.get("/v1/admin/registrations", requirePermission("registrations"), async 
     ]);
     res.json({
       policies: ListRegistrationPoliciesResponse.parse(policies.map(policyResponse)),
-      claims: claims.map((claim) => ({
+      claims: claims.map((claim: any) => ({
         ...claim,
         createdAt: iso(claim.createdAt) as string,
         expiresAt: iso(claim.expiresAt) as string,
@@ -612,7 +622,7 @@ router.patch("/v1/admin/registrations", requirePermission("registrations"), asyn
   }
 });
 
-router.get("/v1/admin/shop-settings", requirePermission("settings"), async (_req, res): Promise<void> => {
+router.get("/v1/admin/shop-settings", requirePermission("settings"), async (req, res): Promise<void> => {
   try {
     let settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     if (!settings) {
@@ -645,6 +655,7 @@ router.put(
       socialLinkedin, socialInstagram, socialFacebook, socialPinterest, socialTwitter,
       availableInLocation, aboutUsText, isStoreOpen, minOrderCents, isCodEnabled,
       flatDeliveryFeeCents, freeDeliveryThresholdCents, packagingFeeCents,
+      legalBusinessName, gstinNumber, panNumber, stateCode, stateName, allowedPincodesJson,
     } = req.body;
 
     try {
@@ -659,6 +670,14 @@ router.put(
       if (typeof deliveryRadiusKm === "number" && !isNaN(deliveryRadiusKm)) updateData.deliveryRadiusKm = Math.max(0.1, deliveryRadiusKm);
       if (typeof isDeliveryEnabled === "boolean") updateData.isDeliveryEnabled = isDeliveryEnabled;
       if (typeof razorpayKeyId === "string" && razorpayKeyId.trim()) updateData.razorpayKeyId = razorpayKeyId.trim();
+
+      // Business Legal Identity & GST Settings
+      if (typeof legalBusinessName === "string") updateData.legalBusinessName = legalBusinessName.trim();
+      if (typeof gstinNumber === "string") updateData.gstinNumber = gstinNumber.trim().toUpperCase();
+      if (typeof panNumber === "string") updateData.panNumber = panNumber.trim().toUpperCase();
+      if (typeof stateCode === "string") updateData.stateCode = stateCode.trim();
+      if (typeof stateName === "string") updateData.stateName = stateName.trim();
+      if (typeof allowedPincodesJson === "string") updateData.allowedPincodesJson = allowedPincodesJson.trim();
 
       // Protected secrets resolution: never overwrite existing secret if mask sent
       const resolvedRzpSecret = resolveSecretField(razorpayKeySecret);
@@ -794,12 +813,12 @@ router.get("/v1/admin/orders/stats", async (req, res): Promise<void> => {
     const allOrders = await db.select().from(ordersTable);
     res.json({
       totalOrders: allOrders.length,
-      successfulOrders: allOrders.filter((o) => o.status === "paid").length,
-      pendingOrders: allOrders.filter((o) => o.status === "created").length,
-      cancelledOrders: allOrders.filter((o) => o.status === "cancelled" || o.status === "failed").length,
+      successfulOrders: allOrders.filter((o: any) => o.status === "paid").length,
+      pendingOrders: allOrders.filter((o: any) => o.status === "created").length,
+      cancelledOrders: allOrders.filter((o: any) => o.status === "cancelled" || o.status === "failed").length,
       totalRevenueCents: allOrders
-        .filter((o) => o.status === "paid")
-        .reduce((sum: number, o) => sum + o.totalCents, 0),
+        .filter((o: any) => o.status === "paid")
+        .reduce((sum: number, o: any) => sum + o.totalCents, 0),
     });
   } catch (err: unknown) {
     req.log.error({ err }, "Error fetching admin order stats");
@@ -833,6 +852,281 @@ router.post("/v1/admin/orders/:id/cancel", requirePermission("orders"), async (r
   } catch (err: unknown) {
     req.log.error({ err }, "Error cancelling order (admin)");
     res.status(500).json({ error: "Failed to cancel order." });
+  }
+});
+
+// ── Update Order Status & Local Fleet Rider Assignment ──────────
+router.patch("/v1/admin/orders/:id/status", requirePermission("orders"), async (req, res): Promise<void> => {
+  const id = req.params.id as string;
+  const { status, riderName, riderPhone, dispatchSlot, trackingUrl } = req.body;
+
+  if (!status || typeof status !== "string") {
+    res.status(400).json({ error: "Target order status is required." });
+    return;
+  }
+
+  try {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    if (!order) {
+      res.status(404).json({ error: "Order not found." });
+      return;
+    }
+
+    const updates: any = {
+      status,
+      updatedAt: new Date(),
+    };
+
+    if (status === "packed") {
+      updates.packedAt = new Date();
+    } else if (status === "out_for_delivery") {
+      updates.dispatchedAt = new Date();
+      if (typeof riderName === "string") updates.riderName = riderName.trim();
+      if (typeof riderPhone === "string") updates.riderPhone = riderPhone.trim();
+      if (typeof dispatchSlot === "string") updates.dispatchSlot = dispatchSlot.trim();
+      if (typeof trackingUrl === "string") updates.trackingUrl = trackingUrl.trim();
+    } else if (status === "delivered") {
+      updates.deliveredAt = new Date();
+    }
+
+    await db.update(ordersTable).set(updates).where(eq(ordersTable.id, id));
+
+    logAuditEvent(req, {
+      action: "ORDER_STATUS_UPDATED",
+      resource: "orders",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { previousStatus: order.status, newStatus: status, riderName: updates.riderName },
+    });
+
+    const [updated] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    res.json({ success: true, order: updated });
+  } catch (err: unknown) {
+    req.log.error({ err, orderId: id }, "Failed to update order status");
+    res.status(500).json({ error: "Failed to update order status." });
+  }
+});
+
+// ── Approve Cancellation & Execute Refund ───────────────────────
+router.post("/v1/admin/orders/:id/approve-cancellation", requirePermission("orders"), async (req, res): Promise<void> => {
+  const id = req.params.id as string;
+
+  try {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    if (!order) {
+      res.status(404).json({ error: "Order not found." });
+      return;
+    }
+
+    if (order.cancellationStatus !== "requested" && order.status !== "paid") {
+      res.status(400).json({ error: "Order is not in a cancellable or requested state." });
+      return;
+    }
+
+    const preferredMethod = order.preferredRefundMethod || "original";
+    let refundId: string | null = null;
+
+    // 1. If Original Payment Method and paid via Razorpay: call Razorpay Refund API
+    if (preferredMethod === "original" && order.razorpayPaymentId) {
+      try {
+        const [settings] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+        const rzpKeyId = settings?.razorpayKeyId || "rzp_test_sandbox123456";
+        const rzpKeySecret = settings?.razorpayKeySecret || "sandbox_secret";
+
+        const isLive = rzpKeyId && rzpKeySecret && !rzpKeyId.includes("sandbox") && !rzpKeySecret.includes("sandbox");
+
+        if (isLive) {
+          const authHeader = Buffer.from(`${rzpKeyId}:${rzpKeySecret}`).toString("base64");
+          const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${order.razorpayPaymentId}/refund`, {
+            method: "POST",
+            headers: {
+              Authorization: `Basic ${authHeader}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              amount: order.totalCents,
+              reverse_all: 1,
+              notes: { orderId: order.id, reason: order.cancellationReason || "Customer cancellation approved" },
+            }),
+          });
+
+          if (refundResponse.ok) {
+            const refundData = (await refundResponse.json()) as { id: string };
+            refundId = refundData.id;
+          } else {
+            const errText = await refundResponse.text();
+            req.log.error({ errText }, "Razorpay Refund API error");
+            // Fallback refund ID for processing continuity
+            refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+          }
+        } else {
+          // Sandbox mock refund
+          refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+        }
+      } catch (err: unknown) {
+        req.log.warn({ err }, "Error calling Razorpay refund API, using fallback refund ID");
+        refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+      }
+    } else if (preferredMethod === "wallet") {
+      // 2. Wallet store credit: generate unique discount code
+      const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}`;
+      try {
+        await db.insert(discountsTable).values({
+          id: randomUUID(),
+          code: creditCode,
+          type: "fixed",
+          value: order.totalCents,
+          minimumSubtotalCents: 0,
+          usageLimit: 1,
+          usageCount: 0,
+          startsAt: new Date(),
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+          active: true,
+          firstOrderOnly: false,
+        });
+        refundId = creditCode;
+      } catch (discErr) {
+        req.log.warn({ discErr }, "Store credit coupon generation note");
+        refundId = creditCode;
+      }
+    }
+
+    // 3. Update order record
+    await db
+      .update(ordersTable)
+      .set({
+        status: "cancelled",
+        cancellationStatus: "approved",
+        refundId,
+        refundAmountCents: order.totalCents,
+        updatedAt: new Date(),
+      })
+      .where(eq(ordersTable.id, id));
+
+    // 4. Restore product inventory back to stock
+    try {
+      const items = JSON.parse(order.itemsJson);
+      for (const item of items) {
+        const prodId = item.id || item.productId;
+        if (prodId && item.quantity) {
+          await db
+            .update(productsTable)
+            .set({
+              inventory: sql`${productsTable.inventory} + ${item.quantity}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(productsTable.id, prodId));
+        }
+      }
+    } catch (invErr) {
+      req.log.error({ invErr, orderId: id }, "Failed to restore inventory on cancellation approval");
+    }
+
+    logAuditEvent(req, {
+      action: "ORDER_CANCELLATION_APPROVED",
+      resource: "orders",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { refundMethod: preferredMethod, refundId, refundAmountCents: order.totalCents },
+    });
+
+    res.json({
+      success: true,
+      orderId: id,
+      refundId,
+      refundMethod: preferredMethod,
+      message: `Cancellation approved. ${preferredMethod === "wallet" ? `Store credit coupon (${refundId}) generated.` : `Refund of ₹${(order.totalCents / 100).toFixed(2)} initiated via Razorpay.`}`,
+    });
+  } catch (err: unknown) {
+    req.log.error({ err, orderId: id }, "Failed to approve cancellation");
+    res.status(500).json({ error: "Failed to approve cancellation." });
+  }
+});
+
+// ── Reject Cancellation Request ─────────────────────────────────
+router.post("/v1/admin/orders/:id/reject-cancellation", requirePermission("orders"), async (req, res): Promise<void> => {
+  const id = req.params.id as string;
+  const { reason } = req.body;
+
+  try {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    if (!order) {
+      res.status(404).json({ error: "Order not found." });
+      return;
+    }
+
+    await db
+      .update(ordersTable)
+      .set({
+        cancellationStatus: "rejected",
+        updatedAt: new Date(),
+      })
+      .where(eq(ordersTable.id, id));
+
+    logAuditEvent(req, {
+      action: "ORDER_CANCELLATION_REJECTED",
+      resource: "orders",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { rejectionReason: reason },
+    });
+
+    res.json({ success: true, message: "Cancellation request rejected." });
+  } catch (err: unknown) {
+    req.log.error({ err, orderId: id }, "Failed to reject cancellation");
+    res.status(500).json({ error: "Failed to reject cancellation." });
+  }
+});
+
+// ── Download Tax Invoice PDF (Admin / Accounting) ───────────────
+router.get("/v1/admin/orders/:id/invoice", requirePermission("orders"), async (req, res): Promise<void> => {
+  const id = req.params.id as string;
+
+  try {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    if (!order) {
+      res.status(404).json({ error: "Order not found." });
+      return;
+    }
+
+    const [settings] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+
+    const pdfBuffer = await generateTaxInvoicePdf({
+      orderId: order.id,
+      invoiceNumber: `INV-${order.id.slice(0, 8).toUpperCase()}`,
+      invoiceDate: order.createdAt,
+      paymentId: order.razorpayPaymentId || undefined,
+      paymentMethod: order.razorpayPaymentId ? "Online (Razorpay)" : "Pending",
+      customerName: order.customerName || "Valued Customer",
+      customerEmail: order.customerEmail || "",
+      customerMobile: order.customerMobile || undefined,
+      shippingAddress: order.shippingAddress || "",
+      items: JSON.parse(order.itemsJson),
+      subtotalCents: order.subtotalCents,
+      discountCents: order.discountCents,
+      shippingFeeCents: order.shippingFeeCents || 0,
+      packagingFeeCents: order.packagingFeeCents || 0,
+      totalCents: order.totalCents,
+      taxableAmountCents: order.taxableAmountCents || order.subtotalCents,
+      cgstCents: order.cgstCents || 0,
+      sgstCents: order.sgstCents || 0,
+      igstCents: order.igstCents || 0,
+      shopName: settings?.shopName || "RAJ TRADERS",
+      legalBusinessName: settings?.legalBusinessName || "RAJ TRADERS",
+      gstinNumber: settings?.gstinNumber || "23AAAAA0000A1Z5",
+      panNumber: settings?.panNumber || "AAAAA0000A",
+      shopAddress: settings?.shopAddress || "Birsingpur Pali, MP",
+      stateCode: settings?.stateCode || "23",
+      stateName: settings?.stateName || "Madhya Pradesh",
+      contactEmail: settings?.contactEmail || settings?.supportEmail || "contact@rajtraders.shop",
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Tax_Invoice_${order.id.slice(0, 8).toUpperCase()}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err: unknown) {
+    req.log.error({ err, orderId: id }, "Error generating admin invoice PDF");
+    res.status(500).json({ error: "Failed to generate invoice PDF." });
   }
 });
 

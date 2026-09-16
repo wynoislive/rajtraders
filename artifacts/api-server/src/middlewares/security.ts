@@ -1,6 +1,6 @@
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import type { RequestHandler } from "express";
+import type { RequestHandler, Request } from "express";
 import { securityConfig } from "../lib/security-config";
 import { getRedisClient } from "../lib/redis";
 

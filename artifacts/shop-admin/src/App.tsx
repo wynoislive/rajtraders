@@ -40,6 +40,11 @@ import {
   Tag,
   Timer,
   Trash2,
+  Truck,
+  Phone,
+  Download,
+  FileText,
+  AlertTriangle,
   UserCheck,
   UserRoundPlus,
   UsersRound,
@@ -1664,6 +1669,12 @@ function StoreSettings() {
     flatDeliveryFeeCents: 3000,
     freeDeliveryThresholdCents: 50000,
     packagingFeeCents: 1000,
+    legalBusinessName: 'RAJ TRADERS',
+    gstinNumber: '23AAAAA0000A1Z5',
+    panNumber: 'AAAAA0000A',
+    stateCode: '23',
+    stateName: 'Madhya Pradesh',
+    allowedPincodesJson: '["484661", "484660"]',
   });
 
   const [showSecret, setShowSecret] = useState(false);
@@ -1705,6 +1716,12 @@ function StoreSettings() {
           longitude: data.longitude ?? 72.8777,
           deliveryRadiusKm: data.deliveryRadiusKm ?? 15.0,
           isDeliveryEnabled: data.isDeliveryEnabled ?? true,
+          legalBusinessName: data.legalBusinessName ?? 'RAJ TRADERS',
+          gstinNumber: data.gstinNumber ?? '23AAAAA0000A1Z5',
+          panNumber: data.panNumber ?? 'AAAAA0000A',
+          stateCode: data.stateCode ?? '23',
+          stateName: data.stateName ?? 'Madhya Pradesh',
+          allowedPincodesJson: data.allowedPincodesJson ? (typeof data.allowedPincodesJson === 'string' ? data.allowedPincodesJson : JSON.stringify(data.allowedPincodesJson)) : '["484661", "484660"]',
         }));
       }
     } catch (e) {
@@ -1734,6 +1751,12 @@ function StoreSettings() {
           longitude: Number(form.longitude),
           deliveryRadiusKm: Number(form.deliveryRadiusKm),
           isDeliveryEnabled: Boolean(form.isDeliveryEnabled),
+          legalBusinessName: form.legalBusinessName?.trim() || undefined,
+          gstinNumber: form.gstinNumber?.trim() || undefined,
+          panNumber: form.panNumber?.trim() || undefined,
+          stateCode: form.stateCode?.trim() || undefined,
+          stateName: form.stateName?.trim() || undefined,
+          allowedPincodesJson: typeof form.allowedPincodesJson === 'string' ? form.allowedPincodesJson : JSON.stringify(form.allowedPincodesJson),
         }),
       });
 
@@ -1814,6 +1837,89 @@ function StoreSettings() {
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Longitude</label>
                 <input type="number" step="any" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: parseFloat(e.target.value) || 0 })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" required />
+              </div>
+            </div>
+          </div>
+
+          {/* Business, Legal & GST Information */}
+          <div className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-6 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 items-center justify-center rounded-xl bg-[hsl(var(--primary)/.10)] text-[hsl(var(--primary))]">
+                <FileText size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold">Business, GSTIN & Tax Configuration</h3>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Legal entity name, 15-character GSTIN, and PAN printed on customer vector PDF invoices.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Legal Business Name</label>
+                <input
+                  type="text"
+                  value={form.legalBusinessName || ''}
+                  onChange={(e) => setForm({ ...form, legalBusinessName: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold"
+                  placeholder="RAJ TRADERS ENTERPRISE"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">15-Digit GSTIN Number</label>
+                <input
+                  type="text"
+                  maxLength={15}
+                  value={form.gstinNumber || ''}
+                  onChange={(e) => setForm({ ...form, gstinNumber: e.target.value.toUpperCase() })}
+                  className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono font-bold uppercase"
+                  placeholder="23AAAAA0000A1Z5"
+                />
+                <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">State code prefix (23 for MP) followed by 10-digit PAN and entity code.</p>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">10-Digit PAN Number</label>
+                <input
+                  type="text"
+                  maxLength={10}
+                  value={form.panNumber || ''}
+                  onChange={(e) => setForm({ ...form, panNumber: e.target.value.toUpperCase() })}
+                  className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono font-bold uppercase"
+                  placeholder="AAAAA0000A"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">State Code</label>
+                  <input
+                    type="text"
+                    maxLength={2}
+                    value={form.stateCode || '23'}
+                    onChange={(e) => setForm({ ...form, stateCode: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono font-bold"
+                    placeholder="23"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">State Name</label>
+                  <input
+                    type="text"
+                    value={form.stateName || 'Madhya Pradesh'}
+                    onChange={(e) => setForm({ ...form, stateName: e.target.value })}
+                    className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold"
+                    placeholder="Madhya Pradesh"
+                  />
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Serviceable PIN Codes (Pali Local Fleet)</label>
+                <input
+                  type="text"
+                  value={typeof form.allowedPincodesJson === 'string' ? form.allowedPincodesJson : JSON.stringify(form.allowedPincodesJson || ["484661", "484660"])}
+                  onChange={(e) => setForm({ ...form, allowedPincodesJson: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono font-bold"
+                  placeholder='["484661", "484660"]'
+                />
+                <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Customers entering PINs outside this list are prevented from completing checkout.</p>
               </div>
             </div>
           </div>
@@ -2179,11 +2285,20 @@ function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
+  // Logistics Dispatch Modal State
+  const [dispatchModalOrder, setDispatchModalOrder] = useState<any | null>(null);
+  const [riderName, setRiderName] = useState('Ramesh Patel');
+  const [riderPhone, setRiderPhone] = useState('+91 98261 23456');
+  const [dispatchSlot, setDispatchSlot] = useState('Morning Slot (9 AM - 1 PM)');
+  const [trackingUrl, setTrackingUrl] = useState('');
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [cancellationNotice, setCancellationNotice] = useState<{ id: string; message: string; success: boolean } | null>(null);
+
   const fetchOrdersData = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (statusFilter !== 'all' && statusFilter !== 'cancellation_requests') params.append('status', statusFilter);
       if (durationFilter !== 'all') params.append('duration', durationFilter);
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
@@ -2194,7 +2309,10 @@ function Orders() {
         fetch(getApiUrl('/api/v1/admin/orders/stats'), { headers: getAuthHeaders() }),
       ]);
 
-      if (ordersRes.ok) setOrders(await ordersRes.json());
+      if (ordersRes.ok) {
+        const rawOrders = await ordersRes.json();
+        setOrders(rawOrders);
+      }
       if (statsRes.ok) setStats(await statsRes.json());
     } catch (err) {
       console.error(err);
@@ -2228,9 +2346,110 @@ function Orders() {
     }
   };
 
+  const handleUpdateStatus = async (orderId: string, status: string, riderData?: any) => {
+    setActionLoadingId(orderId);
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/admin/orders/${orderId}/status`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          status,
+          ...riderData,
+        }),
+      });
+      if (res.ok) {
+        fetchOrdersData();
+        if (dispatchModalOrder?.id === orderId) setDispatchModalOrder(null);
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to update order status');
+      }
+    } catch {
+      alert('Network error while updating status');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleApproveCancellation = async (orderId: string) => {
+    if (!window.confirm('Approve customer cancellation? This will restore stock, issue a refund or credit, and notify the customer.')) return;
+    setActionLoadingId(orderId);
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/admin/orders/${orderId}/approve-cancellation`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCancellationNotice({ id: orderId, message: data.message || 'Cancellation approved and refund executed!', success: true });
+        fetchOrdersData();
+      } else {
+        alert(data.error || 'Failed to approve cancellation.');
+      }
+    } catch {
+      alert('Network error while approving cancellation');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRejectCancellation = async (orderId: string) => {
+    const reason = window.prompt('Reason for rejecting cancellation (will be shared with customer):', 'Order is freshly prepared and already dispatched.');
+    if (!reason) return;
+    setActionLoadingId(orderId);
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/admin/orders/${orderId}/reject-cancellation`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCancellationNotice({ id: orderId, message: 'Cancellation request declined.', success: false });
+        fetchOrdersData();
+      } else {
+        alert(data.error || 'Failed to decline cancellation.');
+      }
+    } catch {
+      alert('Network error while declining cancellation');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDownloadInvoice = async (orderId: string, formattedOrderId?: string) => {
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/admin/orders/${orderId}/invoice`), {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        alert('Could not generate invoice PDF');
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Tax-Invoice-${formattedOrderId || orderId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Network error while downloading invoice');
+    }
+  };
+
+  const displayedOrders = useMemo(() => {
+    if (statusFilter === 'cancellation_requests') {
+      return orders.filter(o => o.cancellationStatus === 'requested');
+    }
+    return orders;
+  }, [orders, statusFilter]);
+
   return (
     <AdminGate isLoading={false} isError={false}>
-      <PageIntro eyebrow="Fulfillment & Ledger" title="Orders" detail="Monitor real-time transactions, Razorpay references, customer shipping coordinates, and order status." action={<Button variant="outline" onClick={fetchOrdersData}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh ledger</Button>} />
+      <PageIntro eyebrow="Fulfillment & Ledger" title="Orders & Logistics" detail="Assign Pali local fleet riders, monitor real-time order progression, download GST invoices, and process refunds." action={<Button variant="outline" onClick={fetchOrdersData}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh ledger</Button>} />
       {stats && (
         <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Total Orders" value={stats.totalOrders} detail="All-time recorded transactions" icon={Receipt} tone="teal" />
@@ -2240,32 +2459,263 @@ function Orders() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))]">
-        <div className="hidden grid-cols-[minmax(180px,1.2fr)_1fr_1fr_100px_90px_100px_80px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-5 py-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] md:grid">
-          <span>Order ID</span>
-          <span>Customer</span>
-          <span>Shipping Address</span>
-          <span>Date</span>
-          <span>Total</span>
-          <span>Status</span>
-          <span />
+      {cancellationNotice && (
+        <div className={`mb-4 p-3 rounded-xl text-xs font-bold flex items-center justify-between ${cancellationNotice.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+          <span>{cancellationNotice.message}</span>
+          <button onClick={() => setCancellationNotice(null)} className="font-bold underline ml-2">Dismiss</button>
         </div>
-        {orders.length === 0 ? (
-          <EmptyState icon={Receipt} title="No orders match filters" detail="Adjust your status or date range to inspect historical orders." />
+      )}
+
+      {/* Filter Tabs */}
+      <div className="flex flex-wrap gap-2 mb-4 border-b border-[hsl(var(--border))] pb-3 text-xs font-bold">
+        {[
+          { id: 'all', label: 'All Orders' },
+          { id: 'paid', label: 'Paid / Unfulfilled' },
+          { id: 'packed', label: 'Packed' },
+          { id: 'out_for_delivery', label: 'Out for Delivery' },
+          { id: 'delivered', label: 'Delivered' },
+          { id: 'cancellation_requests', label: 'Cancellation Requests' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setStatusFilter(tab.id)}
+            className={`px-3 py-1.5 rounded-xl transition ${statusFilter === tab.id ? 'bg-[hsl(var(--primary))] text-white font-extrabold shadow-sm' : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {displayedOrders.length === 0 ? (
+          <EmptyState icon={Receipt} title="No orders match filters" detail="Adjust your status tab or date range to inspect historical orders." />
         ) : (
-          orders.map((order) => (
-            <div key={order.id} className="grid gap-3 border-b border-[hsl(var(--border))] px-4 py-4 last:border-0 md:grid-cols-[minmax(180px,1.2fr)_1fr_1fr_100px_90px_100px_80px] md:items-center md:gap-4 md:px-5">
-              <div><div className="font-mono text-xs font-extrabold">{order.id.slice(0, 14)}...</div><div className="text-[11px] text-[hsl(var(--muted-foreground))]">{order.razorpayOrderId || 'Local Sandbox'}</div></div>
-              <div className="text-xs"><div className="font-bold">{order.customerName || 'Customer'}</div><div className="text-[hsl(var(--muted-foreground))]">{order.customerEmail || 'No email'}</div></div>
-              <div className="text-xs truncate text-[hsl(var(--muted-foreground))]">{order.shippingAddress || 'Store Pickup'}</div>
-              <div className="text-xs font-mono text-[hsl(var(--muted-foreground))]">{new Date(order.createdAt).toLocaleDateString()}</div>
-              <div className="text-sm font-bold">{money(order.totalCents)}</div>
-              <div><StatusPill tone={order.status === 'paid' ? 'green' : order.status === 'created' ? 'yellow' : 'coral'}>{order.status === 'paid' ? 'Paid' : order.status === 'created' ? 'Pending' : 'Cancelled'}</StatusPill></div>
-              <div className="flex justify-end">{order.status === 'created' && <Button variant="danger" className="!h-8 !px-2 text-xs" onClick={() => handleCancelOrder(order.id)} disabled={cancellingId === order.id}>Cancel</Button>}</div>
+          displayedOrders.map((order) => (
+            <div key={order.id} className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-4 sm:p-5 space-y-3">
+              {/* Order Row Header */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--border))] pb-3 text-xs">
+                <div>
+                  <span className="font-mono font-black text-sm">{order.formattedOrderId || order.id.slice(0, 14)}</span>
+                  <span className="text-[hsl(var(--muted-foreground))] ml-2 font-mono">{new Date(order.createdAt).toLocaleDateString()}</span>
+                  <span className="text-[hsl(var(--muted-foreground))] ml-2">· Razorpay: <code className="text-[11px] font-mono">{order.razorpayOrderId || 'N/A'}</code></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-sm text-[hsl(var(--primary))]">{money(order.totalCents)}</span>
+                  <StatusPill tone={order.status === 'delivered' ? 'green' : order.status === 'out_for_delivery' ? 'teal' : order.status === 'packed' ? 'yellow' : order.status === 'paid' ? 'green' : 'coral'}>
+                    {order.status === 'out_for_delivery' ? 'Out for Delivery' : order.status}
+                  </StatusPill>
+                </div>
+              </div>
+
+              {/* Customer & Address Details */}
+              <div className="grid sm:grid-cols-2 gap-2 text-xs">
+                <div>
+                  <p className="font-bold">{order.customerName || 'Customer'} · <span className="font-mono text-[hsl(var(--muted-foreground))]">{order.customerMobile || order.customerEmail || 'No contact'}</span></p>
+                  <p className="text-[hsl(var(--muted-foreground))] mt-0.5">{order.shippingAddress || 'Store Pickup'}</p>
+                </div>
+
+                {/* Rider details if assigned */}
+                {order.riderName && (
+                  <div className="bg-[hsl(var(--muted)/.5)] p-2.5 rounded-xl text-xs space-y-1">
+                    <p className="font-bold flex items-center gap-1.5"><Truck size={13} className="text-[hsl(var(--primary))]" /> Rider: {order.riderName} ({order.riderPhone})</p>
+                    <p className="text-[11px] text-[hsl(var(--muted-foreground))]">Slot: {order.dispatchSlot || 'Pali Fleet'}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Cancellation Request Alert Box */}
+              {order.cancellationStatus === 'requested' && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs space-y-2 text-amber-950 font-semibold">
+                  <div className="flex items-center gap-2 font-black text-amber-900">
+                    <AlertTriangle size={15} /> Customer Cancellation Request Received
+                  </div>
+                  <p>Reason: <em className="font-normal">"{order.cancellationReason || 'Not specified'}"</em></p>
+                  <p>Preferred Refund: <strong className="uppercase">{order.preferredRefundMethod === 'store_credit' ? 'Instant Store Credit' : 'Original Razorpay Source'}</strong></p>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      variant="primary"
+                      className="!h-7 !px-3 text-xs bg-emerald-700 hover:bg-emerald-800"
+                      disabled={actionLoadingId === order.id}
+                      onClick={() => handleApproveCancellation(order.id)}
+                    >
+                      {actionLoadingId === order.id ? 'Refunding...' : 'Approve & Issue Refund'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="!h-7 !px-3 text-xs text-red-700 border-red-300 hover:bg-red-50"
+                      disabled={actionLoadingId === order.id}
+                      onClick={() => handleRejectCancellation(order.id)}
+                    >
+                      Reject Request
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[hsl(var(--border))]">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    className="!h-8 !px-3 text-xs"
+                    onClick={() => handleDownloadInvoice(order.id, order.formattedOrderId)}
+                  >
+                    <Download size={13} /> Tax Invoice PDF
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {order.status === 'paid' && (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="!h-8 !px-3 text-xs"
+                        disabled={actionLoadingId === order.id}
+                        onClick={() => handleUpdateStatus(order.id, 'packed')}
+                      >
+                        Mark Packed
+                      </Button>
+                      <Button
+                        variant="primary"
+                        className="!h-8 !px-3 text-xs"
+                        onClick={() => {
+                          setDispatchModalOrder(order);
+                          setRiderName('Ramesh Patel');
+                          setRiderPhone('+91 98261 23456');
+                        }}
+                      >
+                        <Truck size={13} /> Dispatch Rider
+                      </Button>
+                    </>
+                  )}
+
+                  {order.status === 'packed' && (
+                    <Button
+                      variant="primary"
+                      className="!h-8 !px-3 text-xs"
+                      onClick={() => {
+                        setDispatchModalOrder(order);
+                        setRiderName('Ramesh Patel');
+                        setRiderPhone('+91 98261 23456');
+                      }}
+                    >
+                      <Truck size={13} /> Dispatch Rider
+                    </Button>
+                  )}
+
+                  {order.status === 'out_for_delivery' && (
+                    <Button
+                      variant="primary"
+                      className="!h-8 !px-3 text-xs bg-emerald-700 hover:bg-emerald-800"
+                      disabled={actionLoadingId === order.id}
+                      onClick={() => handleUpdateStatus(order.id, 'delivered')}
+                    >
+                      <CheckCircle2 size={13} /> Mark Delivered
+                    </Button>
+                  )}
+
+                  {order.status === 'created' && (
+                    <Button
+                      variant="danger"
+                      className="!h-8 !px-2 text-xs"
+                      onClick={() => handleCancelOrder(order.id)}
+                      disabled={cancellingId === order.id}
+                    >
+                      Cancel Order
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           ))
         )}
       </div>
+
+      {/* Logistics Dispatch Rider Modal */}
+      {dispatchModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-[hsl(var(--card))] border border-[hsl(var(--card-border))] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[hsl(var(--border))] pb-3">
+              <div className="flex items-center gap-2">
+                <Truck className="text-[hsl(var(--primary))]" size={18} />
+                <h3 className="text-base font-extrabold">Assign Local Fleet Rider</h3>
+              </div>
+              <button onClick={() => setDispatchModalOrder(null)} className="p-1.5 rounded-lg hover:bg-[hsl(var(--muted))]"><X size={16} /></button>
+            </div>
+
+            <div className="text-xs text-[hsl(var(--muted-foreground))] font-semibold">
+              Order: <strong className="text-[hsl(var(--foreground))]">{dispatchModalOrder.formattedOrderId || dispatchModalOrder.id}</strong>
+              <p className="mt-1">Destination: {dispatchModalOrder.shippingAddress}</p>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleUpdateStatus(dispatchModalOrder.id, 'out_for_delivery', {
+                riderName: riderName.trim(),
+                riderPhone: riderPhone.trim(),
+                dispatchSlot: dispatchSlot.trim(),
+                trackingUrl: trackingUrl.trim() || undefined,
+              });
+            }} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Rider Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={riderName}
+                  onChange={(e) => setRiderName(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                  placeholder="e.g. Ramesh Patel"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Rider Phone *</label>
+                <input
+                  type="text"
+                  required
+                  value={riderPhone}
+                  onChange={(e) => setRiderPhone(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-mono font-bold"
+                  placeholder="+91 98261 23456"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Dispatch Slot</label>
+                <select
+                  value={dispatchSlot}
+                  onChange={(e) => setDispatchSlot(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                >
+                  <option value="Morning Slot (9 AM - 1 PM)">Morning Slot (9 AM - 1 PM)</option>
+                  <option value="Afternoon Slot (1 PM - 5 PM)">Afternoon Slot (1 PM - 5 PM)</option>
+                  <option value="Evening Slot (5 PM - 9 PM)">Evening Slot (5 PM - 9 PM)</option>
+                  <option value="Express Local Dispatch (Within 60 Mins)">Express Local Dispatch (Within 60 Mins)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Live Route Map Link (Optional)</label>
+                <input
+                  type="text"
+                  value={trackingUrl}
+                  onChange={(e) => setTrackingUrl(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-mono"
+                  placeholder="https://maps.app.goo.gl/..."
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" type="button" onClick={() => setDispatchModalOrder(null)} className="flex-1">Cancel</Button>
+                <Button variant="primary" type="submit" disabled={actionLoadingId === dispatchModalOrder.id} className="flex-1">
+                  {actionLoadingId === dispatchModalOrder.id ? 'Dispatching...' : 'Dispatch Order'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AdminGate>
   );
 }

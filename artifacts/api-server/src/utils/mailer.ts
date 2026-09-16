@@ -190,12 +190,13 @@ export async function sendEmail(
   subject: string,
   htmlContent: string,
   forceProvider?: "hostinger_rest" | "smtp" | "gmail_notifications",
+  attachments?: nodemailer.SendMailOptions["attachments"],
 ): Promise<{ success: boolean; provider?: "hostinger_rest" | "smtp" | "gmail_notifications"; previewUrl?: string; error?: string; hostingerError?: string }> {
   // Forced Gmail / System Notifications Nodemailer mode
   if (forceProvider === "gmail_notifications") {
     try {
       const { transporter, from } = await getNotificationTransporter();
-      const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
+      const info = await transporter.sendMail({ from, to, subject, html: htmlContent, attachments });
       const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
       logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Gmail Notifications Nodemailer SMTP");
       return { success: true, provider: "gmail_notifications", previewUrl: previewUrl ? previewUrl.toString() : undefined };
@@ -210,7 +211,7 @@ export async function sendEmail(
   if (forceProvider === "smtp") {
     try {
       const { transporter, from } = await getTransporter();
-      const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
+      const info = await transporter.sendMail({ from, to, subject, html: htmlContent, attachments });
       const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
       logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Nodemailer SMTP (Forced)");
       return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : undefined };
@@ -230,16 +231,18 @@ export async function sendEmail(
     return { success: false, provider: "hostinger_rest", error: hostingerResult.error || "Hostinger REST API Failed" };
   }
 
-  // Auto mode: Try Hostinger API first
-  const hostingerResult = await sendViaHostingerApi(to, subject, htmlContent);
-  if (hostingerResult.success) {
-    return { success: true, provider: "hostinger_rest" };
+  // If attachments are provided, prioritize Nodemailer SMTP (since REST API might not support attachments)
+  if (!attachments || attachments.length === 0) {
+    const hostingerResult = await sendViaHostingerApi(to, subject, htmlContent);
+    if (hostingerResult.success) {
+      return { success: true, provider: "hostinger_rest" };
+    }
   }
 
   // Fall back 1: Hostinger Nodemailer SMTP
   try {
     const { transporter, from } = await getTransporter();
-    const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
+    const info = await transporter.sendMail({ from, to, subject, html: htmlContent, attachments });
     const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
     logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Hostinger Nodemailer SMTP");
     return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : undefined };
@@ -249,13 +252,13 @@ export async function sendEmail(
     // Fall back 2: System / Notification Gmail Nodemailer SMTP
     try {
       const { transporter, from } = await getNotificationTransporter();
-      const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
+      const info = await transporter.sendMail({ from, to, subject, html: htmlContent, attachments });
       logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Notification Gmail Nodemailer SMTP (Fallback)");
       return { success: true, provider: "gmail_notifications" };
     } catch (notifErr: unknown) {
       const notifErrMsg = notifErr instanceof Error ? notifErr.message : "All email senders failed";
       logger.error({ notifErr: notifErrMsg, to }, "All email providers (Hostinger API, Hostinger SMTP, Gmail SMTP) failed");
-      return { success: false, error: notifErrMsg, hostingerError: hostingerResult.error };
+      return { success: false, error: notifErrMsg };
     }
   }
 }
@@ -401,3 +404,100 @@ function buildRecoveryHtml(shopName: string, userName: string, resetToken: strin
     </html>
   `;
 }
+
+function buildOrderConfirmationHtml(
+  shopName: string,
+  customerName: string,
+  orderId: string,
+  totalCents: number,
+  items: Array<{ name: string; quantity: number; priceCents: number }>,
+): string {
+  const itemRows = items
+    .map(
+      (item) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #E2E8F0;">${item.name}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #E2E8F0; text-align: center;">${item.quantity}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #E2E8F0; text-align: right;">₹${((item.priceCents * item.quantity) / 100).toFixed(2)}</td>
+      </tr>
+    `
+    )
+    .join("");
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family: Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px;">
+      <div style="max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+        <div style="background: #0E3D42; color: #ffffff; padding: 24px; text-align: center;">
+          <h1 style="margin: 0; font-size: 20px;">${shopName}</h1>
+          <p style="margin: 4px 0 0; opacity: 0.8; font-size: 13px;">Order Confirmation & Official Tax Invoice</p>
+        </div>
+        <div style="padding: 24px; color: #334155;">
+          <h2 style="color: #0E3D42; margin-top: 0;">Thank You for Your Order!</h2>
+          <p>Dear ${customerName || "Valued Customer"},</p>
+          <p>Your order <strong>#${orderId.slice(0, 8).toUpperCase()}</strong> has been successfully placed and payment confirmed.</p>
+          <p>Your official GST Tax Invoice has been generated and is attached to this email as a PDF document for your records.</p>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+            <thead>
+              <tr style="background: #f1f5f9;">
+                <th style="padding: 8px; text-align: left;">Item</th>
+                <th style="padding: 8px; text-align: center;">Qty</th>
+                <th style="padding: 8px; text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows}</tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2" style="padding: 10px 8px; font-weight: bold; text-align: right;">Grand Total:</td>
+                <td style="padding: 10px 8px; font-weight: bold; text-align: right; color: #e11d48;">₹${(totalCents / 100).toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <p style="font-size: 13px; color: #64748b;">You can track real-time delivery status and download duplicate invoices anytime in your customer account dashboard.</p>
+        </div>
+        <div style="background: #f8fafc; padding: 16px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+          <p>© ${new Date().getFullYear()} ${shopName}. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Sends order confirmation email with official GST vector PDF tax invoice attachment.
+ */
+export async function sendOrderConfirmationEmail(
+  toEmail: string,
+  customerName: string,
+  orderId: string,
+  totalCents: number,
+  items: Array<{ name: string; quantity: number; priceCents: number }>,
+  pdfInvoiceBuffer?: Buffer,
+): Promise<{ success: boolean; previewUrl?: string }> {
+  try {
+    const { shopName } = await getTransporter();
+    const subject = `Order Confirmed: #${orderId.slice(0, 8).toUpperCase()} - ${shopName} (Tax Invoice Attached)`;
+    const htmlContent = buildOrderConfirmationHtml(shopName, customerName, orderId, totalCents, items);
+
+    const attachments = pdfInvoiceBuffer
+      ? [
+          {
+            filename: `Tax_Invoice_${orderId.slice(0, 8).toUpperCase()}.pdf`,
+            content: pdfInvoiceBuffer,
+            contentType: "application/pdf",
+          },
+        ]
+      : undefined;
+
+    return await sendEmail(toEmail, subject, htmlContent, undefined, attachments);
+  } catch (err) {
+    logger.error({ err, toEmail, orderId }, "Failed to send order confirmation email with invoice");
+    return { success: false };
+  }
+}
+

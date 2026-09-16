@@ -50,6 +50,13 @@ export const shopSettingsTable = pgTable("shop_settings", {
   flatDeliveryFeeCents: integer("flat_delivery_fee_cents").default(3000), // ₹30
   freeDeliveryThresholdCents: integer("free_delivery_threshold_cents").default(50000), // ₹500
   packagingFeeCents: integer("packaging_fee_cents").default(1000), // ₹10
+  // Business GST, Legal Identity & Local Serviceability
+  legalBusinessName: text("legal_business_name").default("RAJ TRADERS"),
+  gstinNumber: text("gstin_number").default("23AAAAA0000A1Z5"),
+  panNumber: text("pan_number").default("AAAAA0000A"),
+  stateCode: text("state_code").default("23"),
+  stateName: text("state_name").default("Madhya Pradesh"),
+  allowedPincodesJson: text("allowed_pincodes_json").default("[\"484661\",\"484660\"]"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
