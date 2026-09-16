@@ -684,7 +684,17 @@ function Products() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || `Server error (${res.status})`);
+        let errMsg = `Server returned status ${res.status}`;
+        if (typeof errorData.error === 'string') {
+          errMsg = errorData.error;
+        } else if (errorData.error && typeof errorData.error.message === 'string') {
+          errMsg = errorData.error.message;
+        } else if (typeof errorData.message === 'string') {
+          errMsg = errorData.message;
+        } else if (typeof errorData === 'object' && errorData !== null) {
+          errMsg = JSON.stringify(errorData);
+        }
+        throw new Error(errMsg);
       }
 
       setDialog(null);
@@ -694,7 +704,8 @@ function Products() {
       client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
     } catch (e: any) {
       console.error(e);
-      setNotice(`Failed to save product: ${e.message || String(e)}`);
+      const msg = typeof e?.message === 'string' ? e.message : String(e);
+      setNotice(`Failed to save product: ${msg}`);
     }
   };
 
