@@ -1207,7 +1207,7 @@ private fun ProductCard(product: Product, onAdd: () -> Unit, onShare: () -> Unit
 private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewModel: StorefrontViewModel, onNavigateToOrders: () -> Unit) {
     var code by remember { mutableStateOf("") }
     val isCooldownActive = state.cooldownRemainingMs > 0L
-    val isCheckoutDisabled = state.isCheckingOut || isCooldownActive || state.cart.isEmpty()
+    val isCheckoutDisabled = state.isCheckingOut || isCooldownActive || state.cart.isEmpty() || state.currentUser == null
 
     Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Your bag", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)

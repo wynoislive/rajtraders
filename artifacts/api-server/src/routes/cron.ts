@@ -42,7 +42,7 @@ router.post("/drain-emails", async (req: Request, res: Response) => {
 
     logger.info("Cron: email queue drained");
     res.status(200).json({ success: true, message: "Email queue drained." });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error({ err }, "Cron: failed to drain email queue");
     res.status(500).json({ error: "Failed to drain email queue." });
   }

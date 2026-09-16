@@ -176,9 +176,10 @@ async function sendViaHostingerApi(
     const errText = await response.text();
     logger.warn({ to, status: response.status, errText }, "Hostinger REST API failed, falling back to SMTP");
     return { success: false, error: `Hostinger API ${response.status}: ${errText}` };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : "Hostinger API Exception";
     logger.warn({ err, to }, "Hostinger REST API error, falling back to SMTP");
-    return { success: false, error: err.message || "Hostinger API Exception" };
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -198,9 +199,10 @@ export async function sendEmail(
       const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
       logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Gmail Notifications Nodemailer SMTP");
       return { success: true, provider: "gmail_notifications", previewUrl: previewUrl ? previewUrl.toString() : undefined };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "Gmail Notifications Send Failed";
       logger.error({ err, to }, "Gmail Notifications Nodemailer send failed");
-      return { success: false, provider: "gmail_notifications", error: err.message || "Gmail Notifications Send Failed" };
+      return { success: false, provider: "gmail_notifications", error: errorMsg };
     }
   }
 
@@ -212,9 +214,10 @@ export async function sendEmail(
       const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
       logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Nodemailer SMTP (Forced)");
       return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : undefined };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "SMTP Send Failed";
       logger.error({ err, to }, "SMTP email send failed (Forced)");
-      return { success: false, provider: "smtp", error: err.message || "SMTP Send Failed" };
+      return { success: false, provider: "smtp", error: errorMsg };
     }
   }
 
@@ -240,17 +243,19 @@ export async function sendEmail(
     const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;
     logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Hostinger Nodemailer SMTP");
     return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : undefined };
-  } catch (err: any) {
-    logger.warn({ err: err.message, to }, "Primary SMTP email send failed; trying Notification Gmail SMTP fallback");
+  } catch (err: unknown) {
+    const primaryErrMsg = err instanceof Error ? err.message : String(err);
+    logger.warn({ err: primaryErrMsg, to }, "Primary SMTP email send failed; trying Notification Gmail SMTP fallback");
     // Fall back 2: System / Notification Gmail Nodemailer SMTP
     try {
       const { transporter, from } = await getNotificationTransporter();
       const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
       logger.info({ to, subject: subject.slice(0, 50) }, "Email sent via Notification Gmail Nodemailer SMTP (Fallback)");
       return { success: true, provider: "gmail_notifications" };
-    } catch (notifErr: any) {
-      logger.error({ notifErr: notifErr.message, to }, "All email providers (Hostinger API, Hostinger SMTP, Gmail SMTP) failed");
-      return { success: false, error: notifErr.message || "All email senders failed", hostingerError: hostingerResult.error };
+    } catch (notifErr: unknown) {
+      const notifErrMsg = notifErr instanceof Error ? notifErr.message : "All email senders failed";
+      logger.error({ notifErr: notifErrMsg, to }, "All email providers (Hostinger API, Hostinger SMTP, Gmail SMTP) failed");
+      return { success: false, error: notifErrMsg, hostingerError: hostingerResult.error };
     }
   }
 }

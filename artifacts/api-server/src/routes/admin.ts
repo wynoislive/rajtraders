@@ -71,20 +71,20 @@ router.get("/v1/admin/summary", async (_req, res): Promise<void> => {
       db.select().from(registrationClaimsTable),
       db.select().from(registrationPoliciesTable),
     ]);
-    const activeDiscounts = discounts.filter((discount: any) => {
+    const activeDiscounts = discounts.filter((discount) => {
       const now = Date.now();
       const startsAtMs = discount.startsAt ? new Date(discount.startsAt).getTime() : 0;
       const expiresAtMs = discount.expiresAt ? new Date(discount.expiresAt).getTime() : null;
       return discount.active && startsAtMs <= now && (!expiresAtMs || expiresAtMs >= now);
     });
     const recentActivity = [
-      ...products.map((product: any) => ({
+      ...products.map((product) => ({
         id: `product-${product.id}`,
         label: product.approvalStatus === "pending_approval" ? "Product pending approval" : "Product in catalog",
         detail: `${product.name} (${product.prepTimeMinutes}m prep)`,
         timestamp: iso(product.updatedAt) as string,
       })),
-      ...discounts.map((discount: any) => ({
+      ...discounts.map((discount) => ({
         id: `discount-${discount.id}`,
         label: "Discount configured",
         detail: discount.code,
@@ -97,11 +97,11 @@ router.get("/v1/admin/summary", async (_req, res): Promise<void> => {
 
     res.json(
       GetAdminSummaryResponse.parse({
-        activeProducts: products.filter((product: any) => product.status === "active" && product.approvalStatus === "approved").length,
-        draftProducts: products.filter((product: any) => product.status === "draft" || product.approvalStatus === "pending_approval").length,
+        activeProducts: products.filter((product) => product.status === "active" && product.approvalStatus === "approved").length,
+        draftProducts: products.filter((product) => product.status === "draft" || product.approvalStatus === "pending_approval").length,
         liveDiscounts: activeDiscounts.length,
         firstOrderRegistrations: claims.length,
-        inventoryValueCents: products.reduce((total: number, product: any) => total + (product.priceCents || 0) * (product.inventory || 0), 0),
+        inventoryValueCents: products.reduce((total: number, product) => total + (product.priceCents || 0) * (product.inventory || 0), 0),
         recentActivity,
         policies,
       }),
@@ -220,13 +220,14 @@ router.post("/v1/admin/products", async (req, res): Promise<void> => {
       .returning();
 
     res.status(201).json(productResponse(created));
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("Product creation DB insert failed:", err);
-    res.status(500).json({ error: "Failed to create product in database: " + (err.message || String(err)) });
+    res.status(500).json({ error: "Failed to create product in database: " + msg });
   }
 });
 
-const handleUpdateProduct = async (req: any, res: any): Promise<void> => {
+const handleUpdateProduct = async (req: Request, res: Response): Promise<void> => {
   const staff = await getStaffFromToken(req.headers.authorization);
   const { productId } = req.params;
   const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
@@ -279,7 +280,7 @@ const handleUpdateProduct = async (req: any, res: any): Promise<void> => {
     }
 
     res.json(productResponse(updated));
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.json({
       id: productId,
       name: name || "Updated Product",
@@ -526,7 +527,8 @@ router.get("/v1/admin/shop-settings", async (_req, res): Promise<void> => {
       settings = inserted;
     }
     res.json(settings);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    req.log.error({ err }, "Failed to load shop settings");
     res.status(500).json({ error: "Failed to load shop settings." });
   }
 });
@@ -602,7 +604,8 @@ router.put("/v1/admin/shop-settings", async (req, res): Promise<void> => {
 
     const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     res.json({ success: true, settings: updated });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    req.log.error({ err }, "Failed to update shop settings");
     res.status(500).json({ error: "Failed to update shop settings." });
   }
 });
@@ -651,7 +654,7 @@ router.get("/v1/admin/orders", async (req, res): Promise<void> => {
   try {
     const allOrders = await db.select().from(ordersTable);
     res.json(filterOrders(allOrders, req.query));
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Error listing admin orders");
     res.status(500).json({ error: "Failed to load order ledger." });
   }
@@ -662,14 +665,14 @@ router.get("/v1/admin/orders/stats", async (req, res): Promise<void> => {
     const allOrders = await db.select().from(ordersTable);
     res.json({
       totalOrders: allOrders.length,
-      successfulOrders: allOrders.filter((o: any) => o.status === "paid").length,
-      pendingOrders: allOrders.filter((o: any) => o.status === "created").length,
-      cancelledOrders: allOrders.filter((o: any) => o.status === "cancelled" || o.status === "failed").length,
+      successfulOrders: allOrders.filter((o) => o.status === "paid").length,
+      pendingOrders: allOrders.filter((o) => o.status === "created").length,
+      cancelledOrders: allOrders.filter((o) => o.status === "cancelled" || o.status === "failed").length,
       totalRevenueCents: allOrders
-        .filter((o: any) => o.status === "paid")
-        .reduce((sum: number, o: any) => sum + o.totalCents, 0),
+        .filter((o) => o.status === "paid")
+        .reduce((sum: number, o) => sum + o.totalCents, 0),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Error fetching admin order stats");
     res.status(500).json({ error: "Failed to fetch order statistics." });
   }
@@ -689,7 +692,7 @@ router.post("/v1/admin/orders/:id/cancel", async (req, res): Promise<void> => {
     }
     await db.update(ordersTable).set({ status: "cancelled", updatedAt: new Date() }).where(eq(ordersTable.id, id));
     res.json({ success: true, orderId: id, status: "cancelled", message: "Order has been cancelled." });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Error cancelling order (admin)");
     res.status(500).json({ error: "Failed to cancel order." });
   }

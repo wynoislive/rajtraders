@@ -20,7 +20,8 @@ router.get("/approvals", async (req: Request, res: Response) => {
       .where(eq(productsTable.approvalStatus, "pending_approval"));
 
     res.status(200).json(pendingProducts);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    req.log.error({ err }, "Error loading approval queue");
     res.status(500).json({ error: "Failed to load approval queue." });
   }
 });
@@ -55,7 +56,8 @@ router.post("/approvals/:productId/approve", async (req: Request, res: Response)
       .where(eq(productsTable.id, productId));
 
     res.status(200).json({ success: true, message: "Product approved and published to live storefront!" });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    req.log.error({ err }, "Failed to approve product");
     res.status(500).json({ error: "Failed to approve product." });
   }
 });
@@ -90,7 +92,8 @@ router.post("/approvals/:productId/reject", async (req: Request, res: Response) 
       .where(eq(productsTable.id, productId));
 
     res.status(200).json({ success: true, message: "Product rejected and returned to draft." });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    req.log.error({ err }, "Failed to reject product");
     res.status(500).json({ error: "Failed to reject product." });
   }
 });

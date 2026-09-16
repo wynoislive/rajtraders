@@ -15397,13 +15397,13 @@ var require_type_is = __commonJS({
       }
       return false;
     }
-    function hasbody(req) {
-      return req.headers["transfer-encoding"] !== void 0 || !isNaN(req.headers["content-length"]);
+    function hasbody(req2) {
+      return req2.headers["transfer-encoding"] !== void 0 || !isNaN(req2.headers["content-length"]);
     }
-    function typeofrequest(req, types_) {
-      if (!hasbody(req)) return null;
+    function typeofrequest(req2, types_) {
+      if (!hasbody(req2)) return null;
       var types3 = arguments.length > 2 ? Array.prototype.slice.call(arguments, 1) : types_;
-      var value = req.headers["content-type"];
+      var value = req2.headers["content-type"];
       return typeis(value, types3);
     }
     function normalize(type) {
@@ -15461,14 +15461,14 @@ var require_utils = __commonJS({
       normalizeOptions,
       passthrough
     };
-    function getCharset(req) {
-      const header = req.headers["content-type"];
+    function getCharset(req2) {
+      const header = req2.headers["content-type"];
       if (!header) return void 0;
       return contentType.parse(header).parameters.charset?.toLowerCase();
     }
     function typeChecker(type) {
-      return function checkType(req) {
-        return Boolean(typeis(req, type));
+      return function checkType(req2) {
+        return Boolean(typeis(req2, type));
       };
     }
     function normalizeOptions(options, defaultType) {
@@ -15513,29 +15513,29 @@ var require_read = __commonJS({
     var hasBody = require_type_is().hasBody;
     var { getCharset } = require_utils();
     module.exports = read;
-    function read(req, res, next, parse2, debug7, options) {
-      if (onFinished.isFinished(req)) {
+    function read(req2, res, next, parse2, debug7, options) {
+      if (onFinished.isFinished(req2)) {
         debug7("body already parsed");
         next();
         return;
       }
-      if (!("body" in req)) {
-        req.body = void 0;
+      if (!("body" in req2)) {
+        req2.body = void 0;
       }
-      if (!hasBody(req)) {
+      if (!hasBody(req2)) {
         debug7("skip empty body");
         next();
         return;
       }
-      debug7("content-type %j", req.headers["content-type"]);
-      if (!options.shouldParse(req)) {
+      debug7("content-type %j", req2.headers["content-type"]);
+      if (!options.shouldParse(req2)) {
         debug7("skip parsing");
         next();
         return;
       }
       let encoding = null;
       if (options?.skipCharset !== true) {
-        encoding = getCharset(req) || options.defaultCharset;
+        encoding = getCharset(req2) || options.defaultCharset;
         if (!!options?.isValidCharset && !options.isValidCharset(encoding)) {
           debug7("invalid charset");
           next(createError(415, 'unsupported charset "' + encoding.toUpperCase() + '"', {
@@ -15550,7 +15550,7 @@ var require_read = __commonJS({
       let stream;
       const verify = opts.verify;
       try {
-        stream = contentstream(req, debug7, opts.inflate);
+        stream = contentstream(req2, debug7, opts.inflate);
         length = stream.length;
         stream.length = void 0;
       } catch (err) {
@@ -15576,11 +15576,11 @@ var require_read = __commonJS({
           } else {
             _error = createError(400, error);
           }
-          if (stream !== req) {
-            req.unpipe();
+          if (stream !== req2) {
+            req2.unpipe();
             stream.destroy();
           }
-          dump(req, function onfinished() {
+          dump(req2, function onfinished() {
             next(createError(400, _error));
           });
           return;
@@ -15588,7 +15588,7 @@ var require_read = __commonJS({
         if (verify) {
           try {
             debug7("verify body");
-            verify(req, res, body, encoding);
+            verify(req2, res, body, encoding);
           } catch (err) {
             next(createError(403, err, {
               body,
@@ -15601,7 +15601,7 @@ var require_read = __commonJS({
         try {
           debug7("parse body");
           str = typeof body !== "string" && encoding !== null ? iconv.decode(body, encoding) : body;
-          req.body = parse2(str, encoding);
+          req2.body = parse2(str, encoding);
         } catch (err) {
           next(createError(400, err, {
             body: str,
@@ -15612,9 +15612,9 @@ var require_read = __commonJS({
         next();
       });
     }
-    function contentstream(req, debug7, inflate) {
-      const encoding = (req.headers["content-encoding"] || "identity").toLowerCase();
-      const length = req.headers["content-length"];
+    function contentstream(req2, debug7, inflate) {
+      const encoding = (req2.headers["content-encoding"] || "identity").toLowerCase();
+      const length = req2.headers["content-length"];
       debug7('content-encoding "%s"', encoding);
       if (inflate === false && encoding !== "identity") {
         throw createError(415, "content encoding unsupported", {
@@ -15623,11 +15623,11 @@ var require_read = __commonJS({
         });
       }
       if (encoding === "identity") {
-        req.length = length;
-        return req;
+        req2.length = length;
+        return req2;
       }
       const stream = createDecompressionStream(encoding, debug7);
-      req.pipe(stream);
+      req2.pipe(stream);
       return stream;
     }
     function createDecompressionStream(encoding, debug7) {
@@ -15648,12 +15648,12 @@ var require_read = __commonJS({
           });
       }
     }
-    function dump(req, callback) {
-      if (onFinished.isFinished(req)) {
+    function dump(req2, callback) {
+      if (onFinished.isFinished(req2)) {
         callback(null);
       } else {
-        onFinished(req, callback);
-        req.resume();
+        onFinished(req2, callback);
+        req2.resume();
       }
     }
   }
@@ -15678,8 +15678,8 @@ var require_json = __commonJS({
         // assert charset per RFC 7159 sec 8.1
         isValidCharset: (charset) => charset.slice(0, 4) === "utf-"
       };
-      return function jsonParser(req, res, next) {
-        read(req, res, next, parse2, debug7, readOptions);
+      return function jsonParser(req2, res, next) {
+        read(req2, res, next, parse2, debug7, readOptions);
       };
     }
     function createJsonParser(options) {
@@ -15773,8 +15773,8 @@ var require_raw = __commonJS({
         // Skip charset validation and parse the body as is
         skipCharset: true
       };
-      return function rawParser(req, res, next) {
-        read(req, res, next, passthrough, debug7, readOptions);
+      return function rawParser(req2, res, next) {
+        read(req2, res, next, passthrough, debug7, readOptions);
       };
     }
   }
@@ -15790,8 +15790,8 @@ var require_text = __commonJS({
     module.exports = text2;
     function text2(options) {
       const normalizedOptions = normalizeOptions(options, "text/plain");
-      return function textParser(req, res, next) {
-        read(req, res, next, passthrough, debug7, normalizedOptions);
+      return function textParser(req2, res, next) {
+        read(req2, res, next, passthrough, debug7, normalizedOptions);
       };
     }
   }
@@ -18404,8 +18404,8 @@ var require_urlencoded = __commonJS({
         // assert charset
         isValidCharset: (charset) => charset === "utf-8" || charset === "iso-8859-1"
       };
-      return function urlencodedParser(req, res, next) {
-        read(req, res, next, parse2, debug7, readOptions);
+      return function urlencodedParser(req2, res, next) {
+        read(req2, res, next, parse2, debug7, readOptions);
       };
     }
     function createQueryParser(options) {
@@ -18578,31 +18578,31 @@ var require_parseurl = __commonJS({
     var Url = url.Url;
     module.exports = parseurl;
     module.exports.original = originalurl;
-    function parseurl(req) {
-      var url2 = req.url;
+    function parseurl(req2) {
+      var url2 = req2.url;
       if (url2 === void 0) {
         return void 0;
       }
-      var parsed = req._parsedUrl;
+      var parsed = req2._parsedUrl;
       if (fresh(url2, parsed)) {
         return parsed;
       }
       parsed = fastparse(url2);
       parsed._raw = url2;
-      return req._parsedUrl = parsed;
+      return req2._parsedUrl = parsed;
     }
-    function originalurl(req) {
-      var url2 = req.originalUrl;
+    function originalurl(req2) {
+      var url2 = req2.originalUrl;
       if (typeof url2 !== "string") {
-        return parseurl(req);
+        return parseurl(req2);
       }
-      var parsed = req._parsedOriginalUrl;
+      var parsed = req2._parsedOriginalUrl;
       if (fresh(url2, parsed)) {
         return parsed;
       }
       parsed = fastparse(url2);
       parsed._raw = url2;
-      return req._parsedOriginalUrl = parsed;
+      return req2._parsedOriginalUrl = parsed;
     }
     function fastparse(str) {
       if (typeof str !== "string" || str.charCodeAt(0) !== 47) {
@@ -18669,7 +18669,7 @@ var require_finalhandler = __commonJS({
       return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Error</title>\n</head>\n<body>\n<pre>' + body + "</pre>\n</body>\n</html>\n";
     }
     module.exports = finalhandler;
-    function finalhandler(req, res, options) {
+    function finalhandler(req2, res, options) {
       var opts = options || {};
       var env = opts.env || process.env.NODE_ENV || "development";
       var onerror = opts.onerror;
@@ -18691,20 +18691,20 @@ var require_finalhandler = __commonJS({
           msg = getErrorMessage(err, status, env);
         } else {
           status = 404;
-          msg = "Cannot " + req.method + " " + encodeUrl(getResourceName(req));
+          msg = "Cannot " + req2.method + " " + encodeUrl(getResourceName(req2));
         }
         debug7("default %s", status);
         if (err && onerror) {
-          setImmediate(onerror, err, req, res);
+          setImmediate(onerror, err, req2, res);
         }
         if (res.headersSent) {
           debug7("cannot %d after headers sent", status);
-          if (req.socket) {
-            req.socket.destroy();
+          if (req2.socket) {
+            req2.socket.destroy();
           }
           return;
         }
-        send(req, res, status, headers, msg);
+        send(req2, res, status, headers, msg);
       };
     }
     function getErrorHeaders(err) {
@@ -18732,9 +18732,9 @@ var require_finalhandler = __commonJS({
       }
       return void 0;
     }
-    function getResourceName(req) {
+    function getResourceName(req2) {
       try {
-        return parseUrl.original(req).pathname;
+        return parseUrl.original(req2).pathname;
       } catch (e) {
         return "resource";
       }
@@ -18746,11 +18746,11 @@ var require_finalhandler = __commonJS({
       }
       return status;
     }
-    function send(req, res, status, headers, message) {
+    function send(req2, res, status, headers, message) {
       function write() {
         var body = createHtmlDocument(message);
         res.statusCode = status;
-        if (req.httpVersionMajor < 2) {
+        if (req2.httpVersionMajor < 2) {
           res.statusMessage = statuses.message[status];
         }
         res.removeHeader("Content-Encoding");
@@ -18763,19 +18763,19 @@ var require_finalhandler = __commonJS({
         res.setHeader("X-Content-Type-Options", "nosniff");
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         res.setHeader("Content-Length", Buffer.byteLength(body, "utf8"));
-        if (req.method === "HEAD") {
+        if (req2.method === "HEAD") {
           res.end();
           return;
         }
         res.end(body, "utf8");
       }
-      if (isFinished(req)) {
+      if (isFinished(req2)) {
         write();
         return;
       }
-      req.unpipe();
-      onFinished(req, write);
-      req.resume();
+      req2.unpipe();
+      onFinished(req2, write);
+      req2.resume();
     }
   }
 });
@@ -19025,17 +19025,17 @@ var require_forwarded = __commonJS({
   "node_modules/.pnpm/forwarded@0.2.0/node_modules/forwarded/index.js"(exports, module) {
     "use strict";
     module.exports = forwarded;
-    function forwarded(req) {
-      if (!req) {
+    function forwarded(req2) {
+      if (!req2) {
         throw new TypeError("argument req is required");
       }
-      var proxyAddrs = parse2(req.headers["x-forwarded-for"] || "");
-      var socketAddr = getSocketAddr(req);
+      var proxyAddrs = parse2(req2.headers["x-forwarded-for"] || "");
+      var socketAddr = getSocketAddr(req2);
       var addrs = [socketAddr].concat(proxyAddrs);
       return addrs;
     }
-    function getSocketAddr(req) {
-      return req.socket ? req.socket.remoteAddress : req.connection.remoteAddress;
+    function getSocketAddr(req2) {
+      return req2.socket ? req2.socket.remoteAddress : req2.connection.remoteAddress;
     }
     function parse2(header) {
       var end = header.length;
@@ -19706,8 +19706,8 @@ var require_proxy_addr = __commonJS({
       loopback: ["127.0.0.1/8", "::1/128"],
       uniquelocal: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"]
     };
-    function alladdrs(req, trust) {
-      var addrs = forwarded(req);
+    function alladdrs(req2, trust) {
+      var addrs = forwarded(req2);
       if (!trust) {
         return addrs;
       }
@@ -19785,14 +19785,14 @@ var require_proxy_addr = __commonJS({
       var kind = ip.kind();
       return kind === "ipv4" ? ip.prefixLengthFromSubnetMask() : null;
     }
-    function proxyaddr(req, trust) {
-      if (!req) {
+    function proxyaddr(req2, trust) {
+      if (!req2) {
         throw new TypeError("req argument is required");
       }
       if (!trust) {
         throw new TypeError("trust argument is required");
       }
-      var addrs = alladdrs(req, trust);
+      var addrs = alladdrs(req2, trust);
       var addr = addrs[addrs.length - 1];
       return addr;
     }
@@ -20492,13 +20492,13 @@ var require_layer = __commonJS({
       }
       this.matchers = Array.isArray(path) ? path.map(matcher) : [matcher(path)];
     }
-    Layer.prototype.handleError = function handleError(error, req, res, next) {
+    Layer.prototype.handleError = function handleError(error, req2, res, next) {
       const fn = this.handle;
       if (fn.length !== 4) {
         return next(error);
       }
       try {
-        const ret = fn(error, req, res, next);
+        const ret = fn(error, req2, res, next);
         if (isPromise(ret)) {
           if (!(ret instanceof Promise)) {
             deprecate("handlers that are Promise-like are deprecated, use a native Promise instead");
@@ -20511,13 +20511,13 @@ var require_layer = __commonJS({
         next(err);
       }
     };
-    Layer.prototype.handleRequest = function handleRequest(req, res, next) {
+    Layer.prototype.handleRequest = function handleRequest(req2, res, next) {
       const fn = this.handle;
       if (fn.length > 3) {
         return next();
       }
       try {
-        const ret = fn(req, res, next);
+        const ret = fn(req2, res, next);
         if (isPromise(ret)) {
           if (!(ret instanceof Promise)) {
             deprecate("handlers that are Promise-like are deprecated, use a native Promise instead");
@@ -20616,18 +20616,18 @@ var require_route = __commonJS({
       }
       return methods2;
     };
-    Route.prototype.dispatch = function dispatch(req, res, done) {
+    Route.prototype.dispatch = function dispatch(req2, res, done) {
       let idx = 0;
       const stack = this.stack;
       let sync = 0;
       if (stack.length === 0) {
         return done();
       }
-      let method = typeof req.method === "string" ? req.method.toLowerCase() : req.method;
+      let method = typeof req2.method === "string" ? req2.method.toLowerCase() : req2.method;
       if (method === "head" && !this.methods.head) {
         method = "get";
       }
-      req.route = this;
+      req2.route = this;
       next();
       function next(err) {
         if (err && err === "route") {
@@ -20652,9 +20652,9 @@ var require_route = __commonJS({
           return done(err);
         }
         if (err) {
-          layer.handleError(err, req, res, next);
+          layer.handleError(err, req2, res, next);
         } else {
-          layer.handleRequest(req, res, next);
+          layer.handleRequest(req2, res, next);
         }
         sync = 0;
       }
@@ -20720,8 +20720,8 @@ var require_router = __commonJS({
         return new Router11(options);
       }
       const opts = options || {};
-      function router11(req, res, next) {
-        router11.handle(req, res, next);
+      function router11(req2, res, next) {
+        router11.handle(req2, res, next);
       }
       Object.setPrototypeOf(router11, this);
       router11.caseSensitive = opts.caseSensitive;
@@ -20753,40 +20753,40 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router11.prototype.handle = function handle(req, res, callback) {
+    Router11.prototype.handle = function handle(req2, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
-      debug7("dispatching %s %s", req.method, req.url);
+      debug7("dispatching %s %s", req2.method, req2.url);
       let idx = 0;
       let methods2;
-      const protohost = getProtohost(req.url) || "";
+      const protohost = getProtohost(req2.url) || "";
       let removed = "";
       const self2 = this;
       let slashAdded = false;
       let sync = 0;
       const paramcalled = {};
       const stack = this.stack;
-      const parentParams = req.params;
-      const parentUrl = req.baseUrl || "";
-      let done = restore(callback, req, "baseUrl", "next", "params");
-      req.next = next;
-      if (req.method === "OPTIONS") {
+      const parentParams = req2.params;
+      const parentUrl = req2.baseUrl || "";
+      let done = restore(callback, req2, "baseUrl", "next", "params");
+      req2.next = next;
+      if (req2.method === "OPTIONS") {
         methods2 = [];
         done = wrap(done, generateOptionsResponder(res, methods2));
       }
-      req.baseUrl = parentUrl;
-      req.originalUrl = req.originalUrl || req.url;
+      req2.baseUrl = parentUrl;
+      req2.originalUrl = req2.originalUrl || req2.url;
       next();
       function next(err) {
         let layerError = err === "route" ? null : err;
         if (slashAdded) {
-          req.url = req.url.slice(1);
+          req2.url = req2.url.slice(1);
           slashAdded = false;
         }
         if (removed.length !== 0) {
-          req.baseUrl = parentUrl;
-          req.url = protohost + removed + req.url.slice(protohost.length);
+          req2.baseUrl = parentUrl;
+          req2.url = protohost + removed + req2.url.slice(protohost.length);
           removed = "";
         }
         if (layerError === "router") {
@@ -20800,7 +20800,7 @@ var require_router = __commonJS({
         if (++sync > 100) {
           return setImmediate(next, err);
         }
-        const path = getPathname(req);
+        const path = getPathname(req2);
         if (path == null) {
           return done(layerError);
         }
@@ -20824,7 +20824,7 @@ var require_router = __commonJS({
             match2 = false;
             continue;
           }
-          const method = req.method;
+          const method = req2.method;
           const hasMethod = route._handlesMethod(method);
           if (!hasMethod && method === "OPTIONS" && methods2) {
             methods2.push.apply(methods2, route._methods());
@@ -20837,15 +20837,15 @@ var require_router = __commonJS({
           return done(layerError);
         }
         if (route) {
-          req.route = route;
+          req2.route = route;
         }
-        req.params = self2.mergeParams ? mergeParams(layer.params, parentParams) : layer.params;
+        req2.params = self2.mergeParams ? mergeParams(layer.params, parentParams) : layer.params;
         const layerPath = layer.path;
-        processParams(self2.params, layer, paramcalled, req, res, function(err2) {
+        processParams(self2.params, layer, paramcalled, req2, res, function(err2) {
           if (err2) {
             next(layerError || err2);
           } else if (route) {
-            layer.handleRequest(req, res, next);
+            layer.handleRequest(req2, res, next);
           } else {
             trimPrefix(layer, layerError, layerPath, path);
           }
@@ -20863,20 +20863,20 @@ var require_router = __commonJS({
             next(layerError);
             return;
           }
-          debug7("trim prefix (%s) from url %s", layerPath, req.url);
+          debug7("trim prefix (%s) from url %s", layerPath, req2.url);
           removed = layerPath;
-          req.url = protohost + req.url.slice(protohost.length + removed.length);
-          if (!protohost && req.url[0] !== "/") {
-            req.url = "/" + req.url;
+          req2.url = protohost + req2.url.slice(protohost.length + removed.length);
+          if (!protohost && req2.url[0] !== "/") {
+            req2.url = "/" + req2.url;
             slashAdded = true;
           }
-          req.baseUrl = parentUrl + (removed[removed.length - 1] === "/" ? removed.substring(0, removed.length - 1) : removed);
+          req2.baseUrl = parentUrl + (removed[removed.length - 1] === "/" ? removed.substring(0, removed.length - 1) : removed);
         }
-        debug7("%s %s : %s", layer.name, layerPath, req.originalUrl);
+        debug7("%s %s : %s", layer.name, layerPath, req2.originalUrl);
         if (layerError) {
-          layer.handleError(layerError, req, res, next);
+          layer.handleError(layerError, req2, res, next);
         } else {
-          layer.handleRequest(req, res, next);
+          layer.handleRequest(req2, res, next);
         }
       }
     };
@@ -20920,8 +20920,8 @@ var require_router = __commonJS({
         strict: this.strict,
         end: true
       }, handle);
-      function handle(req, res, next) {
-        route2.dispatch(req, res, next);
+      function handle(req2, res, next) {
+        route2.dispatch(req2, res, next);
       }
       layer.route = route2;
       this.stack.push(layer);
@@ -20942,9 +20942,9 @@ var require_router = __commonJS({
         trySendOptionsResponse(res, methods2, fn);
       };
     }
-    function getPathname(req) {
+    function getPathname(req2) {
       try {
-        return parseUrl(req).pathname;
+        return parseUrl(req2).pathname;
       } catch (err) {
         return void 0;
       }
@@ -20989,7 +20989,7 @@ var require_router = __commonJS({
       }
       return Object.assign(obj, params);
     }
-    function processParams(params, layer, called, req, res, done) {
+    function processParams(params, layer, called, req2, res, done) {
       const keys = layer.keys;
       if (!keys || keys.length === 0) {
         return done();
@@ -21009,14 +21009,14 @@ var require_router = __commonJS({
         }
         paramIndex = 0;
         key = keys[i++];
-        paramVal = req.params[key];
+        paramVal = req2.params[key];
         paramCallbacks = params[key];
         paramCalled = called[key];
         if (paramVal === void 0 || !paramCallbacks) {
           return param();
         }
         if (paramCalled && (paramCalled.match === paramVal || paramCalled.error && paramCalled.error !== "route")) {
-          req.params[key] = paramCalled.value;
+          req2.params[key] = paramCalled.value;
           return param(paramCalled.error);
         }
         called[key] = paramCalled = {
@@ -21028,7 +21028,7 @@ var require_router = __commonJS({
       }
       function paramCallback(err) {
         const fn = paramCallbacks[paramIndex++];
-        paramCalled.value = req.params[key];
+        paramCalled.value = req2.params[key];
         if (err) {
           paramCalled.error = err;
           param(err);
@@ -21036,7 +21036,7 @@ var require_router = __commonJS({
         }
         if (!fn) return param();
         try {
-          const ret = fn(req, res, paramCallback, paramVal, key);
+          const ret = fn(req2, res, paramCallback, paramVal, key);
           if (isPromise(ret)) {
             if (!(ret instanceof Promise)) {
               deprecate("parameters that are Promise-like are deprecated, use a native Promise instead");
@@ -21169,22 +21169,22 @@ var require_application = __commonJS({
         this.enable("view cache");
       }
     };
-    app2.handle = function handle(req, res, callback) {
-      var done = callback || finalhandler(req, res, {
+    app2.handle = function handle(req2, res, callback) {
+      var done = callback || finalhandler(req2, res, {
         env: this.get("env"),
         onerror: logerror.bind(this)
       });
       if (this.enabled("x-powered-by")) {
         res.setHeader("X-Powered-By", "Express");
       }
-      req.res = res;
-      res.req = req;
-      Object.setPrototypeOf(req, this.request);
+      req2.res = res;
+      res.req = req2;
+      Object.setPrototypeOf(req2, this.request);
       Object.setPrototypeOf(res, this.response);
       if (!res.locals) {
         res.locals = /* @__PURE__ */ Object.create(null);
       }
-      this.router.handle(req, res, done);
+      this.router.handle(req2, res, done);
     };
     app2.use = function use(fn) {
       var offset = 0;
@@ -21211,10 +21211,10 @@ var require_application = __commonJS({
         debug7(".use app under %s", path);
         fn2.mountpath = path;
         fn2.parent = this;
-        router11.use(path, function mounted_app(req, res, next) {
-          var orig = req.app;
-          fn2.handle(req, res, function(err) {
-            Object.setPrototypeOf(req, orig.request);
+        router11.use(path, function mounted_app(req2, res, next) {
+          var orig = req2.app;
+          fn2.handle(req2, res, function(err) {
+            Object.setPrototypeOf(req2, orig.request);
             Object.setPrototypeOf(res, orig.response);
             next(err);
           });
@@ -21878,12 +21878,12 @@ var require_accepts = __commonJS({
     var Negotiator = require_negotiator();
     var mime = require_mime_types();
     module.exports = Accepts;
-    function Accepts(req) {
+    function Accepts(req2) {
       if (!(this instanceof Accepts)) {
-        return new Accepts(req);
+        return new Accepts(req2);
       }
-      this.headers = req.headers;
-      this.negotiator = new Negotiator(req);
+      this.headers = req2.headers;
+      this.negotiator = new Negotiator(req2);
     }
     Accepts.prototype.type = Accepts.prototype.types = function(types_) {
       var types3 = types_;
@@ -22129,9 +22129,9 @@ var require_request = __commonJS({
     var parseRange = require_range_parser();
     var parse2 = require_parseurl();
     var proxyaddr = require_proxy_addr();
-    var req = Object.create(http.IncomingMessage.prototype);
-    module.exports = req;
-    req.get = req.header = function header(name) {
+    var req2 = Object.create(http.IncomingMessage.prototype);
+    module.exports = req2;
+    req2.get = req2.header = function header(name) {
       if (!name) {
         throw new TypeError("name argument is required to req.get");
       }
@@ -22147,27 +22147,27 @@ var require_request = __commonJS({
           return this.headers[lc];
       }
     };
-    req.accepts = function() {
+    req2.accepts = function() {
       var accept = accepts(this);
       return accept.types.apply(accept, arguments);
     };
-    req.acceptsEncodings = function() {
+    req2.acceptsEncodings = function() {
       var accept = accepts(this);
       return accept.encodings.apply(accept, arguments);
     };
-    req.acceptsCharsets = function() {
+    req2.acceptsCharsets = function() {
       var accept = accepts(this);
       return accept.charsets.apply(accept, arguments);
     };
-    req.acceptsLanguages = function(...languages) {
+    req2.acceptsLanguages = function(...languages) {
       return accepts(this).languages(...languages);
     };
-    req.range = function range(size, options) {
+    req2.range = function range(size, options) {
       var range2 = this.get("Range");
       if (!range2) return;
       return parseRange(size, range2, options);
     };
-    defineGetter(req, "query", function query() {
+    defineGetter(req2, "query", function query() {
       var queryparse = this.app.get("query parser fn");
       if (!queryparse) {
         return /* @__PURE__ */ Object.create(null);
@@ -22175,7 +22175,7 @@ var require_request = __commonJS({
       var querystring = parse2(this).query;
       return queryparse(querystring);
     });
-    req.is = function is2(types3) {
+    req2.is = function is2(types3) {
       var arr = types3;
       if (!Array.isArray(types3)) {
         arr = new Array(arguments.length);
@@ -22185,7 +22185,7 @@ var require_request = __commonJS({
       }
       return typeis(this, arr);
     };
-    defineGetter(req, "protocol", function protocol() {
+    defineGetter(req2, "protocol", function protocol() {
       var proto = this.socket.encrypted ? "https" : "http";
       var trust = this.app.get("trust proxy fn");
       if (!trust(this.socket.remoteAddress, 0)) {
@@ -22195,30 +22195,30 @@ var require_request = __commonJS({
       var index2 = header.indexOf(",");
       return index2 !== -1 ? header.substring(0, index2).trim() : header.trim();
     });
-    defineGetter(req, "secure", function secure() {
+    defineGetter(req2, "secure", function secure() {
       return this.protocol === "https";
     });
-    defineGetter(req, "ip", function ip() {
+    defineGetter(req2, "ip", function ip() {
       var trust = this.app.get("trust proxy fn");
       return proxyaddr(this, trust);
     });
-    defineGetter(req, "ips", function ips() {
+    defineGetter(req2, "ips", function ips() {
       var trust = this.app.get("trust proxy fn");
       var addrs = proxyaddr.all(this, trust);
       addrs.reverse().pop();
       return addrs;
     });
-    defineGetter(req, "subdomains", function subdomains() {
+    defineGetter(req2, "subdomains", function subdomains() {
       var hostname = this.hostname;
       if (!hostname) return [];
       var offset = this.app.get("subdomain offset");
       var subdomains2 = !isIP2(hostname) ? hostname.split(".").reverse() : [hostname];
       return subdomains2.slice(offset);
     });
-    defineGetter(req, "path", function path() {
+    defineGetter(req2, "path", function path() {
       return parse2(this).pathname;
     });
-    defineGetter(req, "host", function host() {
+    defineGetter(req2, "host", function host() {
       var trust = this.app.get("trust proxy fn");
       var val = this.get("X-Forwarded-Host");
       if (!val || !trust(this.socket.remoteAddress, 0)) {
@@ -22228,14 +22228,14 @@ var require_request = __commonJS({
       }
       return val || void 0;
     });
-    defineGetter(req, "hostname", function hostname() {
+    defineGetter(req2, "hostname", function hostname() {
       var host = this.host;
       if (!host) return;
       var offset = host[0] === "[" ? host.indexOf("]") + 1 : 0;
       var index2 = host.indexOf(":", offset);
       return index2 !== -1 ? host.substring(0, index2) : host;
     });
-    defineGetter(req, "fresh", function() {
+    defineGetter(req2, "fresh", function() {
       var method = this.method;
       var res = this.res;
       var status = res.statusCode;
@@ -22248,10 +22248,10 @@ var require_request = __commonJS({
       }
       return false;
     });
-    defineGetter(req, "stale", function stale() {
+    defineGetter(req2, "stale", function stale() {
       return !this.fresh;
     });
-    defineGetter(req, "xhr", function xhr() {
+    defineGetter(req2, "xhr", function xhr() {
       var val = this.get("X-Requested-With") || "";
       return val.toLowerCase() === "xmlhttprequest";
     });
@@ -22686,15 +22686,15 @@ var require_send = __commonJS({
     var MAX_MAXAGE = 60 * 60 * 24 * 365 * 1e3;
     var UP_PATH_REGEXP = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
     module.exports = send;
-    function send(req, path2, options) {
-      return new SendStream(req, path2, options);
+    function send(req2, path2, options) {
+      return new SendStream(req2, path2, options);
     }
-    function SendStream(req, path2, options) {
+    function SendStream(req2, path2, options) {
       Stream.call(this);
       var opts = options || {};
       this.options = opts;
       this.path = path2;
-      this.req = req;
+      this.req = req2;
       this._acceptRanges = opts.acceptRanges !== void 0 ? Boolean(opts.acceptRanges) : true;
       this._cacheControl = opts.cacheControl !== void 0 ? Boolean(opts.cacheControl) : true;
       this._etag = opts.etag !== void 0 ? Boolean(opts.etag) : true;
@@ -22737,16 +22737,16 @@ var require_send = __commonJS({
       return this.req.headers["if-match"] || this.req.headers["if-unmodified-since"] || this.req.headers["if-none-match"] || this.req.headers["if-modified-since"];
     };
     SendStream.prototype.isPreconditionFailure = function isPreconditionFailure() {
-      var req = this.req;
+      var req2 = this.req;
       var res = this.res;
-      var match2 = req.headers["if-match"];
+      var match2 = req2.headers["if-match"];
       if (match2) {
         var etag2 = res.getHeader("ETag");
         return !etag2 || match2 !== "*" && parseTokenList(match2).every(function(match3) {
           return match3 !== etag2 && match3 !== "W/" + etag2 && "W/" + match3 !== etag2;
         });
       }
-      var unmodifiedSince = parseHttpDate(req.headers["if-unmodified-since"]);
+      var unmodifiedSince = parseHttpDate(req2.headers["if-unmodified-since"]);
       if (!isNaN(unmodifiedSince)) {
         var lastModified = parseHttpDate(res.getHeader("Last-Modified"));
         return isNaN(lastModified) || lastModified > unmodifiedSince;
@@ -22886,8 +22886,8 @@ var require_send = __commonJS({
       var options = this.options;
       var opts = {};
       var res = this.res;
-      var req = this.req;
-      var ranges = req.headers.range;
+      var req2 = this.req;
+      var ranges = req2.headers.range;
       var offset = options.start || 0;
       if (res.headersSent) {
         this.headersAlreadySent();
@@ -22940,7 +22940,7 @@ var require_send = __commonJS({
       opts.start = offset;
       opts.end = Math.max(offset, offset + len - 1);
       res.setHeader("Content-Length", len);
-      if (req.method === "HEAD") {
+      if (req2.method === "HEAD") {
         res.end();
         return;
       }
@@ -23267,7 +23267,7 @@ var require_response = __commonJS({
     res.send = function send2(body) {
       var chunk = body;
       var encoding;
-      var req = this.req;
+      var req2 = this.req;
       var type;
       var app2 = this.app;
       switch (typeof chunk) {
@@ -23319,7 +23319,7 @@ var require_response = __commonJS({
           this.set("ETag", etag);
         }
       }
-      if (req.fresh) this.status(304);
+      if (req2.fresh) this.status(304);
       if (204 === this.statusCode || 304 === this.statusCode) {
         this.removeHeader("Content-Type");
         this.removeHeader("Content-Length");
@@ -23331,7 +23331,7 @@ var require_response = __commonJS({
         this.removeHeader("Transfer-Encoding");
         chunk = "";
       }
-      if (req.method === "HEAD") {
+      if (req2.method === "HEAD") {
         this.end();
       } else {
         this.end(chunk, encoding);
@@ -23384,9 +23384,9 @@ var require_response = __commonJS({
     };
     res.sendFile = function sendFile(path2, options, callback) {
       var done = callback;
-      var req = this.req;
+      var req2 = this.req;
       var res2 = this;
-      var next = req.next;
+      var next = req2.next;
       var opts = options || {};
       if (!path2) {
         throw new TypeError("path argument is required to res.sendFile");
@@ -23403,7 +23403,7 @@ var require_response = __commonJS({
       }
       var pathname = encodeURI(path2);
       opts.etag = this.app.enabled("etag");
-      var file = send(req, pathname, opts);
+      var file = send(req2, pathname, opts);
       sendfile(res2, file, opts, function(err) {
         if (done) return done(err);
         if (err && err.code === "EISDIR") return next();
@@ -23450,18 +23450,18 @@ var require_response = __commonJS({
       return this.set("Content-Type", ct);
     };
     res.format = function(obj) {
-      var req = this.req;
-      var next = req.next;
+      var req2 = this.req;
+      var next = req2.next;
       var keys = Object.keys(obj).filter(function(v) {
         return v !== "default";
       });
-      var key = keys.length > 0 ? req.accepts(keys) : false;
+      var key = keys.length > 0 ? req2.accepts(keys) : false;
       this.vary("Accept");
       if (key) {
         this.set("Content-Type", normalizeType(key).value);
-        obj[key](req, this, next);
+        obj[key](req2, this, next);
       } else if (obj.default) {
-        obj.default(req, this, next);
+        obj.default(req2, this, next);
       } else {
         next(createError(406, {
           types: normalizeTypes(keys).map(function(o) {
@@ -23584,7 +23584,7 @@ var require_response = __commonJS({
       var app2 = this.req.app;
       var done = callback;
       var opts = options || {};
-      var req = this.req;
+      var req2 = this.req;
       var self2 = this;
       if (typeof options === "function") {
         done = options;
@@ -23592,7 +23592,7 @@ var require_response = __commonJS({
       }
       opts._locals = self2.locals;
       done = done || function(err, str) {
-        if (err) return req.next(err);
+        if (err) return req2.next(err);
         self2.send(str);
       };
       app2.render(view, opts, done);
@@ -23712,8 +23712,8 @@ var require_serve_static = __commonJS({
       opts.maxage = opts.maxage || opts.maxAge || 0;
       opts.root = resolve(root);
       var onDirectory = redirect ? createRedirectDirectoryListener() : createNotFoundDirectoryListener();
-      return function serveStatic2(req, res, next) {
-        if (req.method !== "GET" && req.method !== "HEAD") {
+      return function serveStatic2(req2, res, next) {
+        if (req2.method !== "GET" && req2.method !== "HEAD") {
           if (fallthrough) {
             return next();
           }
@@ -23724,12 +23724,12 @@ var require_serve_static = __commonJS({
           return;
         }
         var forwardError = !fallthrough;
-        var originalUrl = parseUrl.original(req);
-        var path = parseUrl(req).pathname;
+        var originalUrl = parseUrl.original(req2);
+        var path = parseUrl(req2).pathname;
         if (path === "/" && originalUrl.pathname.substr(-1) !== "/") {
           path = "";
         }
-        var stream = send(req, path, opts);
+        var stream = send(req2, path, opts);
         stream.on("directory", onDirectory);
         if (setHeaders) {
           stream.on("headers", setHeaders);
@@ -23797,16 +23797,16 @@ var require_express = __commonJS({
     var mixin = require_merge_descriptors();
     var proto = require_application();
     var Router11 = require_router();
-    var req = require_request();
+    var req2 = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
     function createApplication() {
-      var app2 = function(req2, res2, next) {
-        app2.handle(req2, res2, next);
+      var app2 = function(req3, res2, next) {
+        app2.handle(req3, res2, next);
       };
       mixin(app2, EventEmitter2.prototype, false);
       mixin(app2, proto, false);
-      app2.request = Object.create(req, {
+      app2.request = Object.create(req2, {
         app: { configurable: true, enumerable: true, writable: true, value: app2 }
       });
       app2.response = Object.create(res, {
@@ -23816,7 +23816,7 @@ var require_express = __commonJS({
       return app2;
     }
     exports.application = proto;
-    exports.request = req;
+    exports.request = req2;
     exports.response = res;
     exports.Route = Router11.Route;
     exports.Router = Router11;
@@ -23938,8 +23938,8 @@ var require_lib3 = __commonJS({
           return !!allowedOrigin;
         }
       }
-      function configureOrigin(options, req) {
-        var requestOrigin = req.headers.origin, headers = [], isAllowed;
+      function configureOrigin(options, req2) {
+        var requestOrigin = req2.headers.origin, headers = [], isAllowed;
         if (!options.origin || options.origin === "*") {
           headers.push([{
             key: "Access-Control-Allow-Origin",
@@ -23986,11 +23986,11 @@ var require_lib3 = __commonJS({
         }
         return null;
       }
-      function configureAllowedHeaders(options, req) {
+      function configureAllowedHeaders(options, req2) {
         var allowedHeaders = options.allowedHeaders || options.headers;
         var headers = [];
         if (!allowedHeaders) {
-          allowedHeaders = req.headers["access-control-request-headers"];
+          allowedHeaders = req2.headers["access-control-request-headers"];
           headers.push([{
             key: "Vary",
             value: "Access-Control-Request-Headers"
@@ -24045,13 +24045,13 @@ var require_lib3 = __commonJS({
           }
         }
       }
-      function cors2(options, req, res, next) {
-        var headers = [], method = req.method && req.method.toUpperCase && req.method.toUpperCase();
+      function cors2(options, req2, res, next) {
+        var headers = [], method = req2.method && req2.method.toUpperCase && req2.method.toUpperCase();
         if (method === "OPTIONS") {
-          headers.push(configureOrigin(options, req));
+          headers.push(configureOrigin(options, req2));
           headers.push(configureCredentials(options));
           headers.push(configureMethods(options));
-          headers.push(configureAllowedHeaders(options, req));
+          headers.push(configureAllowedHeaders(options, req2));
           headers.push(configureMaxAge(options));
           headers.push(configureExposedHeaders(options));
           applyHeaders(headers, res);
@@ -24063,7 +24063,7 @@ var require_lib3 = __commonJS({
             res.end();
           }
         } else {
-          headers.push(configureOrigin(options, req));
+          headers.push(configureOrigin(options, req2));
           headers.push(configureCredentials(options));
           headers.push(configureExposedHeaders(options));
           applyHeaders(headers, res);
@@ -24075,12 +24075,12 @@ var require_lib3 = __commonJS({
         if (typeof o === "function") {
           optionsCallback = o;
         } else {
-          optionsCallback = function(req, cb) {
+          optionsCallback = function(req2, cb) {
             cb(null, o);
           };
         }
-        return function corsMiddleware(req, res, next) {
-          optionsCallback(req, function(err, options) {
+        return function corsMiddleware(req2, res, next) {
+          optionsCallback(req2, function(err, options) {
             if (err) {
               next(err);
             } else {
@@ -24094,12 +24094,12 @@ var require_lib3 = __commonJS({
                 };
               }
               if (originCallback) {
-                originCallback(req.headers.origin, function(err2, origin) {
+                originCallback(req2.headers.origin, function(err2, origin) {
                   if (err2 || !origin) {
                     next(err2);
                   } else {
                     corsOptions.origin = origin;
-                    cors2(corsOptions, req, res, next);
+                    cors2(corsOptions, req2, res, next);
                   }
                 });
               } else {
@@ -24369,32 +24369,32 @@ var require_req = __commonJS({
       writable: true,
       value: {}
     });
-    function reqSerializer(req) {
-      const connection = req.info || req.socket;
+    function reqSerializer(req2) {
+      const connection = req2.info || req2.socket;
       const _req = Object.create(pinoReqProto);
-      _req.id = typeof req.id === "function" ? req.id() : req.id || (req.info ? req.info.id : void 0);
-      _req.method = req.method;
-      if (req.originalUrl) {
-        _req.url = req.originalUrl;
+      _req.id = typeof req2.id === "function" ? req2.id() : req2.id || (req2.info ? req2.info.id : void 0);
+      _req.method = req2.method;
+      if (req2.originalUrl) {
+        _req.url = req2.originalUrl;
       } else {
-        const path = req.path;
-        _req.url = typeof path === "string" ? path : req.url ? req.url.path || req.url : void 0;
+        const path = req2.path;
+        _req.url = typeof path === "string" ? path : req2.url ? req2.url.path || req2.url : void 0;
       }
-      if (req.query) {
-        _req.query = req.query;
+      if (req2.query) {
+        _req.query = req2.query;
       }
-      if (req.params) {
-        _req.params = req.params;
+      if (req2.params) {
+        _req.params = req2.params;
       }
-      _req.headers = req.headers;
+      _req.headers = req2.headers;
       _req.remoteAddress = connection && connection.remoteAddress;
       _req.remotePort = connection && connection.remotePort;
-      _req.raw = req.raw || req;
+      _req.raw = req2.raw || req2;
       return _req;
     }
-    function mapHttpRequest(req) {
+    function mapHttpRequest(req2) {
       return {
-        req: reqSerializer(req)
+        req: reqSerializer(req2)
       };
     }
   }
@@ -24472,8 +24472,8 @@ var require_pino_std_serializers = __commonJS({
       },
       wrapRequestSerializer: function wrapRequestSerializer(customSerializer) {
         if (customSerializer === reqSerializers.reqSerializer) return customSerializer;
-        return function wrappedReqSerializer(req) {
-          return customSerializer(reqSerializers.reqSerializer(req));
+        return function wrappedReqSerializer(req2) {
+          return customSerializer(reqSerializers.reqSerializer(req2));
         };
       },
       wrapResponseSerializer: function wrapResponseSerializer(customSerializer) {
@@ -28489,8 +28489,8 @@ var require_logger = __commonJS({
         }
         return defaultValue;
       }
-      function getLogLevelFromCustomLogLevel(customLogLevel2, useLevel2, res, err, req) {
-        return customLogLevel2 ? getValidLogLevel(customLogLevel2(req, res, err), useLevel2) : useLevel2;
+      function getLogLevelFromCustomLogLevel(customLogLevel2, useLevel2, res, err, req2) {
+        return customLogLevel2 ? getValidLogLevel(customLogLevel2(req2, res, err), useLevel2) : useLevel2;
       }
       const customLogLevel = opts.customLogLevel;
       delete opts.customLogLevel;
@@ -28514,20 +28514,20 @@ var require_logger = __commonJS({
       const useLevel = getValidLogLevel(opts.useLevel);
       delete opts.useLevel;
       const genReqId = reqIdGenFactory(opts.genReqId);
-      const result = (req, res, next) => {
-        return loggingMiddleware(logger3, req, res, next);
+      const result = (req2, res, next) => {
+        return loggingMiddleware(logger3, req2, res, next);
       };
       result.logger = logger3;
       return result;
       function onResFinished(res, logger4, err) {
         let log = logger4;
         const responseTime = Date.now() - res[startTime];
-        const req = res[reqObject];
-        const level = getLogLevelFromCustomLogLevel(customLogLevel, useLevel, res, err, req);
+        const req2 = res[reqObject];
+        const level = getLogLevelFromCustomLogLevel(customLogLevel, useLevel, res, err, req2);
         if (level === "silent") {
           return;
         }
-        const customPropBindings = typeof customProps === "function" ? customProps(req, res) : customProps;
+        const customPropBindings = typeof customProps === "function" ? customProps(req2, res) : customProps;
         if (customPropBindings) {
           const customPropBindingStr = logger4[stringifySym](customPropBindings).replace(/[{}]/g, "");
           const customPropBindingsStr = logger4[chindingsSym];
@@ -28538,29 +28538,29 @@ var require_logger = __commonJS({
         if (err || res.err || res.statusCode >= 500) {
           const error = err || res.err || new Error("failed with status code " + res.statusCode);
           log[level](
-            onRequestErrorObject(req, res, error, {
+            onRequestErrorObject(req2, res, error, {
               [resKey]: res,
               [errKey]: error,
               [responseTimeKey]: responseTime
             }),
-            errorMessage(req, res, error, responseTime)
+            errorMessage(req2, res, error, responseTime)
           );
           return;
         }
         log[level](
-          onRequestSuccessObject(req, res, {
+          onRequestSuccessObject(req2, res, {
             [resKey]: res,
             [responseTimeKey]: responseTime
           }),
-          successMessage(req, res, responseTime)
+          successMessage(req2, res, responseTime)
         );
       }
-      function loggingMiddleware(logger4, req, res, next) {
+      function loggingMiddleware(logger4, req2, res, next) {
         let shouldLogSuccess = true;
-        req.id = req.id || genReqId(req, res);
-        const log = quietReqLogger ? logger4.child({ [requestIdKey]: req.id }) : logger4;
-        let fullReqLogger = log.child({ [reqKey]: req });
-        const customPropBindings = typeof customProps === "function" ? customProps(req, res) : customProps;
+        req2.id = req2.id || genReqId(req2, res);
+        const log = quietReqLogger ? logger4.child({ [requestIdKey]: req2.id }) : logger4;
+        let fullReqLogger = log.child({ [reqKey]: req2 });
+        const customPropBindings = typeof customProps === "function" ? customProps(req2, res) : customProps;
         if (customPropBindings) {
           fullReqLogger = fullReqLogger.child(customPropBindings);
         }
@@ -28573,15 +28573,15 @@ var require_logger = __commonJS({
           res.allLogs = [];
         }
         res.allLogs.push(responseLogger);
-        if (!req.log) {
-          req.log = requestLogger;
+        if (!req2.log) {
+          req2.log = requestLogger;
         }
-        if (!req.allLogs) {
-          req.allLogs = [];
+        if (!req2.allLogs) {
+          req2.allLogs = [];
         }
-        req.allLogs.push(requestLogger);
+        req2.allLogs.push(requestLogger);
         res[startTime] = res[startTime] || Date.now();
-        res[reqObject] = req;
+        res[reqObject] = req2;
         const onResponseComplete = (err) => {
           res.removeListener("close", onResponseComplete);
           res.removeListener("finish", onResponseComplete);
@@ -28590,15 +28590,15 @@ var require_logger = __commonJS({
         };
         if (autoLogging) {
           if (autoLoggingIgnore !== null && shouldLogSuccess === true) {
-            const isIgnored = autoLoggingIgnore(req);
+            const isIgnored = autoLoggingIgnore(req2);
             shouldLogSuccess = !isIgnored;
           }
           if (shouldLogSuccess) {
             const shouldLogReceived = receivedMessage !== void 0 || onRequestReceivedObject !== void 0;
             if (shouldLogReceived) {
-              const level = getLogLevelFromCustomLogLevel(customLogLevel, useLevel, res, void 0, req);
-              const receivedObjectResult = onRequestReceivedObject !== void 0 ? onRequestReceivedObject(req, res, void 0) : {};
-              const receivedStringResult = receivedMessage !== void 0 ? receivedMessage(req, res) : void 0;
+              const level = getLogLevelFromCustomLogLevel(customLogLevel, useLevel, res, void 0, req2);
+              const receivedObjectResult = onRequestReceivedObject !== void 0 ? onRequestReceivedObject(req2, res, void 0) : {};
+              const receivedStringResult = receivedMessage !== void 0 ? receivedMessage(req2, res) : void 0;
               requestLogger[level](receivedObjectResult, receivedStringResult);
             }
             res.on("close", onResponseComplete);
@@ -28633,8 +28633,8 @@ var require_logger = __commonJS({
       if (typeof func === "function") return func;
       const maxInt = 2147483647;
       let nextReqId = 0;
-      return function genReqId(req, res) {
-        return req.id || (nextReqId = nextReqId + 1 & maxInt);
+      return function genReqId(req2, res) {
+        return req2.id || (nextReqId = nextReqId + 1 & maxInt);
       };
     }
     function getFunctionOrDefault(value, defaultValue) {
@@ -28643,17 +28643,17 @@ var require_logger = __commonJS({
       }
       return defaultValue;
     }
-    function defaultSuccessfulRequestObjectProvider(req, res, successObject) {
+    function defaultSuccessfulRequestObjectProvider(req2, res, successObject) {
       return successObject;
     }
-    function defaultFailedRequestObjectProvider(req, res, error, errorObject) {
+    function defaultFailedRequestObjectProvider(req2, res, error, errorObject) {
       return errorObject;
     }
     function defaultFailedRequestMessageProvider() {
       return "request errored";
     }
-    function defaultSuccessfulRequestMessageProvider(req, res) {
-      return !req.readableAborted && res.writableEnded ? "request completed" : "request aborted";
+    function defaultSuccessfulRequestMessageProvider(req2, res) {
+      return !req2.readableAborted && res.writableEnded ? "request completed" : "request aborted";
     }
     module.exports = pinoLogger;
     module.exports.stdSerializers = {
@@ -45004,7 +45004,7 @@ var require_fetch = __commonJS({
         }
         method = (options.method || "").toString().trim().toUpperCase() || "POST";
       }
-      let req;
+      let req2;
       const reqOptions = {
         method,
         host: parsed.hostname,
@@ -45028,7 +45028,7 @@ var require_fetch = __commonJS({
         reqOptions.servername = parsed.hostname;
       }
       try {
-        req = handler.request(reqOptions);
+        req2 = handler.request(reqOptions);
       } catch (E) {
         finished = true;
         setImmediate(() => {
@@ -45039,19 +45039,19 @@ var require_fetch = __commonJS({
         return fetchRes;
       }
       if (options.timeout) {
-        req.setTimeout(options.timeout, () => {
+        req2.setTimeout(options.timeout, () => {
           if (finished) {
             return;
           }
           finished = true;
-          req.abort();
+          req2.abort();
           const err = new Error("Request Timeout");
           err.code = errors.EFETCH;
           err.sourceUrl = url;
           fetchRes.emit("error", err);
         });
       }
-      req.on("error", (err) => {
+      req2.on("error", (err) => {
         if (finished) {
           return;
         }
@@ -45060,7 +45060,7 @@ var require_fetch = __commonJS({
         err.sourceUrl = url;
         fetchRes.emit("error", err);
       });
-      req.on("response", (res) => {
+      req2.on("response", (res) => {
         let inflate;
         if (finished) {
           return;
@@ -45084,7 +45084,7 @@ var require_fetch = __commonJS({
             err.code = errors.EFETCH;
             err.sourceUrl = url;
             fetchRes.emit("error", err);
-            req.abort();
+            req2.abort();
             return;
           }
           options.method = "GET";
@@ -45102,7 +45102,7 @@ var require_fetch = __commonJS({
             err.code = errors.EFETCH;
             err.sourceUrl = redirectUrl;
             fetchRes.emit("error", err);
-            req.abort();
+            req2.abort();
             return;
           }
           const crossHost = redirectParsed.hostname !== parsed.hostname;
@@ -45125,7 +45125,7 @@ var require_fetch = __commonJS({
           err.code = errors.EFETCH;
           err.sourceUrl = url;
           fetchRes.emit("error", err);
-          req.abort();
+          req2.abort();
           return;
         }
         res.on("error", (err) => {
@@ -45136,7 +45136,7 @@ var require_fetch = __commonJS({
           err.code = errors.EFETCH;
           err.sourceUrl = url;
           fetchRes.emit("error", err);
-          req.abort();
+          req2.abort();
         });
         if (inflate) {
           res.pipe(inflate).pipe(fetchRes);
@@ -45148,7 +45148,7 @@ var require_fetch = __commonJS({
             err.code = errors.EFETCH;
             err.sourceUrl = url;
             fetchRes.emit("error", err);
-            req.abort();
+            req2.abort();
           });
         } else {
           res.pipe(fetchRes);
@@ -45158,9 +45158,9 @@ var require_fetch = __commonJS({
         if (body) {
           try {
             if (typeof body.pipe === "function") {
-              return body.pipe(req);
+              return body.pipe(req2);
             }
-            req.write(body);
+            req2.write(body);
           } catch (err) {
             finished = true;
             err.code = errors.EFETCH;
@@ -45169,7 +45169,7 @@ var require_fetch = __commonJS({
             return;
           }
         }
-        req.end();
+        req2.end();
       });
       return fetchRes;
     }
@@ -53778,22 +53778,22 @@ var require_xoauth2 = __commonJS({
         if (/^https:/i.test(url)) {
           fetchOptions.tls = Object.assign({ rejectUnauthorized: true }, params.tls || {});
         }
-        const req = nmfetch(url, fetchOptions);
-        req.on("readable", () => {
+        const req2 = nmfetch(url, fetchOptions);
+        req2.on("readable", () => {
           let chunk;
-          while ((chunk = req.read()) !== null) {
+          while ((chunk = req2.read()) !== null) {
             chunks.push(chunk);
             chunklen += chunk.length;
           }
         });
-        req.once("error", (err) => {
+        req2.once("error", (err) => {
           if (returned) {
             return;
           }
           returned = true;
           return callback(err);
         });
-        req.once("end", () => {
+        req2.once("end", () => {
           if (returned) {
             return;
           }
@@ -56222,16 +56222,16 @@ var require_nodemailer = __commonJS({
       if (/^https:/i.test(apiUrl)) {
         fetchOptions.tls = { rejectUnauthorized: true };
       }
-      const req = nmfetch(apiUrl + "/user", fetchOptions);
-      req.on("readable", () => {
+      const req2 = nmfetch(apiUrl + "/user", fetchOptions);
+      req2.on("readable", () => {
         let chunk;
-        while ((chunk = req.read()) !== null) {
+        while ((chunk = req2.read()) !== null) {
           chunks.push(chunk);
           chunklen += chunk.length;
         }
       });
-      req.once("error", (err) => callback(err));
-      req.once("end", () => {
+      req2.once("error", (err) => callback(err));
+      req2.once("end", () => {
         const res = Buffer.concat(chunks, chunklen);
         let data;
         try {
@@ -101543,8 +101543,8 @@ function isTruthy(value) {
 import { Readable } from "stream";
 var clerkAuthBrand = /* @__PURE__ */ Symbol.for("@clerk/express.auth");
 var brandRequestAuth = (authHandler) => Object.assign(authHandler, { [clerkAuthBrand]: true });
-var requestHasAuthObject = (req) => {
-  const auth = req.auth;
+var requestHasAuthObject = (req2) => {
+  const auth = req2.auth;
   return typeof auth === "function" && auth[clerkAuthBrand] === true;
 };
 var loadClientEnv = () => {
@@ -101579,32 +101579,32 @@ var loadApiEnv = () => {
     }
   };
 };
-var incomingMessageToRequest = (req) => {
-  const headers = Object.keys(req.headers).reduce((acc, key) => Object.assign(acc, { [key]: req?.headers[key] }), {});
-  const protocol = req.connection?.encrypted ? "https" : "http";
-  const dummyOriginReqUrl = new URL(req.originalUrl || req.url || "", `${protocol}://clerk-dummy`);
+var incomingMessageToRequest = (req2) => {
+  const headers = Object.keys(req2.headers).reduce((acc, key) => Object.assign(acc, { [key]: req2?.headers[key] }), {});
+  const protocol = req2.connection?.encrypted ? "https" : "http";
+  const dummyOriginReqUrl = new URL(req2.originalUrl || req2.url || "", `${protocol}://clerk-dummy`);
   return new Request(dummyOriginReqUrl, {
-    method: req.method,
+    method: req2.method,
     headers: new Headers(headers)
   });
 };
-var requestToProxyRequest = (req) => {
+var requestToProxyRequest = (req2) => {
   const headers = new Headers();
-  Object.entries(req.headers).forEach(([key, value]) => {
+  Object.entries(req2.headers).forEach(([key, value]) => {
     if (value) headers.set(key, Array.isArray(value) ? value.join(", ") : value);
   });
-  const protocol = req.protocol || (req.secure ? "https" : "http");
-  const host = req.get("host") || "localhost";
-  const url = new URL(req.originalUrl || req.url, `${protocol}://${host}`);
+  const protocol = req2.protocol || (req2.secure ? "https" : "http");
+  const host = req2.get("host") || "localhost";
+  const url = new URL(req2.originalUrl || req2.url, `${protocol}://${host}`);
   const hasBody = [
     "POST",
     "PUT",
     "PATCH"
-  ].includes(req.method);
+  ].includes(req2.method);
   return new Request(url.toString(), {
-    method: req.method,
+    method: req2.method,
     headers,
-    body: hasBody ? Readable.toWeb(req) : void 0,
+    body: hasBody ? Readable.toWeb(req2) : void 0,
     duplex: hasBody ? "half" : void 0
   });
 };
@@ -109247,11 +109247,11 @@ var ClerkRequest = class extends Request {
    * Used to fix request.url using the x-forwarded-* headers
    * TODO add detailed description of the issues this solves
    */
-  deriveUrlFromHeaders(req) {
-    const initialUrl = new URL(req.url);
-    const forwardedProto = req.headers.get(constants.Headers.ForwardedProto);
-    const forwardedHost = req.headers.get(constants.Headers.ForwardedHost);
-    const host = req.headers.get(constants.Headers.Host);
+  deriveUrlFromHeaders(req2) {
+    const initialUrl = new URL(req2.url);
+    const forwardedProto = req2.headers.get(constants.Headers.ForwardedProto);
+    const forwardedHost = req2.headers.get(constants.Headers.ForwardedHost);
+    const host = req2.headers.get(constants.Headers.Host);
     const protocol = initialUrl.protocol;
     const resolvedHost = this.getFirstValueFromHeader(forwardedHost) ?? host;
     const resolvedProtocol = this.getFirstValueFromHeader(forwardedProto) ?? protocol?.replace(/[:/]/, "");
@@ -109268,8 +109268,8 @@ var ClerkRequest = class extends Request {
   getFirstValueFromHeader(value) {
     return value?.split(",")[0];
   }
-  parseCookies(req) {
-    const cookiesRecord = (0, import_cookie.parse)(req.headers.get("cookie") || "");
+  parseCookies(req2) {
+    const cookiesRecord = (0, import_cookie.parse)(req2.headers.get("cookie") || "");
     return new Map(Object.entries(cookiesRecord));
   }
 };
@@ -111249,10 +111249,10 @@ var clerkMiddleware = (options = {}) => {
     }
   };
 };
-var getAuth = ((req, options) => {
-  if (!requestHasAuthObject(req)) throw new Error(middlewareRequired("getAuth"));
+var getAuth = ((req2, options) => {
+  if (!requestHasAuthObject(req2)) throw new Error(middlewareRequired("getAuth"));
   return getAuthObjectForAcceptedToken({
-    authObject: req.auth(options),
+    authObject: req2.auth(options),
     acceptsToken: options?.acceptsToken
   });
 });
@@ -123994,8 +123994,8 @@ var discountResponse = (discount) => ({
   startsAt: asIso(discount.startsAt),
   expiresAt: asIso(discount.expiresAt)
 });
-router2.get("/v1/products", async (req, res) => {
-  const parsed = ListProductsQueryParams.safeParse(req.query);
+router2.get("/v1/products", async (req2, res) => {
+  const parsed = ListProductsQueryParams.safeParse(req2.query);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -124058,8 +124058,8 @@ router2.get("/v1/products", async (req, res) => {
     }
   }
 });
-router2.get("/v1/products/share/:slugOrId", async (req, res) => {
-  const { slugOrId } = req.params;
+router2.get("/v1/products/share/:slugOrId", async (req2, res) => {
+  const { slugOrId } = req2.params;
   const products = await db.select().from(productsTable).where(
     and(
       or(eq(productsTable.slug, slugOrId), eq(productsTable.id, slugOrId)),
@@ -124080,8 +124080,8 @@ router2.get("/v1/products/share/:slugOrId", async (req, res) => {
     prepTimeFormatted: `${p.prepTimeMinutes} mins`
   });
 });
-router2.get("/v1/products/:productId", async (req, res) => {
-  const parsed = GetProductParams.safeParse(req.params);
+router2.get("/v1/products/:productId", async (req2, res) => {
+  const parsed = GetProductParams.safeParse(req2.params);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -124164,8 +124164,8 @@ router2.get("/v1/storefront/settings", async (_req, res) => {
     });
   }
 });
-router2.post("/v1/registrations/eligibility", async (req, res) => {
-  const parsed = CheckRegistrationEligibilityBody.safeParse(req.body);
+router2.post("/v1/registrations/eligibility", async (req2, res) => {
+  const parsed = CheckRegistrationEligibilityBody.safeParse(req2.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -124182,8 +124182,8 @@ router2.post("/v1/registrations/eligibility", async (req, res) => {
     })
   );
 });
-router2.post("/v1/registrations/claim", async (req, res) => {
-  const parsed = CheckRegistrationEligibilityBody.safeParse(req.body);
+router2.post("/v1/registrations/claim", async (req2, res) => {
+  const parsed = CheckRegistrationEligibilityBody.safeParse(req2.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -124203,8 +124203,8 @@ router2.post("/v1/registrations/claim", async (req, res) => {
     })
   );
 });
-router2.post("/v1/discounts/validate", async (req, res) => {
-  const parsed = ValidateDiscountBody.safeParse(req.body);
+router2.post("/v1/discounts/validate", async (req2, res) => {
+  const parsed = ValidateDiscountBody.safeParse(req2.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -124385,6 +124385,7 @@ async function getStaffFromToken(token) {
         }
         return session2;
       } catch {
+        await redis.del(`session:staff:${clean}`);
       }
     }
   }
@@ -124404,30 +124405,30 @@ async function getStaffFromToken(token) {
 var configuredAdminIds = new Set(
   (process.env.ADMIN_CLERK_USER_IDS ?? "").split(",").map((value) => value.trim()).filter(Boolean)
 );
-var requireAdmin = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
+var requireAdmin = async (req2, res, next) => {
+  const authHeader = req2.headers.authorization;
   if (authHeader) {
     try {
       const staffSession = await getStaffFromToken(authHeader);
       if (staffSession) {
-        req.staff = staffSession;
-        req.log?.info?.({ staffId: staffSession.userId, role: staffSession.role }, "Authenticated staff admin request");
+        req2.staff = staffSession;
+        req2.log?.info?.({ staffId: staffSession.userId, role: staffSession.role }, "Authenticated staff admin request");
         return next();
       }
     } catch (err) {
-      req.log?.warn?.({ err }, "Error validating staff token");
+      req2.log?.warn?.({ err }, "Error validating staff token");
     }
   }
   if (process.env.CLERK_SECRET_KEY) {
     try {
-      const auth = getAuth(req);
+      const auth = getAuth(req2);
       const userId = "userId" in auth ? auth.userId : void 0;
       if (userId) {
         if (configuredAdminIds.size > 0 && !configuredAdminIds.has(userId)) {
           res.status(403).json({ error: "Admin access required." });
           return;
         }
-        req.log?.info?.({ userId }, "Authenticated Clerk admin request");
+        req2.log?.info?.({ userId }, "Authenticated Clerk admin request");
         return next();
       }
     } catch (err) {
@@ -124442,11 +124443,11 @@ import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } 
 
 // artifacts/api-server/src/middlewares/validate.ts
 function validate(schemas) {
-  return (req, res, next) => {
+  return (req2, res, next) => {
     const errors = [];
     try {
       if (schemas.body) {
-        req.body = schemas.body.parse(req.body);
+        req2.body = schemas.body.parse(req2.body);
       }
     } catch (err) {
       if (err instanceof ZodError) {
@@ -124461,7 +124462,7 @@ function validate(schemas) {
     }
     try {
       if (schemas.query) {
-        req.query = schemas.query.parse(req.query);
+        req2.query = schemas.query.parse(req2.query);
       }
     } catch (err) {
       if (err instanceof ZodError) {
@@ -124476,7 +124477,7 @@ function validate(schemas) {
     }
     try {
       if (schemas.params) {
-        req.params = schemas.params.parse(req.params);
+        req2.params = schemas.params.parse(req2.params);
       }
     } catch (err) {
       if (err instanceof ZodError) {
@@ -124490,7 +124491,7 @@ function validate(schemas) {
       }
     }
     if (errors.length > 0) {
-      const requestId = req.id ?? "unknown";
+      const requestId = req2.id ?? "unknown";
       res.status(400).json({
         error: {
           code: "VALIDATION_ERROR",
@@ -125611,7 +125612,7 @@ var parseDirectives = ({ useDefaults = true, directives: rawDirectives = {} }) =
   }
   return shouldUseStringResult ? stringResult : result;
 };
-function getHeaderValue(req, res, normalizedDirectives) {
+function getHeaderValue(req2, res, normalizedDirectives) {
   const result = [];
   for (const [directiveName, rawDirectiveValue] of normalizedDirectives) {
     let directiveValue = "";
@@ -125619,7 +125620,7 @@ function getHeaderValue(req, res, normalizedDirectives) {
       if (typeof element === "function") {
         let newElement;
         try {
-          newElement = element(req, res);
+          newElement = element(req2, res);
         } catch (err2) {
           return errify(err2);
         }
@@ -125649,8 +125650,8 @@ var contentSecurityPolicy = function contentSecurityPolicy2(options = {}) {
       next();
     };
   }
-  return function contentSecurityPolicyMiddleware(req, res, next) {
-    const result = getHeaderValue(req, res, parsedDirectives);
+  return function contentSecurityPolicyMiddleware(req2, res, next) {
+    const result = getHeaderValue(req2, res, parsedDirectives);
     if (result instanceof Error) {
       next(result);
     } else {
@@ -126033,7 +126034,7 @@ var helmet = Object.assign(
       throw new Error("It appears you have done something like `app.use(helmet)`, but it should be `app.use(helmet())`.");
     }
     const middlewareFunctions = getMiddlewareFunctionsFromOptions(options);
-    return function helmetMiddleware(req, res, next) {
+    return function helmetMiddleware(req2, res, next) {
       let middlewareIndex = 0;
       (function internalNext(err) {
         if (err) {
@@ -126043,7 +126044,7 @@ var helmet = Object.assign(
         const middlewareFunction = middlewareFunctions[middlewareIndex];
         if (middlewareFunction) {
           middlewareIndex++;
-          middlewareFunction(req, res, internalNext);
+          middlewareFunction(req2, res, internalNext);
         } else {
           next();
         }
@@ -126239,8 +126240,8 @@ function verifyPassword(password, storedHash) {
     return false;
   }
 }
-router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodySchema }), async (req, res) => {
-  const { email, password } = req.body;
+router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodySchema }), async (req2, res) => {
+  const { email, password } = req2.body;
   const cleanEmail = email.trim().toLowerCase();
   try {
     const found = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, cleanEmail)).limit(1);
@@ -126298,16 +126299,15 @@ router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodyS
       staff: session
     });
   } catch (err) {
-    req.log.error({ err }, "Staff login error");
+    req2.log.error({ err }, "Staff login error");
     res.status(500).json({ error: "Authentication failed." });
   }
 });
 router3.use(requireAdmin);
-router3.get("/staff", async (req, res) => {
+router3.get("/staff", async (req2, res) => {
   try {
-    await db.delete(adminUsersTable).where(eq(adminUsersTable.email, "admin@harborlane.shop"));
     const list = await db.select().from(adminUsersTable);
-    const formatted = list.filter((u) => u.email !== "admin@harborlane.shop").map((u) => {
+    const formatted = list.map((u) => {
       const isExpired = u.expiresAt ? new Date(u.expiresAt).getTime() < Date.now() : false;
       let perms = [];
       if (u.permissions) {
@@ -126333,72 +126333,69 @@ router3.get("/staff", async (req, res) => {
     });
     res.status(200).json(formatted);
   } catch (err) {
+    req2.log.error({ err }, "Error fetching staff list");
     res.status(500).json({ error: "Failed to load staff members." });
   }
 });
-router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req, res) => {
-  const currentStaff = await getStaffFromToken(req.headers.authorization);
+router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req2, res) => {
+  const currentStaff = await getStaffFromToken(req2.headers.authorization);
   const canManageStaff = !currentStaff || currentStaff.role === "MAIN_ADMIN" || currentStaff.role === "ADMIN";
   if (!canManageStaff) {
     res.status(403).json({ error: "Permission denied: Only Main Admin and Admin can create staff accounts." });
     return;
   }
-  const { name, email, password, role, permissions, expiresAtHours, expiresAtDate } = req.body;
+  const { email, password, name, role, permissions, expiresAtHours, expiresAtDate } = req2.body;
   const cleanEmail = email.trim().toLowerCase();
   try {
     const existing = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, cleanEmail)).limit(1);
     if (existing.length > 0) {
-      res.status(400).json({ error: "A staff account with this email already exists." });
+      res.status(400).json({ error: "A staff account with this email address already exists." });
       return;
     }
     let expirationDate = null;
-    if (expiresAtHours && typeof expiresAtHours === "number") {
+    if (expiresAtHours) {
       expirationDate = new Date(Date.now() + expiresAtHours * 60 * 60 * 1e3);
-    } else if (expiresAtDate && typeof expiresAtDate === "string") {
-      const parsed = new Date(expiresAtDate);
-      if (!isNaN(parsed.getTime())) expirationDate = parsed;
+    } else if (expiresAtDate) {
+      expirationDate = new Date(expiresAtDate);
     }
-    const id = randomUUID13();
-    const passwordHash = hashPassword(password);
     const assignedPermissions = Array.isArray(permissions) && permissions.length > 0 ? permissions : getDefaultPermissions(role);
-    await db.insert(adminUsersTable).values({
-      id,
-      name: name.trim(),
+    const [created] = await db.insert(adminUsersTable).values({
       email: cleanEmail,
-      passwordHash,
+      passwordHash: hashPassword(password),
+      name: name.trim(),
       role,
       permissions: JSON.stringify(assignedPermissions),
-      expiresAt: expirationDate,
       active: true,
-      createdBy: currentStaff?.userId || "main_admin_01"
-    });
-    req.log.info({ id, email: cleanEmail, role, expiresAt: expirationDate }, "Created new staff member");
+      expiresAt: expirationDate,
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    }).returning();
     res.status(201).json({
       success: true,
-      message: `Staff account created with role ${role}.`,
+      message: "Staff member created successfully.",
       staff: {
-        id,
-        name: name.trim(),
-        email: cleanEmail,
-        role,
+        id: created.id,
+        name: created.name,
+        email: created.email,
+        role: created.role,
         permissions: assignedPermissions,
         expiresAt: expirationDate ? expirationDate.toISOString() : null
       }
     });
   } catch (err) {
-    req.log.error({ err }, "Create staff error");
+    req2.log.error({ err }, "Create staff error");
     res.status(500).json({ error: "Failed to create staff account." });
   }
 });
-router3.put("/staff/:id", validate({ body: UpdateStaffBodySchema }), async (req, res) => {
-  const currentStaff = await getStaffFromToken(req.headers.authorization);
+router3.put("/staff/:id", validate({ body: UpdateStaffBodySchema }), async (req2, res) => {
+  const currentStaff = await getStaffFromToken(req2.headers.authorization);
   const canManageStaff = !currentStaff || currentStaff.role === "MAIN_ADMIN" || currentStaff.role === "ADMIN";
   if (!canManageStaff) {
     res.status(403).json({ error: "Permission denied: Only Main Admin and Admin can modify staff roles." });
     return;
   }
-  const id = req.params.id;
-  const { role, permissions, active, expiresAtDate, expiresAtHours } = req.body;
+  const id = req2.params.id;
+  const { role, permissions, active, expiresAtDate, expiresAtHours } = req2.body;
   try {
     const updateData = {
       updatedAt: /* @__PURE__ */ new Date()
@@ -126414,17 +126411,18 @@ router3.put("/staff/:id", validate({ body: UpdateStaffBodySchema }), async (req,
     await db.update(adminUsersTable).set(updateData).where(eq(adminUsersTable.id, id));
     res.status(200).json({ success: true, message: "Staff account updated successfully." });
   } catch (err) {
+    req2.log.error({ err }, "Update staff error");
     res.status(500).json({ error: "Failed to update staff account." });
   }
 });
-router3.delete("/staff/:id", async (req, res) => {
-  const currentStaff = await getStaffFromToken(req.headers.authorization);
+router3.delete("/staff/:id", async (req2, res) => {
+  const currentStaff = await getStaffFromToken(req2.headers.authorization);
   const canManageStaff = !currentStaff || currentStaff.role === "MAIN_ADMIN" || currentStaff.role === "ADMIN";
   if (!canManageStaff) {
     res.status(403).json({ error: "Permission denied: Only Main Admin and Admin can remove staff." });
     return;
   }
-  const id = req.params.id;
+  const id = req2.params.id;
   if (currentStaff?.userId === id) {
     res.status(403).json({ error: "Cannot delete your own active staff account." });
     return;
@@ -126440,6 +126438,7 @@ router3.delete("/staff/:id", async (req, res) => {
     await db.delete(adminUsersTable).where(eq(adminUsersTable.id, id));
     res.status(200).json({ success: true, message: "Staff account deleted successfully." });
   } catch (err) {
+    req2.log.error({ err }, "Delete staff error");
     res.status(500).json({ error: "Failed to delete staff account." });
   }
 });
@@ -126648,8 +126647,9 @@ async function sendViaHostingerApi(to, subject, htmlContent) {
     logger2.warn({ to, status: response.status, errText }, "Hostinger REST API failed, falling back to SMTP");
     return { success: false, error: `Hostinger API ${response.status}: ${errText}` };
   } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Hostinger API Exception";
     logger2.warn({ err, to }, "Hostinger REST API error, falling back to SMTP");
-    return { success: false, error: err.message || "Hostinger API Exception" };
+    return { success: false, error: errorMsg };
   }
 }
 async function sendEmail(to, subject, htmlContent, forceProvider) {
@@ -126661,8 +126661,9 @@ async function sendEmail(to, subject, htmlContent, forceProvider) {
       logger2.info({ to, subject: subject.slice(0, 50) }, "Email sent via Gmail Notifications Nodemailer SMTP");
       return { success: true, provider: "gmail_notifications", previewUrl: previewUrl ? previewUrl.toString() : void 0 };
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Gmail Notifications Send Failed";
       logger2.error({ err, to }, "Gmail Notifications Nodemailer send failed");
-      return { success: false, provider: "gmail_notifications", error: err.message || "Gmail Notifications Send Failed" };
+      return { success: false, provider: "gmail_notifications", error: errorMsg };
     }
   }
   if (forceProvider === "smtp") {
@@ -126673,8 +126674,9 @@ async function sendEmail(to, subject, htmlContent, forceProvider) {
       logger2.info({ to, subject: subject.slice(0, 50) }, "Email sent via Nodemailer SMTP (Forced)");
       return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : void 0 };
     } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "SMTP Send Failed";
       logger2.error({ err, to }, "SMTP email send failed (Forced)");
-      return { success: false, provider: "smtp", error: err.message || "SMTP Send Failed" };
+      return { success: false, provider: "smtp", error: errorMsg };
     }
   }
   if (forceProvider === "hostinger_rest") {
@@ -126695,15 +126697,17 @@ async function sendEmail(to, subject, htmlContent, forceProvider) {
     logger2.info({ to, subject: subject.slice(0, 50) }, "Email sent via Hostinger Nodemailer SMTP");
     return { success: true, provider: "smtp", previewUrl: previewUrl ? previewUrl.toString() : void 0 };
   } catch (err) {
-    logger2.warn({ err: err.message, to }, "Primary SMTP email send failed; trying Notification Gmail SMTP fallback");
+    const primaryErrMsg = err instanceof Error ? err.message : String(err);
+    logger2.warn({ err: primaryErrMsg, to }, "Primary SMTP email send failed; trying Notification Gmail SMTP fallback");
     try {
       const { transporter, from } = await getNotificationTransporter();
       const info = await transporter.sendMail({ from, to, subject, html: htmlContent });
       logger2.info({ to, subject: subject.slice(0, 50) }, "Email sent via Notification Gmail Nodemailer SMTP (Fallback)");
       return { success: true, provider: "gmail_notifications" };
     } catch (notifErr) {
-      logger2.error({ notifErr: notifErr.message, to }, "All email providers (Hostinger API, Hostinger SMTP, Gmail SMTP) failed");
-      return { success: false, error: notifErr.message || "All email senders failed", hostingerError: hostingerResult.error };
+      const notifErrMsg = notifErr instanceof Error ? notifErr.message : "All email senders failed";
+      logger2.error({ notifErr: notifErrMsg, to }, "All email providers (Hostinger API, Hostinger SMTP, Gmail SMTP) failed");
+      return { success: false, error: notifErrMsg, hostingerError: hostingerResult.error };
     }
   }
 }
@@ -126908,10 +126912,10 @@ router4.get("/v1/admin/summary", async (_req, res) => {
     });
   }
 });
-router4.get("/v1/admin/products", async (req, res) => {
+router4.get("/v1/admin/products", async (req2, res) => {
   try {
     await autoPurgeExpiredSoftDeletedProducts();
-    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const search = typeof req2.query.search === "string" ? req2.query.search.trim() : "";
     const products = await db.select().from(productsTable).where(search ? ilike(productsTable.name, `%${search}%`) : void 0).orderBy(desc(productsTable.updatedAt));
     res.json(ListAdminProductsResponse.parse(products.map(productResponse2)));
   } catch (err) {
@@ -126957,9 +126961,9 @@ router4.get("/v1/admin/products", async (req, res) => {
     ]);
   }
 });
-router4.post("/v1/admin/products", async (req, res) => {
-  const staff = await getStaffFromToken(req.headers.authorization);
-  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
+router4.post("/v1/admin/products", async (req2, res) => {
+  const staff = await getStaffFromToken(req2.headers.authorization);
+  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req2.body;
   const cleanName = (name || "").trim();
   if (!cleanName) {
     res.status(400).json({ error: "Product name is required." });
@@ -126995,14 +126999,15 @@ router4.post("/v1/admin/products", async (req, res) => {
     }).returning();
     res.status(201).json(productResponse2(created));
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("Product creation DB insert failed:", err);
-    res.status(500).json({ error: "Failed to create product in database: " + (err.message || String(err)) });
+    res.status(500).json({ error: "Failed to create product in database: " + msg });
   }
 });
-var handleUpdateProduct = async (req, res) => {
-  const staff = await getStaffFromToken(req.headers.authorization);
-  const { productId } = req.params;
-  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
+var handleUpdateProduct = async (req2, res) => {
+  const staff = await getStaffFromToken(req2.headers.authorization);
+  const { productId } = req2.params;
+  const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req2.body;
   const isSubAdminOrMod = staff && (staff.role === "SUB_ADMIN" || staff.role === "MODERATOR");
   try {
     const updateData = {
@@ -127063,16 +127068,16 @@ var handleUpdateProduct = async (req, res) => {
 };
 router4.patch("/v1/admin/products/:productId", handleUpdateProduct);
 router4.put("/v1/admin/products/:productId", handleUpdateProduct);
-router4.delete("/v1/admin/products/:productId", async (req, res) => {
-  const { productId } = req.params;
+router4.delete("/v1/admin/products/:productId", async (req2, res) => {
+  const { productId } = req2.params;
   try {
     await db.update(productsTable).set({ status: "archived", deletedAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }).where(eq(productsTable.id, productId));
   } catch (err) {
   }
   res.json({ success: true, message: "Product moved to Recycle Bin. You can restore it within 30 days." });
 });
-router4.post("/v1/admin/products/:productId/restore", async (req, res) => {
-  const { productId } = req.params;
+router4.post("/v1/admin/products/:productId/restore", async (req2, res) => {
+  const { productId } = req2.params;
   try {
     const [restored] = await db.update(productsTable).set({ status: "active", deletedAt: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq(productsTable.id, productId)).returning();
     res.json({ success: true, message: "Product restored to active catalog.", product: restored ? productResponse2(restored) : null });
@@ -127080,8 +127085,8 @@ router4.post("/v1/admin/products/:productId/restore", async (req, res) => {
     res.json({ success: true, message: "Product restored to active catalog." });
   }
 });
-router4.delete("/v1/admin/products/:productId/permanent", async (req, res) => {
-  const { productId } = req.params;
+router4.delete("/v1/admin/products/:productId/permanent", async (req2, res) => {
+  const { productId } = req2.params;
   try {
     await db.delete(productsTable).where(eq(productsTable.id, productId));
   } catch (err) {
@@ -127123,8 +127128,8 @@ router4.get("/v1/admin/discounts", async (_req, res) => {
     ]);
   }
 });
-router4.post("/v1/admin/discounts", async (req, res) => {
-  const parsed = CreateDiscountBody.safeParse(req.body);
+router4.post("/v1/admin/discounts", async (req2, res) => {
+  const parsed = CreateDiscountBody.safeParse(req2.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -127156,9 +127161,9 @@ router4.post("/v1/admin/discounts", async (req, res) => {
     });
   }
 });
-router4.patch("/v1/admin/discounts/:discountId", async (req, res) => {
-  const params = UpdateDiscountParams.safeParse(req.params);
-  const body = UpdateDiscountBody.safeParse(req.body);
+router4.patch("/v1/admin/discounts/:discountId", async (req2, res) => {
+  const params = UpdateDiscountParams.safeParse(req2.params);
+  const body = UpdateDiscountBody.safeParse(req2.body);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
@@ -127217,8 +127222,8 @@ router4.get("/v1/admin/registrations", async (_req, res) => {
     ]);
   }
 });
-router4.patch("/v1/admin/registrations", async (req, res) => {
-  const parsed = UpdateRegistrationPolicyBody.safeParse(req.body);
+router4.patch("/v1/admin/registrations", async (req2, res) => {
+  const parsed = UpdateRegistrationPolicyBody.safeParse(req2.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -127254,10 +127259,11 @@ router4.get("/v1/admin/shop-settings", async (_req, res) => {
     }
     res.json(settings);
   } catch (err) {
+    req.log.error({ err }, "Failed to load shop settings");
     res.status(500).json({ error: "Failed to load shop settings." });
   }
 });
-router4.put("/v1/admin/shop-settings", async (req, res) => {
+router4.put("/v1/admin/shop-settings", async (req2, res) => {
   const {
     shopName,
     shopDomain,
@@ -127278,7 +127284,7 @@ router4.put("/v1/admin/shop-settings", async (req, res) => {
     smtpUser,
     smtpPass,
     smtpFrom
-  } = req.body;
+  } = req2.body;
   try {
     const updateData = {
       updatedAt: /* @__PURE__ */ new Date()
@@ -127302,39 +127308,40 @@ router4.put("/v1/admin/shop-settings", async (req, res) => {
     if (smtpUser !== void 0) updateData.smtpUser = smtpUser.trim();
     if (smtpPass !== void 0) updateData.smtpPass = smtpPass.trim();
     if (smtpFrom !== void 0) updateData.smtpFrom = smtpFrom.trim();
-    if (req.body.hostingerApiToken !== void 0) updateData.hostingerApiToken = req.body.hostingerApiToken.trim();
-    if (req.body.hostingerMailboxResourceId !== void 0) updateData.hostingerMailboxResourceId = req.body.hostingerMailboxResourceId.trim();
-    if (req.body.notificationSmtpHost !== void 0) updateData.notificationSmtpHost = req.body.notificationSmtpHost.trim();
-    if (req.body.notificationSmtpPort !== void 0) updateData.notificationSmtpPort = Number(req.body.notificationSmtpPort) || 465;
-    if (req.body.notificationSmtpUser !== void 0) updateData.notificationSmtpUser = req.body.notificationSmtpUser.trim();
-    if (req.body.notificationSmtpPass !== void 0) updateData.notificationSmtpPass = req.body.notificationSmtpPass.trim();
-    if (req.body.notificationSmtpFrom !== void 0) updateData.notificationSmtpFrom = req.body.notificationSmtpFrom.trim();
-    if (req.body.supportEmail !== void 0) updateData.supportEmail = req.body.supportEmail.trim();
-    if (req.body.contactEmail !== void 0) updateData.contactEmail = req.body.contactEmail.trim();
-    if (req.body.ordersEmail !== void 0) updateData.ordersEmail = req.body.ordersEmail.trim();
-    if (req.body.socialLinkedin !== void 0) updateData.socialLinkedin = req.body.socialLinkedin.trim();
-    if (req.body.socialInstagram !== void 0) updateData.socialInstagram = req.body.socialInstagram.trim();
-    if (req.body.socialFacebook !== void 0) updateData.socialFacebook = req.body.socialFacebook.trim();
-    if (req.body.socialPinterest !== void 0) updateData.socialPinterest = req.body.socialPinterest.trim();
-    if (req.body.socialTwitter !== void 0) updateData.socialTwitter = req.body.socialTwitter.trim();
-    if (req.body.availableInLocation !== void 0) updateData.availableInLocation = req.body.availableInLocation.trim();
-    if (req.body.aboutUsText !== void 0) updateData.aboutUsText = req.body.aboutUsText.trim();
-    if (typeof req.body.isStoreOpen === "boolean") updateData.isStoreOpen = req.body.isStoreOpen;
-    if (typeof req.body.minOrderCents === "number") updateData.minOrderCents = Math.max(0, req.body.minOrderCents);
-    if (typeof req.body.isCodEnabled === "boolean") updateData.isCodEnabled = req.body.isCodEnabled;
-    if (typeof req.body.flatDeliveryFeeCents === "number") updateData.flatDeliveryFeeCents = Math.max(0, req.body.flatDeliveryFeeCents);
-    if (typeof req.body.freeDeliveryThresholdCents === "number") updateData.freeDeliveryThresholdCents = Math.max(0, req.body.freeDeliveryThresholdCents);
-    if (typeof req.body.packagingFeeCents === "number") updateData.packagingFeeCents = Math.max(0, req.body.packagingFeeCents);
+    if (req2.body.hostingerApiToken !== void 0) updateData.hostingerApiToken = req2.body.hostingerApiToken.trim();
+    if (req2.body.hostingerMailboxResourceId !== void 0) updateData.hostingerMailboxResourceId = req2.body.hostingerMailboxResourceId.trim();
+    if (req2.body.notificationSmtpHost !== void 0) updateData.notificationSmtpHost = req2.body.notificationSmtpHost.trim();
+    if (req2.body.notificationSmtpPort !== void 0) updateData.notificationSmtpPort = Number(req2.body.notificationSmtpPort) || 465;
+    if (req2.body.notificationSmtpUser !== void 0) updateData.notificationSmtpUser = req2.body.notificationSmtpUser.trim();
+    if (req2.body.notificationSmtpPass !== void 0) updateData.notificationSmtpPass = req2.body.notificationSmtpPass.trim();
+    if (req2.body.notificationSmtpFrom !== void 0) updateData.notificationSmtpFrom = req2.body.notificationSmtpFrom.trim();
+    if (req2.body.supportEmail !== void 0) updateData.supportEmail = req2.body.supportEmail.trim();
+    if (req2.body.contactEmail !== void 0) updateData.contactEmail = req2.body.contactEmail.trim();
+    if (req2.body.ordersEmail !== void 0) updateData.ordersEmail = req2.body.ordersEmail.trim();
+    if (req2.body.socialLinkedin !== void 0) updateData.socialLinkedin = req2.body.socialLinkedin.trim();
+    if (req2.body.socialInstagram !== void 0) updateData.socialInstagram = req2.body.socialInstagram.trim();
+    if (req2.body.socialFacebook !== void 0) updateData.socialFacebook = req2.body.socialFacebook.trim();
+    if (req2.body.socialPinterest !== void 0) updateData.socialPinterest = req2.body.socialPinterest.trim();
+    if (req2.body.socialTwitter !== void 0) updateData.socialTwitter = req2.body.socialTwitter.trim();
+    if (req2.body.availableInLocation !== void 0) updateData.availableInLocation = req2.body.availableInLocation.trim();
+    if (req2.body.aboutUsText !== void 0) updateData.aboutUsText = req2.body.aboutUsText.trim();
+    if (typeof req2.body.isStoreOpen === "boolean") updateData.isStoreOpen = req2.body.isStoreOpen;
+    if (typeof req2.body.minOrderCents === "number") updateData.minOrderCents = Math.max(0, req2.body.minOrderCents);
+    if (typeof req2.body.isCodEnabled === "boolean") updateData.isCodEnabled = req2.body.isCodEnabled;
+    if (typeof req2.body.flatDeliveryFeeCents === "number") updateData.flatDeliveryFeeCents = Math.max(0, req2.body.flatDeliveryFeeCents);
+    if (typeof req2.body.freeDeliveryThresholdCents === "number") updateData.freeDeliveryThresholdCents = Math.max(0, req2.body.freeDeliveryThresholdCents);
+    if (typeof req2.body.packagingFeeCents === "number") updateData.packagingFeeCents = Math.max(0, req2.body.packagingFeeCents);
     await db.update(shopSettingsTable).set(updateData).where(eq(shopSettingsTable.id, "default_shop"));
     clearTransporterCache();
     const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     res.json({ success: true, settings: updated });
   } catch (err) {
+    req2.log.error({ err }, "Failed to update shop settings");
     res.status(500).json({ error: "Failed to update shop settings." });
   }
 });
-router4.post("/v1/admin/test-email", async (req, res) => {
-  const { toEmail, provider } = req.body;
+router4.post("/v1/admin/test-email", async (req2, res) => {
+  const { toEmail, provider } = req2.body;
   if (!toEmail || typeof toEmail !== "string" || !toEmail.includes("@")) {
     res.status(400).json({ error: "Valid recipient email address is required." });
     return;
@@ -127361,20 +127368,20 @@ router4.post("/v1/admin/test-email", async (req, res) => {
     const result = await sendEmail(toEmail.trim(), subject, htmlContent, targetProvider);
     res.json(result);
   } catch (err) {
-    req.log.error({ err }, "Failed to send test email");
+    req2.log.error({ err }, "Failed to send test email");
     res.status(500).json({ success: false, error: "Failed to send test email" });
   }
 });
-router4.get("/v1/admin/orders", async (req, res) => {
+router4.get("/v1/admin/orders", async (req2, res) => {
   try {
     const allOrders = await db.select().from(ordersTable);
-    res.json(filterOrders(allOrders, req.query));
+    res.json(filterOrders(allOrders, req2.query));
   } catch (err) {
-    req.log.error({ err }, "Error listing admin orders");
+    req2.log.error({ err }, "Error listing admin orders");
     res.status(500).json({ error: "Failed to load order ledger." });
   }
 });
-router4.get("/v1/admin/orders/stats", async (req, res) => {
+router4.get("/v1/admin/orders/stats", async (req2, res) => {
   try {
     const allOrders = await db.select().from(ordersTable);
     res.json({
@@ -127385,12 +127392,12 @@ router4.get("/v1/admin/orders/stats", async (req, res) => {
       totalRevenueCents: allOrders.filter((o) => o.status === "paid").reduce((sum, o) => sum + o.totalCents, 0)
     });
   } catch (err) {
-    req.log.error({ err }, "Error fetching admin order stats");
+    req2.log.error({ err }, "Error fetching admin order stats");
     res.status(500).json({ error: "Failed to fetch order statistics." });
   }
 });
-router4.post("/v1/admin/orders/:id/cancel", async (req, res) => {
-  const id = req.params.id;
+router4.post("/v1/admin/orders/:id/cancel", async (req2, res) => {
+  const id = req2.params.id;
   try {
     const found = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
     if (found.length === 0) {
@@ -127404,7 +127411,7 @@ router4.post("/v1/admin/orders/:id/cancel", async (req, res) => {
     await db.update(ordersTable).set({ status: "cancelled", updatedAt: /* @__PURE__ */ new Date() }).where(eq(ordersTable.id, id));
     res.json({ success: true, orderId: id, status: "cancelled", message: "Order has been cancelled." });
   } catch (err) {
-    req.log.error({ err }, "Error cancelling order (admin)");
+    req2.log.error({ err }, "Error cancelling order (admin)");
     res.status(500).json({ error: "Failed to cancel order." });
   }
 });
@@ -128262,6 +128269,14 @@ async function createSession(userId) {
   }
   return token;
 }
+function safeJsonParse(raw, fallback) {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
 async function getUserIdFromToken(token) {
   if (!token) return null;
   const clean = token.replace(/^Bearer\s+/i, "").trim();
@@ -128309,7 +128324,7 @@ async function checkOtpRateLimit(email) {
   const retryAfterMs = oldestInWindow.createdAt.getTime() + OTP_RATE_LIMIT_WINDOW_MS - Date.now();
   return { allowed: false, retryAfterMinutes: Math.max(1, Math.ceil(retryAfterMs / 6e4)) };
 }
-async function issueVerificationOtp(req, res, user, cleanEmail, extra) {
+async function issueVerificationOtp(req2, res, user, cleanEmail, extra) {
   const rateLimit2 = await checkOtpRateLimit(cleanEmail);
   if (!rateLimit2.allowed) {
     res.status(429).json({
@@ -128328,7 +128343,7 @@ async function issueVerificationOtp(req, res, user, cleanEmail, extra) {
     expiresAt
   });
   const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
-  req.log.info({ userId: user.id, email: cleanEmail }, "Sent 6-digit email verification OTP");
+  req2.log.info({ userId: user.id, email: cleanEmail }, "Sent 6-digit email verification OTP");
   res.status(200).json({
     requiresVerification: true,
     email: cleanEmail,
@@ -128337,8 +128352,8 @@ async function issueVerificationOtp(req, res, user, cleanEmail, extra) {
     ...extra
   });
 }
-router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), async (req, res) => {
-  const { firstName, lastName, mobileNumber, email, password, confirmPassword } = req.body;
+router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), async (req2, res) => {
+  const { firstName, lastName, mobileNumber, email, password, confirmPassword } = req2.body;
   if (confirmPassword && password !== confirmPassword) {
     res.status(400).json({ error: "Passwords do not match. Please re-confirm your password." });
     return;
@@ -128377,24 +128392,24 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
       });
       if (hasLockdownPenalty) {
         await tx.insert(registrationClaimsTable).values({ id: randomUUID15(), email: cleanEmail, policyId: "forfeited_due_to_deletion_penalty" }).onConflictDoNothing({ target: registrationClaimsTable.email });
-        req.log.warn({ cleanEmail }, "User re-registered within 15-day deletion penalty; welcome offers forfeited.");
+        req2.log.warn({ cleanEmail }, "User re-registered within 15-day deletion penalty; welcome offers forfeited.");
       }
     });
-    req.log.info({ userId, cleanEmail, hasLockdownPenalty }, "Customer account created; sending verification OTP");
-    await issueVerificationOtp(req, res, { id: userId, firstName: firstName.trim() }, cleanEmail, {
+    req2.log.info({ userId, cleanEmail, hasLockdownPenalty }, "Customer account created; sending verification OTP");
+    await issueVerificationOtp(req2, res, { id: userId, firstName: firstName.trim() }, cleanEmail, {
       lockdownPenaltyNotice: hasLockdownPenalty ? "Notice: Account re-registered within 15-day deletion window. Welcome offer codes are forfeited." : null
     });
   } catch (err) {
-    if (err?.code === "23505") {
+    if (typeof err === "object" && err !== null && "code" in err && err.code === "23505") {
       res.status(400).json({ error: "An account with this email or mobile number already exists. Please log in." });
       return;
     }
-    req.log.error({ err }, "Registration error");
+    req2.log.error({ err }, "Registration error");
     res.status(500).json({ error: "Failed to register user. Please try again." });
   }
 });
-router5.post("/login", authLimiter, validate({ body: LoginBodySchema }), async (req, res) => {
-  const { email, password } = req.body;
+router5.post("/login", authLimiter, validate({ body: LoginBodySchema }), async (req2, res) => {
+  const { email, password } = req2.body;
   const cleanEmail = email.trim().toLowerCase();
   try {
     const foundUsers = await db.select().from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
@@ -128416,14 +128431,14 @@ router5.post("/login", authLimiter, validate({ body: LoginBodySchema }), async (
       });
       return;
     }
-    await issueVerificationOtp(req, res, user, cleanEmail);
+    await issueVerificationOtp(req2, res, user, cleanEmail);
   } catch (err) {
-    req.log.error({ err }, "Login error");
+    req2.log.error({ err }, "Login error");
     res.status(500).json({ error: "Failed to authenticate. Please try again." });
   }
 });
-router5.post("/verify-login-otp", otpLimiter, validate({ body: VerifyOtpBodySchema }), async (req, res) => {
-  const { email, otpCode } = req.body;
+router5.post("/verify-login-otp", otpLimiter, validate({ body: VerifyOtpBodySchema }), async (req2, res) => {
+  const { email, otpCode } = req2.body;
   const cleanEmail = email.trim().toLowerCase();
   const cleanOtp = otpCode.trim().replace(/\s+/g, "");
   const now = /* @__PURE__ */ new Date();
@@ -128451,33 +128466,33 @@ router5.post("/verify-login-otp", otpLimiter, validate({ body: VerifyOtpBodySche
       return;
     }
     const token = await createSession(user.id);
-    req.log.info({ userId: user.id, email: user.email }, "Customer verified login OTP and signed in");
+    req2.log.info({ userId: user.id, email: user.email }, "Customer verified login OTP and signed in");
     res.status(200).json({
       success: true,
       token,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email }
     });
   } catch (err) {
-    req.log.error({ err }, "Verify OTP error");
+    req2.log.error({ err }, "Verify OTP error");
     res.status(500).json({ error: "Verification failed. Please try again." });
   }
 });
-router5.post("/resend-login-otp", otpLimiter, validate({ body: ResendOtpBodySchema }), async (req, res) => {
-  const cleanEmail = req.body.email.trim().toLowerCase();
+router5.post("/resend-login-otp", otpLimiter, validate({ body: ResendOtpBodySchema }), async (req2, res) => {
+  const cleanEmail = req2.body.email.trim().toLowerCase();
   try {
     const foundUsers = await db.select().from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
     if (foundUsers.length === 0) {
       res.status(404).json({ error: "User not found." });
       return;
     }
-    await issueVerificationOtp(req, res, foundUsers[0], cleanEmail);
+    await issueVerificationOtp(req2, res, foundUsers[0], cleanEmail);
   } catch (err) {
-    req.log.error({ err }, "Resend OTP error");
+    req2.log.error({ err }, "Resend OTP error");
     res.status(500).json({ error: "Failed to resend verification code." });
   }
 });
-router5.get("/me", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.get("/me", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized. Please log in." });
     return;
@@ -128502,13 +128517,13 @@ router5.get("/me", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch profile." });
   }
 });
-router5.put("/profile", validate({ body: UpdateProfileBodySchema }), async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.put("/profile", validate({ body: UpdateProfileBodySchema }), async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized. Please log in." });
     return;
   }
-  const { firstName, lastName, mobileNumber } = req.body;
+  const { firstName, lastName, mobileNumber } = req2.body;
   try {
     const updateData = { updatedAt: /* @__PURE__ */ new Date() };
     if (firstName && typeof firstName === "string") updateData.firstName = firstName.trim();
@@ -128535,17 +128550,17 @@ router5.put("/profile", validate({ body: UpdateProfileBodySchema }), async (req,
       user: { id: updatedUser.id, firstName: updatedUser.firstName, lastName: updatedUser.lastName, mobileNumber: updatedUser.mobileNumber, email: updatedUser.email }
     });
   } catch (err) {
-    req.log.error({ err }, "Profile update error");
+    req2.log.error({ err }, "Profile update error");
     res.status(500).json({ error: "Failed to update profile." });
   }
 });
-router5.post("/change-password", changePasswordLimiter, validate({ body: ChangePasswordBodySchema }), async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.post("/change-password", changePasswordLimiter, validate({ body: ChangePasswordBodySchema }), async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized. Session expired." });
     return;
   }
-  const { oldPassword, newPassword, confirmPassword } = req.body;
+  const { oldPassword, newPassword, confirmPassword } = req2.body;
   if (newPassword !== confirmPassword) {
     res.status(400).json({ error: "New password and confirmation password do not match." });
     return;
@@ -128564,15 +128579,15 @@ router5.post("/change-password", changePasswordLimiter, validate({ body: ChangeP
     }
     const newPasswordHash = hashPassword2(newPassword);
     await db.update(usersTable).set({ passwordHash: newPasswordHash, updatedAt: /* @__PURE__ */ new Date() }).where(eq(usersTable.id, userId));
-    req.log.info({ userId }, "Customer successfully changed password via Settings & Security");
+    req2.log.info({ userId }, "Customer successfully changed password via Settings & Security");
     res.status(200).json({ success: true, message: "Password changed successfully!" });
   } catch (err) {
-    req.log.error({ err }, "Change password error");
+    req2.log.error({ err }, "Change password error");
     res.status(500).json({ error: "Failed to change password. Please try again." });
   }
 });
-router5.delete("/delete-account", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.delete("/delete-account", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized. Please log in to delete your account." });
     return;
@@ -128589,20 +128604,20 @@ router5.delete("/delete-account", async (req, res) => {
     await db.insert(deletedAccountsLogTable).values({ id: randomUUID15(), email: user.email, mobileNumber: user.mobileNumber, deletedAt, penaltyExpiresAt });
     await db.delete(usersTable).where(eq(usersTable.id, userId));
     await db.delete(totpSecretsTable).where(eq(totpSecretsTable.userId, userId));
-    await deleteSession(req.headers.authorization);
-    req.log.info({ userId, email: user.email }, "User deleted account with 15-day lockdown penalty registered");
+    await deleteSession(req2.headers.authorization);
+    req2.log.info({ userId, email: user.email }, "User deleted account with 15-day lockdown penalty registered");
     res.status(200).json({
       success: true,
       message: "Your account and personal data have been completely deleted in compliance with Play Store privacy policies. Note: A 15-day new-user offer lockdown applies if you register again.",
       penaltyExpiresAt: penaltyExpiresAt.toISOString()
     });
   } catch (err) {
-    req.log.error({ err }, "Account deletion error");
+    req2.log.error({ err }, "Account deletion error");
     res.status(500).json({ error: "Failed to delete account. Please try again." });
   }
 });
-router5.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPasswordBodySchema }), async (req, res) => {
-  const cleanEmail = req.body.email.trim().toLowerCase();
+router5.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPasswordBodySchema }), async (req2, res) => {
+  const cleanEmail = req2.body.email.trim().toLowerCase();
   try {
     const lockout = await db.select().from(passwordLockoutsTable).where(and(eq(passwordLockoutsTable.email, cleanEmail), gt(passwordLockoutsTable.lockedUntil, /* @__PURE__ */ new Date()))).limit(1);
     if (lockout.length > 0) {
@@ -128625,15 +128640,15 @@ router5.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPasswor
     const shopDomain = shopSettings?.shopDomain || "myshop.com";
     const resetUrl = `https://${shopDomain}/reset-password?token=${rawToken}&email=${encodeURIComponent(cleanEmail)}`;
     const emailResult = await sendPasswordRecoveryEmail(cleanEmail, user.firstName, rawToken, resetUrl);
-    req.log.info({ email: cleanEmail, expiresAt }, "Sent password recovery email");
+    req2.log.info({ email: cleanEmail, expiresAt }, "Sent password recovery email");
     res.status(200).json({ success: true, message: "Password recovery email has been sent. The token is valid for 60 minutes.", previewUrl: emailResult.previewUrl });
   } catch (err) {
-    req.log.error({ err }, "Forgot password error");
+    req2.log.error({ err }, "Forgot password error");
     res.status(500).json({ error: "Failed to process recovery request." });
   }
 });
-router5.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordBodySchema }), async (req, res) => {
-  const { email, token, newPassword, confirmPassword } = req.body;
+router5.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordBodySchema }), async (req2, res) => {
+  const { email, token, newPassword, confirmPassword } = req2.body;
   if (confirmPassword && newPassword !== confirmPassword) {
     res.status(400).json({ error: "Passwords do not match." });
     return;
@@ -128653,15 +128668,15 @@ router5.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordB
     await db.update(passwordResetsTable).set({ usedAt: now }).where(eq(passwordResetsTable.id, resetRecord.id));
     const lockoutUntil = new Date(now.getTime() + 15 * 60 * 1e3);
     await db.insert(passwordLockoutsTable).values({ id: randomUUID15(), email: cleanEmail, lockedUntil: lockoutUntil }).onConflictDoUpdate({ target: passwordLockoutsTable.email, set: { lockedUntil: lockoutUntil } });
-    req.log.info({ email: cleanEmail }, "Password successfully reset; 15-min lockout enacted");
+    req2.log.info({ email: cleanEmail }, "Password successfully reset; 15-min lockout enacted");
     res.status(200).json({ success: true, message: "Password reset successful! You may now sign in with your new password." });
   } catch (err) {
-    req.log.error({ err }, "Reset password error");
+    req2.log.error({ err }, "Reset password error");
     res.status(500).json({ error: "Failed to reset password." });
   }
 });
-router5.post("/totp/setup", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.post("/totp/setup", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
@@ -128698,17 +128713,17 @@ router5.post("/totp/setup", async (req, res) => {
       message: "Scan the QR code with your authenticator app, then verify with a code to enable TOTP."
     });
   } catch (err) {
-    req.log.error({ err }, "TOTP setup error");
+    req2.log.error({ err }, "TOTP setup error");
     res.status(500).json({ error: "Failed to set up TOTP." });
   }
 });
-router5.post("/totp/enable", validate({ body: TotpVerifyBodySchema }), async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.post("/totp/enable", validate({ body: TotpVerifyBodySchema }), async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const { totpCode } = req.body;
+  const { totpCode } = req2.body;
   try {
     const records = await db.select().from(totpSecretsTable).where(eq(totpSecretsTable.userId, userId)).limit(1);
     if (records.length === 0) {
@@ -128731,24 +128746,24 @@ router5.post("/totp/enable", validate({ body: TotpVerifyBodySchema }), async (re
       recoveryCodes: JSON.stringify(hashedCodes),
       updatedAt: /* @__PURE__ */ new Date()
     }).where(eq(totpSecretsTable.id, record.id));
-    req.log.info({ userId }, "TOTP enabled successfully");
+    req2.log.info({ userId }, "TOTP enabled successfully");
     res.status(200).json({
       success: true,
       recoveryCodes: plaintextCodes,
       message: "TOTP has been enabled! Save these recovery codes in a safe place. Each code can only be used once."
     });
   } catch (err) {
-    req.log.error({ err }, "TOTP enable error");
+    req2.log.error({ err }, "TOTP enable error");
     res.status(500).json({ error: "Failed to enable TOTP." });
   }
 });
-router5.post("/totp/disable", validate({ body: TotpVerifyBodySchema }), async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.post("/totp/disable", validate({ body: TotpVerifyBodySchema }), async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const { totpCode } = req.body;
+  const { totpCode } = req2.body;
   try {
     const records = await db.select().from(totpSecretsTable).where(and(eq(totpSecretsTable.userId, userId), eq(totpSecretsTable.isEnabled, true))).limit(1);
     if (records.length === 0) {
@@ -128762,15 +128777,15 @@ router5.post("/totp/disable", validate({ body: TotpVerifyBodySchema }), async (r
       return;
     }
     await db.delete(totpSecretsTable).where(eq(totpSecretsTable.id, record.id));
-    req.log.info({ userId }, "TOTP disabled");
+    req2.log.info({ userId }, "TOTP disabled");
     res.status(200).json({ success: true, message: "TOTP has been disabled. You will now use email OTP for login verification." });
   } catch (err) {
-    req.log.error({ err }, "TOTP disable error");
+    req2.log.error({ err }, "TOTP disable error");
     res.status(500).json({ error: "Failed to disable TOTP." });
   }
 });
-router5.post("/totp/verify", otpLimiter, validate({ body: TotpLoginVerifySchema }), async (req, res) => {
-  const { email, totpCode } = req.body;
+router5.post("/totp/verify", otpLimiter, validate({ body: TotpLoginVerifySchema }), async (req2, res) => {
+  const { email, totpCode } = req2.body;
   const cleanEmail = email.trim().toLowerCase();
   try {
     const foundUsers = await db.select().from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
@@ -128790,19 +128805,19 @@ router5.post("/totp/verify", otpLimiter, validate({ body: TotpLoginVerifySchema 
       return;
     }
     const token = await createSession(user.id);
-    req.log.info({ userId: user.id, email: user.email }, "Customer verified TOTP and signed in");
+    req2.log.info({ userId: user.id, email: user.email }, "Customer verified TOTP and signed in");
     res.status(200).json({
       success: true,
       token,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email }
     });
   } catch (err) {
-    req.log.error({ err }, "TOTP verify error");
+    req2.log.error({ err }, "TOTP verify error");
     res.status(500).json({ error: "TOTP verification failed." });
   }
 });
-router5.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema }), async (req, res) => {
-  const { email, recoveryCode } = req.body;
+router5.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema }), async (req2, res) => {
+  const { email, recoveryCode } = req2.body;
   const cleanEmail = email.trim().toLowerCase();
   try {
     const foundUsers = await db.select().from(usersTable).where(eq(usersTable.email, cleanEmail)).limit(1);
@@ -128817,7 +128832,7 @@ router5.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema })
       return;
     }
     const record = totpRecords[0];
-    const hashedCodes = JSON.parse(record.recoveryCodes || "[]");
+    const hashedCodes = safeJsonParse(record.recoveryCodes, []);
     const matchIndex = verifyRecoveryCode(recoveryCode, hashedCodes);
     if (matchIndex === -1) {
       res.status(400).json({ error: "Invalid recovery code." });
@@ -128826,7 +128841,7 @@ router5.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema })
     hashedCodes.splice(matchIndex, 1);
     await db.update(totpSecretsTable).set({ recoveryCodes: JSON.stringify(hashedCodes), updatedAt: /* @__PURE__ */ new Date() }).where(eq(totpSecretsTable.id, record.id));
     const token = await createSession(user.id);
-    req.log.info({ userId: user.id, email: user.email, remainingCodes: hashedCodes.length }, "Customer used TOTP recovery code and signed in");
+    req2.log.info({ userId: user.id, email: user.email, remainingCodes: hashedCodes.length }, "Customer used TOTP recovery code and signed in");
     res.status(200).json({
       success: true,
       token,
@@ -128835,12 +128850,12 @@ router5.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema })
       message: `Recovery code accepted. You have ${hashedCodes.length} recovery codes remaining.`
     });
   } catch (err) {
-    req.log.error({ err }, "TOTP recovery error");
+    req2.log.error({ err }, "TOTP recovery error");
     res.status(500).json({ error: "TOTP recovery failed." });
   }
 });
-router5.get("/addresses", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.get("/addresses", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
@@ -128852,13 +128867,13 @@ router5.get("/addresses", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch addresses." });
   }
 });
-router5.post("/addresses", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.post("/addresses", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req.body;
+  const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req2.body;
   if (!fullAddress || !pincode || !city) {
     res.status(400).json({ error: "Full address, pincode, and city are required." });
     return;
@@ -128887,14 +128902,14 @@ router5.post("/addresses", async (req, res) => {
     res.status(500).json({ error: "Failed to save address." });
   }
 });
-router5.put("/addresses/:id", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.put("/addresses/:id", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const { id } = req.params;
-  const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req.body;
+  const { id } = req2.params;
+  const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req2.body;
   try {
     const existing = await db.select().from(customerAddressesTable).where(and(eq(customerAddressesTable.id, id), eq(customerAddressesTable.userId, userId))).limit(1);
     if (existing.length === 0) {
@@ -128924,13 +128939,13 @@ router5.put("/addresses/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to update address." });
   }
 });
-router5.delete("/addresses/:id", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.delete("/addresses/:id", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const { id } = req.params;
+  const { id } = req2.params;
   try {
     await db.delete(customerAddressesTable).where(and(eq(customerAddressesTable.id, id), eq(customerAddressesTable.userId, userId)));
     res.json({ success: true, message: "Address deleted successfully." });
@@ -128938,8 +128953,8 @@ router5.delete("/addresses/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete address." });
   }
 });
-router5.get("/favorites", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.get("/favorites", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
@@ -128958,13 +128973,13 @@ router5.get("/favorites", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch wishlist." });
   }
 });
-router5.post("/favorites/toggle", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.post("/favorites/toggle", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const { productId } = req.body;
+  const { productId } = req2.body;
   if (!productId) {
     res.status(400).json({ error: "productId is required." });
     return;
@@ -128982,8 +128997,8 @@ router5.post("/favorites/toggle", async (req, res) => {
     res.status(500).json({ error: "Failed to toggle favorite." });
   }
 });
-router5.get("/orders", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.get("/orders", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
@@ -128994,19 +129009,19 @@ router5.get("/orders", async (req, res) => {
       ...o,
       formattedOrderId: `#RAJ-${o.id.substring(0, 6).toUpperCase()}`,
       estimatedEta: "30-45 mins",
-      items: JSON.parse(o.itemsJson || "[]")
+      items: safeJsonParse(o.itemsJson, [])
     })));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch customer orders." });
   }
 });
-router5.get("/orders/:id", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.get("/orders/:id", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const { id } = req.params;
+  const { id } = req2.params;
   try {
     const found = await db.select().from(ordersTable).where(and(eq(ordersTable.id, id), eq(ordersTable.userId, userId))).limit(1);
     if (found.length === 0) {
@@ -129018,14 +129033,14 @@ router5.get("/orders/:id", async (req, res) => {
       ...o,
       formattedOrderId: `#RAJ-${o.id.substring(0, 6).toUpperCase()}`,
       estimatedEta: "30-45 mins",
-      items: JSON.parse(o.itemsJson || "[]")
+      items: safeJsonParse(o.itemsJson, [])
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch order details." });
   }
 });
-router5.get("/notifications", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.get("/notifications", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
@@ -129038,8 +129053,8 @@ router5.get("/notifications", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch notifications." });
   }
 });
-router5.put("/notifications/read-all", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router5.put("/notifications/read-all", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized." });
     return;
@@ -129073,8 +129088,8 @@ async function getShopSettings() {
     razorpayKeySecret: "sandbox_secret"
   };
 }
-router6.post("/validate-delivery", async (req, res) => {
-  const { latitude, longitude } = req.body;
+router6.post("/validate-delivery", async (req2, res) => {
+  const { latitude, longitude } = req2.body;
   if (typeof latitude !== "number" || typeof longitude !== "number") {
     res.status(400).json({ error: "Please provide valid latitude and longitude." });
     return;
@@ -129106,7 +129121,7 @@ router6.post("/validate-delivery", async (req, res) => {
       message: allowed ? `Within delivery range: ${distanceKm} km (max ${settings.deliveryRadiusKm} km).` : `Out of delivery range: ${distanceKm} km away. Maximum delivery radius is ${settings.deliveryRadiusKm} km.`
     });
   } catch (err) {
-    req.log.error({ err }, "Error validating delivery address");
+    req2.log.error({ err }, "Error validating delivery address");
     res.status(500).json({ error: "Failed to validate delivery address." });
   }
 });
@@ -129124,8 +129139,8 @@ router6.get("/shop-info", async (_req, res) => {
     res.status(500).json({ error: "Failed to load shop info." });
   }
 });
-router6.post("/check-pincode", async (req, res) => {
-  const { pincode } = req.body;
+router6.post("/check-pincode", async (req2, res) => {
+  const { pincode } = req2.body;
   if (!pincode || typeof pincode !== "string" || !/^[1-9][0-9]{5}$/.test(pincode.trim())) {
     res.status(400).json({ allowed: false, message: "Please enter a valid 6-digit Indian PIN code." });
     return;
@@ -129158,7 +129173,7 @@ router6.post("/check-pincode", async (req, res) => {
     message: `Delivery available to ${cleanPin} (${locationName})`
   });
 });
-router6.post("/create-order", async (req, res) => {
+router6.post("/create-order", async (req2, res) => {
   const {
     idempotencyKey,
     items,
@@ -129169,7 +129184,7 @@ router6.post("/create-order", async (req, res) => {
     shippingAddress,
     deliveryLatitude,
     deliveryLongitude
-  } = req.body;
+  } = req2.body;
   if (!idempotencyKey || typeof idempotencyKey !== "string") {
     res.status(400).json({ error: "Missing or invalid idempotencyKey." });
     return;
@@ -129178,7 +129193,7 @@ router6.post("/create-order", async (req, res) => {
     res.status(400).json({ error: "Cart cannot be empty." });
     return;
   }
-  const authHeader = req.headers.authorization;
+  const authHeader = req2.headers.authorization;
   const resolvedUserId = await getUserIdFromToken(authHeader);
   if (!resolvedUserId) {
     res.status(401).json({ error: "Please log in or register before placing an order." });
@@ -129210,7 +129225,7 @@ router6.post("/create-order", async (req, res) => {
     const existingOrders = await db.select().from(ordersTable).where(eq(ordersTable.idempotencyKey, idempotencyKey)).limit(1);
     if (existingOrders.length > 0) {
       const existing = existingOrders[0];
-      req.log.info({ orderId: existing.id, idempotencyKey }, "Returning existing idempotency order");
+      req2.log.info({ orderId: existing.id, idempotencyKey }, "Returning existing idempotency order");
       res.status(200).json({
         orderId: existing.id,
         razorpayOrderId: existing.razorpayOrderId,
@@ -129292,13 +129307,13 @@ router6.post("/create-order", async (req, res) => {
         });
         if (!rzpResponse.ok) {
           const errText = await rzpResponse.text();
-          req.log.error({ errText }, "Razorpay API order creation failed");
+          req2.log.error({ errText }, "Razorpay API order creation failed");
           throw new Error("Razorpay gateway order creation failed.");
         }
         const rzpData = await rzpResponse.json();
         razorpayOrderId = rzpData.id;
       } catch (err) {
-        req.log.warn("Falling back to local generated Razorpay order ID for sandbox.");
+        req2.log.warn("Falling back to local generated Razorpay order ID for sandbox.");
         razorpayOrderId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       }
     } else {
@@ -129326,7 +129341,7 @@ router6.post("/create-order", async (req, res) => {
     if (appliedDiscountId) {
       await db.update(discountsTable).set({ usageCount: sql`${discountsTable.usageCount} + 1` }).where(eq(discountsTable.id, appliedDiscountId));
     }
-    req.log.info({ internalOrderId, razorpayOrderId, totalCents, userId: resolvedUserId }, "Created checkout order");
+    req2.log.info({ internalOrderId, razorpayOrderId, totalCents, userId: resolvedUserId }, "Created checkout order");
     res.status(201).json({
       orderId: internalOrderId,
       razorpayOrderId,
@@ -129337,12 +129352,12 @@ router6.post("/create-order", async (req, res) => {
       idempotencyKey
     });
   } catch (err) {
-    req.log.error({ err }, "Error creating checkout order");
+    req2.log.error({ err }, "Error creating checkout order");
     res.status(500).json({ error: "Failed to initialize payment checkout." });
   }
 });
-router6.post("/verify-payment", async (req, res) => {
-  const { idempotencyKey, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
+router6.post("/verify-payment", async (req2, res) => {
+  const { idempotencyKey, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req2.body;
   if (!idempotencyKey || !razorpayOrderId || !razorpayPaymentId) {
     res.status(400).json({ error: "Missing required payment verification fields." });
     return;
@@ -129355,7 +129370,7 @@ router6.post("/verify-payment", async (req, res) => {
     }
     const order = orders[0];
     if (order.status === "paid") {
-      req.log.info({ orderId: order.id }, "Payment already verified for this order");
+      req2.log.info({ orderId: order.id }, "Payment already verified for this order");
       res.status(200).json({
         success: true,
         orderId: order.id,
@@ -129369,7 +129384,7 @@ router6.post("/verify-payment", async (req, res) => {
       return;
     }
     if (razorpayOrderId !== order.razorpayOrderId) {
-      req.log.error(
+      req2.log.error(
         { provided: razorpayOrderId, expected: order.razorpayOrderId },
         "Razorpay order id does not match the order being verified"
       );
@@ -129382,13 +129397,13 @@ router6.post("/verify-payment", async (req, res) => {
     );
     if (isLiveKeys) {
       if (!razorpaySignature) {
-        req.log.error({ razorpayOrderId, razorpayPaymentId }, "Missing Razorpay payment signature in live mode");
+        req2.log.error({ razorpayOrderId, razorpayPaymentId }, "Missing Razorpay payment signature in live mode");
         res.status(400).json({ error: "Payment signature is required." });
         return;
       }
       const generatedSignature = createHmac2("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
       if (generatedSignature !== razorpaySignature) {
-        req.log.error({ razorpayOrderId, razorpayPaymentId }, "Invalid Razorpay payment signature");
+        req2.log.error({ razorpayOrderId, razorpayPaymentId }, "Invalid Razorpay payment signature");
         res.status(400).json({ error: "Payment signature verification failed." });
         return;
       }
@@ -129399,7 +129414,7 @@ router6.post("/verify-payment", async (req, res) => {
       razorpaySignature: razorpaySignature || null,
       updatedAt: /* @__PURE__ */ new Date()
     }).where(eq(ordersTable.id, order.id));
-    req.log.info({ orderId: order.id, razorpayPaymentId }, "Order paid and verified successfully");
+    req2.log.info({ orderId: order.id, razorpayPaymentId }, "Order paid and verified successfully");
     res.status(200).json({
       success: true,
       orderId: order.id,
@@ -129412,32 +129427,32 @@ router6.post("/verify-payment", async (req, res) => {
       message: "Payment verified successfully."
     });
   } catch (err) {
-    req.log.error({ err }, "Error verifying payment");
+    req2.log.error({ err }, "Error verifying payment");
     res.status(500).json({ error: "Failed to verify payment." });
   }
 });
-router6.get("/orders", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router6.get("/orders", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized. Please log in to view your orders." });
     return;
   }
   try {
     const userOrders = await db.select().from(ordersTable).where(eq(ordersTable.userId, userId));
-    const filtered = filterOrders(userOrders, req.query);
+    const filtered = filterOrders(userOrders, req2.query);
     res.status(200).json(filtered);
   } catch (err) {
-    req.log.error({ err }, "Error listing orders");
+    req2.log.error({ err }, "Error listing orders");
     res.status(500).json({ error: "Failed to load order history." });
   }
 });
-router6.post("/orders/:id/cancel", async (req, res) => {
-  const userId = await getUserIdFromToken(req.headers.authorization);
+router6.post("/orders/:id/cancel", async (req2, res) => {
+  const userId = await getUserIdFromToken(req2.headers.authorization);
   if (!userId) {
     res.status(401).json({ error: "Unauthorized. Please log in to cancel an order." });
     return;
   }
-  const id = req.params.id;
+  const id = req2.params.id;
   try {
     const found = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
     if (found.length === 0 || found[0].userId !== userId) {
@@ -129450,7 +129465,7 @@ router6.post("/orders/:id/cancel", async (req, res) => {
       return;
     }
     await db.update(ordersTable).set({ status: "cancelled", updatedAt: /* @__PURE__ */ new Date() }).where(eq(ordersTable.id, id));
-    req.log.info({ orderId: id, userId }, "Order cancelled successfully");
+    req2.log.info({ orderId: id, userId }, "Order cancelled successfully");
     res.status(200).json({
       success: true,
       orderId: id,
@@ -129458,7 +129473,7 @@ router6.post("/orders/:id/cancel", async (req, res) => {
       message: "Order has been cancelled."
     });
   } catch (err) {
-    req.log.error({ err }, "Error cancelling order");
+    req2.log.error({ err }, "Error cancelling order");
     res.status(500).json({ error: "Failed to cancel order." });
   }
 });
@@ -129468,21 +129483,22 @@ var checkout_default = router6;
 var import_express8 = __toESM(require_express2(), 1);
 var router7 = (0, import_express8.Router)();
 router7.use(requireAdmin);
-router7.get("/approvals", async (req, res) => {
+router7.get("/approvals", async (req2, res) => {
   try {
     const pendingProducts = await db.select().from(productsTable).where(eq(productsTable.approvalStatus, "pending_approval"));
     res.status(200).json(pendingProducts);
   } catch (err) {
+    req2.log.error({ err }, "Error loading approval queue");
     res.status(500).json({ error: "Failed to load approval queue." });
   }
 });
-router7.post("/approvals/:productId/approve", async (req, res) => {
-  const currentStaff = await getStaffFromToken(req.headers.authorization);
+router7.post("/approvals/:productId/approve", async (req2, res) => {
+  const currentStaff = await getStaffFromToken(req2.headers.authorization);
   if (currentStaff && (currentStaff.role === "SUB_ADMIN" || currentStaff.role === "MODERATOR")) {
     res.status(403).json({ error: "Permission denied: Only Main Admin or Admin can approve product listings." });
     return;
   }
-  const productId = req.params.productId;
+  const productId = req2.params.productId;
   try {
     const found = await db.select().from(productsTable).where(eq(productsTable.id, productId)).limit(1);
     if (found.length === 0) {
@@ -129498,17 +129514,18 @@ router7.post("/approvals/:productId/approve", async (req, res) => {
     }).where(eq(productsTable.id, productId));
     res.status(200).json({ success: true, message: "Product approved and published to live storefront!" });
   } catch (err) {
+    req2.log.error({ err }, "Failed to approve product");
     res.status(500).json({ error: "Failed to approve product." });
   }
 });
-router7.post("/approvals/:productId/reject", async (req, res) => {
-  const currentStaff = await getStaffFromToken(req.headers.authorization);
+router7.post("/approvals/:productId/reject", async (req2, res) => {
+  const currentStaff = await getStaffFromToken(req2.headers.authorization);
   if (currentStaff && (currentStaff.role === "SUB_ADMIN" || currentStaff.role === "MODERATOR")) {
     res.status(403).json({ error: "Permission denied: Only Main Admin or Admin can reject product listings." });
     return;
   }
-  const productId = req.params.productId;
-  const { reason } = req.body;
+  const productId = req2.params.productId;
+  const { reason } = req2.body;
   try {
     const found = await db.select().from(productsTable).where(eq(productsTable.id, productId)).limit(1);
     if (found.length === 0) {
@@ -129523,6 +129540,7 @@ router7.post("/approvals/:productId/reject", async (req, res) => {
     }).where(eq(productsTable.id, productId));
     res.status(200).json({ success: true, message: "Product rejected and returned to draft." });
   } catch (err) {
+    req2.log.error({ err }, "Failed to reject product");
     res.status(500).json({ error: "Failed to reject product." });
   }
 });
@@ -129533,15 +129551,15 @@ var import_express9 = __toESM(require_express2(), 1);
 import { randomUUID as randomUUID17 } from "node:crypto";
 var router8 = (0, import_express9.Router)();
 router8.use(requireAdmin);
-router8.post("/storage/upload", async (req, res) => {
-  const { filename, contentType, base64Data, imageUrl } = req.body;
+router8.post("/storage/upload", async (req2, res) => {
+  const { filename, contentType, base64Data, imageUrl } = req2.body;
   try {
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const uniqueKey = `products/${randomUUID17()}_${(filename || "cake-photo.jpg").replace(/[^a-zA-Z0-9.-]/g, "_")}`;
     if (settings?.r2AccountId && settings?.r2AccessKeyId && settings?.r2SecretAccessKey) {
       const publicBase = settings.r2PublicUrl || `https://pub-${settings.r2AccountId.substring(0, 8)}.r2.dev`;
       const finalUrl = `${publicBase.replace(/\/$/, "")}/${uniqueKey}`;
-      req.log.info({ finalUrl, key: uniqueKey }, "Uploaded image to Cloudflare R2");
+      req2.log.info({ finalUrl, key: uniqueKey }, "Uploaded image to Cloudflare R2");
       res.status(200).json({
         success: true,
         url: finalUrl,
@@ -129558,7 +129576,7 @@ router8.post("/storage/upload", async (req, res) => {
       storage: "CDN Storage (Cloudflare R2 ready)"
     });
   } catch (err) {
-    req.log.error({ err }, "Image upload error");
+    req2.log.error({ err }, "Image upload error");
     res.status(500).json({ error: "Failed to process photo upload." });
   }
 });
@@ -129642,13 +129660,13 @@ async function stopEmailWorker() {
 
 // artifacts/api-server/src/routes/cron.ts
 var router9 = (0, import_express10.Router)();
-router9.post("/drain-emails", async (req, res) => {
+router9.post("/drain-emails", async (req2, res) => {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     res.status(500).json({ error: "CRON_SECRET not configured." });
     return;
   }
-  const authHeader = req.headers.authorization;
+  const authHeader = req2.headers.authorization;
   const token = authHeader?.replace(/^Bearer\s+/i, "").trim();
   if (token !== cronSecret) {
     res.status(401).json({ error: "Unauthorized." });
@@ -129720,7 +129738,7 @@ var HTTP2_HEADER_BLACKLIST = [
   ":scheme",
   ":authority"
 ];
-function setupOutgoing(outgoing, options, req, forward) {
+function setupOutgoing(outgoing, options, req2, forward) {
   outgoing.port = options[forward || "target"].port || (isSSL.test(options[forward || "target"].protocol ?? "http") ? 443 : 80);
   for (const e of [
     "host",
@@ -129741,16 +129759,16 @@ function setupOutgoing(outgoing, options, req, forward) {
     const bracketedHost = outgoing.hostname.includes(":") && !outgoing.hostname.startsWith("[") ? `[${outgoing.hostname}]` : outgoing.hostname;
     outgoing.host = outgoing.port ? `${bracketedHost}:${outgoing.port}` : bracketedHost;
   }
-  outgoing.method = options.method || req.method;
-  outgoing.headers = { ...req.headers };
-  if (req.headers?.[":authority"]) outgoing.headers.host = req.headers[":authority"];
+  outgoing.method = options.method || req2.method;
+  outgoing.headers = { ...req2.headers };
+  if (req2.headers?.[":authority"]) outgoing.headers.host = req2.headers[":authority"];
   if (options.headers) for (const key of Object.keys(options.headers)) outgoing.headers[key] = options.headers[key];
-  if (req.httpVersionMajor > 1) for (const header of HTTP2_HEADER_BLACKLIST) delete outgoing.headers[header];
+  if (req2.httpVersionMajor > 1) for (const header of HTTP2_HEADER_BLACKLIST) delete outgoing.headers[header];
   if (options.auth) outgoing.auth = options.auth;
   if (options.ca) outgoing.ca = options.ca;
   if (isSSL.test(options[forward || "target"].protocol ?? "http")) outgoing.rejectUnauthorized = options.secure === void 0 ? true : options.secure;
   if (options.agent !== void 0) outgoing.agent = options.agent || false;
-  else if (req.httpVersionMajor > 1 || upgradeHeader.test(req.headers.connection || "")) outgoing.agent = false;
+  else if (req2.httpVersionMajor > 1 || upgradeHeader.test(req2.headers.connection || "")) outgoing.agent = false;
   else {
     const targetProto = options[forward || "target"].protocol ?? "http";
     outgoing.agent = isSSL.test(targetProto) ? defaultAgents.https : defaultAgents.http;
@@ -129765,7 +129783,7 @@ function setupOutgoing(outgoing, options, req, forward) {
   const target = options[forward || "target"];
   const targetPath = target && options.prependPath !== false ? target.pathname || "" : "";
   const targetSearch = target instanceof URL && options.prependPath !== false ? target.search || "" : "";
-  const reqUrl = req.url || "";
+  const reqUrl = req2.url || "";
   const qIdx = reqUrl.indexOf("?");
   const reqPath = qIdx === -1 ? reqUrl : reqUrl.slice(0, qIdx);
   const reqSearch = qIdx === -1 ? "" : reqUrl.slice(qIdx);
@@ -129793,14 +129811,14 @@ function setupSocket(socket) {
   socket.setKeepAlive(true, 0);
   return socket;
 }
-function getPort(req) {
-  const hostHeader = req.headers[":authority"] || req.headers.host;
+function getPort(req2) {
+  const hostHeader = req2.headers[":authority"] || req2.headers.host;
   const res = hostHeader ? hostHeader.match(/:(\d+)/) : "";
   if (res) return res[1];
-  return hasEncryptedConnection(req) ? "443" : "80";
+  return hasEncryptedConnection(req2) ? "443" : "80";
 }
-function hasEncryptedConnection(req) {
-  const socket = req.socket;
+function hasEncryptedConnection(req2) {
+  const socket = req2.socket;
   return !!socket && "encrypted" in socket && socket.encrypted;
 }
 function rewriteCookieProperty(header, config, property) {
@@ -129846,15 +129864,15 @@ function defineProxyOutgoingMiddleware(m) {
 }
 var redirectRegex = /^201|30([12378])$/;
 var webOutgoingMiddleware = [
-  defineProxyOutgoingMiddleware((req, res, proxyRes) => {
-    if (req.httpVersion === "1.0" || req.httpVersionMajor >= 2 || proxyRes.statusCode === 204 || proxyRes.statusCode === 304) delete proxyRes.headers["transfer-encoding"];
+  defineProxyOutgoingMiddleware((req2, res, proxyRes) => {
+    if (req2.httpVersion === "1.0" || req2.httpVersionMajor >= 2 || proxyRes.statusCode === 204 || proxyRes.statusCode === 304) delete proxyRes.headers["transfer-encoding"];
   }),
-  defineProxyOutgoingMiddleware((req, res, proxyRes) => {
-    if (req.httpVersion === "1.0") proxyRes.headers.connection = req.headers.connection || "close";
-    else if (req.httpVersionMajor < 2 && !proxyRes.headers.connection) proxyRes.headers.connection = req.headers.connection || "keep-alive";
-    else if (req.httpVersionMajor >= 2) delete proxyRes.headers.connection;
+  defineProxyOutgoingMiddleware((req2, res, proxyRes) => {
+    if (req2.httpVersion === "1.0") proxyRes.headers.connection = req2.headers.connection || "close";
+    else if (req2.httpVersionMajor < 2 && !proxyRes.headers.connection) proxyRes.headers.connection = req2.headers.connection || "keep-alive";
+    else if (req2.httpVersionMajor >= 2) delete proxyRes.headers.connection;
   }),
-  defineProxyOutgoingMiddleware((req, res, proxyRes, options) => {
+  defineProxyOutgoingMiddleware((req2, res, proxyRes, options) => {
     if ((options.hostRewrite || options.autoRewrite || options.protocolRewrite) && proxyRes.headers.location && redirectRegex.test(String(proxyRes.statusCode))) {
       const target = _toURL(options.target);
       const keepProtocolRelative = proxyRes.headers.location.startsWith("//") && !options.protocolRewrite;
@@ -129862,14 +129880,14 @@ var webOutgoingMiddleware = [
       if (target.host !== u.host) return;
       if (options.hostRewrite) u.host = options.hostRewrite;
       else if (options.autoRewrite) {
-        if (req.headers[":authority"]) u.host = req.headers[":authority"];
-        else if (req.headers.host) u.host = req.headers.host;
+        if (req2.headers[":authority"]) u.host = req2.headers[":authority"];
+        else if (req2.headers.host) u.host = req2.headers.host;
       }
       if (options.protocolRewrite) u.protocol = options.protocolRewrite;
       proxyRes.headers.location = keepProtocolRelative ? u.href.slice(u.protocol.length) : u.href;
     }
   }),
-  defineProxyOutgoingMiddleware((req, res, proxyRes, options) => {
+  defineProxyOutgoingMiddleware((req2, res, proxyRes, options) => {
     const rewriteCookieDomainConfig = typeof options.cookieDomainRewrite === "string" ? { "*": options.cookieDomainRewrite } : options.cookieDomainRewrite;
     const rewriteCookiePathConfig = typeof options.cookiePathRewrite === "string" ? { "*": options.cookiePathRewrite } : options.cookiePathRewrite;
     const preserveHeaderKeyCase = options.preserveHeaderKeyCase;
@@ -129896,9 +129914,9 @@ var webOutgoingMiddleware = [
       setHeader(key, header);
     }
   }),
-  defineProxyOutgoingMiddleware((req, res, proxyRes) => {
+  defineProxyOutgoingMiddleware((req2, res, proxyRes) => {
     res.statusCode = proxyRes.statusCode;
-    if (proxyRes.statusMessage && req.httpVersionMajor < 2) res.statusMessage = proxyRes.statusMessage;
+    if (proxyRes.statusMessage && req2.httpVersionMajor < 2) res.statusMessage = proxyRes.statusMessage;
   })
 ];
 function _toURL(target) {
@@ -129921,20 +129939,20 @@ var redirectStatuses = /* @__PURE__ */ new Set([
   308
 ]);
 var webIncomingMiddleware = [
-  defineProxyMiddleware((req) => {
-    if ((req.method === "DELETE" || req.method === "OPTIONS") && !req.headers["content-length"] && !req.headers["transfer-encoding"]) req.headers["content-length"] = "0";
+  defineProxyMiddleware((req2) => {
+    if ((req2.method === "DELETE" || req2.method === "OPTIONS") && !req2.headers["content-length"] && !req2.headers["transfer-encoding"]) req2.headers["content-length"] = "0";
   }),
-  defineProxyMiddleware((req, res, options) => {
-    if (options.timeout) req.socket.setTimeout(options.timeout, () => {
-      req.socket.destroy();
+  defineProxyMiddleware((req2, res, options) => {
+    if (options.timeout) req2.socket.setTimeout(options.timeout, () => {
+      req2.socket.destroy();
     });
   }),
-  defineProxyMiddleware((req, res, options) => {
+  defineProxyMiddleware((req2, res, options) => {
     if (!options.xfwd) return;
-    const encrypted = req.isSpdy || hasEncryptedConnection(req);
+    const encrypted = req2.isSpdy || hasEncryptedConnection(req2);
     const values = {
-      for: req.connection.remoteAddress || req.socket.remoteAddress,
-      port: getPort(req),
+      for: req2.connection.remoteAddress || req2.socket.remoteAddress,
+      port: getPort(req2),
       proto: encrypted ? "https" : "http"
     };
     for (const header of [
@@ -129943,29 +129961,29 @@ var webIncomingMiddleware = [
       "proto"
     ]) {
       const key = "x-forwarded-" + header;
-      if (!req.headers[key] && values[header] !== void 0) req.headers[key] = values[header];
+      if (!req2.headers[key] && values[header] !== void 0) req2.headers[key] = values[header];
     }
-    req.headers["x-forwarded-host"] = req.headers["x-forwarded-host"] || req.headers[":authority"] || req.headers.host || "";
+    req2.headers["x-forwarded-host"] = req2.headers["x-forwarded-host"] || req2.headers[":authority"] || req2.headers.host || "";
   }),
-  defineProxyMiddleware((req, res, options, server, head, callback) => {
-    server.emit("start", req, res, options.target || options.forward);
+  defineProxyMiddleware((req2, res, options, server, head, callback) => {
+    server.emit("start", req2, res, options.target || options.forward);
     const http = nativeAgents.http;
     const https = nativeAgents.https;
     const maxRedirects = typeof options.followRedirects === "number" ? options.followRedirects : options.followRedirects ? 5 : 0;
     if (options.forward) {
-      const forwardReq = (isSSL.test(options.forward.protocol || "http") ? https : http).request(setupOutgoing(options.ssl || {}, options, req, "forward"));
+      const forwardReq = (isSSL.test(options.forward.protocol || "http") ? https : http).request(setupOutgoing(options.ssl || {}, options, req2, "forward"));
       const forwardError = createErrorHandler(forwardReq, options.forward);
-      req.on("error", forwardError);
+      req2.on("error", forwardError);
       forwardReq.on("error", forwardError);
-      (options.buffer || req).pipe(forwardReq);
+      (options.buffer || req2).pipe(forwardReq);
       if (!options.target) {
         res.end();
         return;
       }
     }
-    const proxyReq = (isSSL.test(options.target.protocol || "http") ? https : http).request(setupOutgoing(options.ssl || {}, options, req));
+    const proxyReq = (isSSL.test(options.target.protocol || "http") ? https : http).request(setupOutgoing(options.ssl || {}, options, req2));
     proxyReq.on("socket", (_socket) => {
-      if (server && !proxyReq.getHeader("expect")) server.emit("proxyReq", proxyReq, req, res, options);
+      if (server && !proxyReq.getHeader("expect")) server.emit("proxyReq", proxyReq, req2, res, options);
     });
     if (options.proxyTimeout) proxyReq.setTimeout(options.proxyTimeout, function() {
       proxyReq.destroy();
@@ -129974,22 +129992,22 @@ var webIncomingMiddleware = [
       if (!res.writableFinished) proxyReq.destroy();
     });
     const proxyError = createErrorHandler(proxyReq, options.target);
-    req.on("error", proxyError);
+    req2.on("error", proxyError);
     proxyReq.on("error", proxyError);
     function createErrorHandler(proxyReq2, url) {
       return function proxyError2(err) {
-        if (!req.socket?.writable && err.code === "ECONNRESET") {
-          server.emit("econnreset", err, req, res, url);
+        if (!req2.socket?.writable && err.code === "ECONNRESET") {
+          server.emit("econnreset", err, req2, res, url);
           return proxyReq2.destroy();
         }
-        if (callback) callback(err, req, res, url);
-        else server.emit("error", err, req, res, url);
+        if (callback) callback(err, req2, res, url);
+        else server.emit("error", err, req2, res, url);
       };
     }
     let bodyBuffer;
     if (maxRedirects > 0) {
       const chunks = [];
-      const source = options.buffer || req;
+      const source = options.buffer || req2;
       source.on("data", (chunk) => {
         chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
         proxyReq.write(chunk);
@@ -130002,8 +130020,8 @@ var webIncomingMiddleware = [
         proxyReq.destroy(err);
       });
     } else proxyReq.on("socket", (socket) => {
-      if (socket.pending) socket.on("connect", () => (options.buffer || req).pipe(proxyReq));
-      else (options.buffer || req).pipe(proxyReq);
+      if (socket.pending) socket.on("connect", () => (options.buffer || req2).pipe(proxyReq));
+      else (options.buffer || req2).pipe(proxyReq);
     });
     function handleResponse(proxyRes, redirectCount, currentUrl) {
       const statusCode = proxyRes.statusCode;
@@ -130011,10 +130029,10 @@ var webIncomingMiddleware = [
         proxyRes.resume();
         const location = new URL(proxyRes.headers.location, currentUrl);
         const preserveMethod = statusCode === 307 || statusCode === 308;
-        const redirectMethod = preserveMethod ? req.method || "GET" : "GET";
+        const redirectMethod = preserveMethod ? req2.method || "GET" : "GET";
         const isHTTPS = isSSL.test(location.protocol);
         const agent = isHTTPS ? https : http;
-        const redirectHeaders = { ...req.headers };
+        const redirectHeaders = { ...req2.headers };
         if (options.headers) Object.assign(redirectHeaders, options.headers);
         redirectHeaders.host = location.host;
         if (location.host !== currentUrl.host) {
@@ -130037,7 +130055,7 @@ var webIncomingMiddleware = [
         };
         if (isHTTPS) redirectOpts.rejectUnauthorized = options.secure === void 0 ? true : options.secure;
         const redirectReq = agent.request(redirectOpts);
-        if (server && !redirectReq.getHeader("expect")) server.emit("proxyReq", redirectReq, req, res, options);
+        if (server && !redirectReq.getHeader("expect")) server.emit("proxyReq", redirectReq, req2, res, options);
         if (options.proxyTimeout) redirectReq.setTimeout(options.proxyTimeout, () => {
           redirectReq.destroy();
         });
@@ -130050,12 +130068,12 @@ var webIncomingMiddleware = [
         else redirectReq.end();
         return;
       }
-      if (server) server.emit("proxyRes", proxyRes, req, res);
+      if (server) server.emit("proxyRes", proxyRes, req2, res);
       if (!res.headersSent && !options.selfHandleResponse) {
-        for (const pass of webOutgoingMiddleware) if (pass(req, res, proxyRes, options)) break;
+        for (const pass of webOutgoingMiddleware) if (pass(req2, res, proxyRes, options)) break;
       }
       if (res.finished) {
-        if (server) server.emit("end", req, res, proxyRes);
+        if (server) server.emit("end", req2, res, proxyRes);
       } else {
         res.on("close", function() {
           proxyRes.destroy();
@@ -130065,10 +130083,10 @@ var webIncomingMiddleware = [
         });
         proxyRes.on("error", function(err) {
           if (!res.destroyed) res.destroy(err);
-          if (server.listenerCount("error") > 0) server.emit("error", err, req, res, currentUrl);
+          if (server.listenerCount("error") > 0) server.emit("error", err, req2, res, currentUrl);
         });
         proxyRes.on("end", function() {
-          if (server) server.emit("end", req, res, proxyRes);
+          if (server) server.emit("end", req2, res, proxyRes);
         });
         if (!options.selfHandleResponse) proxyRes.pipe(res);
       }
@@ -130079,22 +130097,22 @@ var webIncomingMiddleware = [
   })
 ];
 var websocketIncomingMiddleware = [
-  defineProxyMiddleware((req, socket) => {
-    if (req.method !== "GET" || !req.headers.upgrade) {
+  defineProxyMiddleware((req2, socket) => {
+    if (req2.method !== "GET" || !req2.headers.upgrade) {
       socket.destroy();
       return true;
     }
-    if (req.headers.upgrade.toLowerCase() !== "websocket") {
+    if (req2.headers.upgrade.toLowerCase() !== "websocket") {
       socket.destroy();
       return true;
     }
   }),
-  defineProxyMiddleware((req, socket, options) => {
+  defineProxyMiddleware((req2, socket, options) => {
     if (!options.xfwd) return;
     const values = {
-      for: req.connection.remoteAddress || req.socket.remoteAddress,
-      port: getPort(req),
-      proto: hasEncryptedConnection(req) ? "wss" : "ws"
+      for: req2.connection.remoteAddress || req2.socket.remoteAddress,
+      port: getPort(req2),
+      proto: hasEncryptedConnection(req2) ? "wss" : "ws"
     };
     for (const header of [
       "for",
@@ -130102,10 +130120,10 @@ var websocketIncomingMiddleware = [
       "proto"
     ]) {
       const key = "x-forwarded-" + header;
-      if (!req.headers[key] && values[header] !== void 0) req.headers[key] = values[header];
+      if (!req2.headers[key] && values[header] !== void 0) req2.headers[key] = values[header];
     }
   }),
-  defineProxyMiddleware((req, socket, options, server, head, callback) => {
+  defineProxyMiddleware((req2, socket, options, server, head, callback) => {
     const createHttpHeader = function(line2, headers) {
       return Object.keys(headers).reduce(function(head2, key) {
         const value = headers[key];
@@ -130120,8 +130138,8 @@ var websocketIncomingMiddleware = [
     setupSocket(socket);
     if (head && head.length > 0) socket.unshift(head);
     socket.on("error", onSocketError);
-    const proxyReq = (isSSL.test(options.target.protocol || "http") ? httpsNative : httpNative).request(setupOutgoing(options.ssl || {}, options, req));
-    if (server) server.emit("proxyReqWs", proxyReq, req, socket, options, head);
+    const proxyReq = (isSSL.test(options.target.protocol || "http") ? httpsNative : httpNative).request(setupOutgoing(options.ssl || {}, options, req2));
+    if (server) server.emit("proxyReqWs", proxyReq, req2, socket, options, head);
     proxyReq.on("error", onOutgoingError);
     proxyReq.on("response", function(res) {
       if (!res.upgrade) if (!socket.destroyed && socket.writable) {
@@ -130148,13 +130166,13 @@ var websocketIncomingMiddleware = [
     });
     proxyReq.end();
     function onSocketError(err) {
-      if (callback) callback(err, req, socket);
-      else server.emit("error", err, req, socket);
+      if (callback) callback(err, req2, socket);
+      else server.emit("error", err, req2, socket);
       proxyReq.destroy();
     }
     function onOutgoingError(err) {
-      if (callback) callback(err, req, socket);
-      else server.emit("error", err, req, socket);
+      if (callback) callback(err, req2, socket);
+      else server.emit("error", err, req2, socket);
       socket.end();
     }
   })
@@ -130174,8 +130192,8 @@ var ProxyServer = class extends EventEmitter {
     this.ws = _createProxyFn("ws", this);
   }
   listen(port, hostname, listeningListener) {
-    const closure = (req, res) => {
-      return this.web(req, res);
+    const closure = (req2, res) => {
+      return this.web(req2, res);
     };
     if (this.options.http2) {
       if (!this.options.ssl) throw new Error("HTTP/2 requires ssl option");
@@ -130185,8 +130203,8 @@ var ProxyServer = class extends EventEmitter {
       }, closure);
     } else if (this.options.ssl) this._server = httpsNative.createServer(this.options.ssl, closure);
     else this._server = httpNative.createServer(closure);
-    if (this.options.ws) this._server.on("upgrade", (req, socket, head) => {
-      this.ws(req, socket, this.options, head).catch(() => {
+    if (this.options.ws) this._server.on("upgrade", (req2, socket, head) => {
+      this.ws(req2, socket, this.options, head).catch(() => {
       });
     });
     this._server.listen(port, hostname, listeningListener);
@@ -130222,7 +130240,7 @@ function createProxyServer(options = {}) {
   return new ProxyServer(options);
 }
 function _createProxyFn(type, server) {
-  return function(req, res, opts, head) {
+  return function(req2, res, opts, head) {
     const requestOptions = {
       ...opts,
       ...server.options
@@ -130247,15 +130265,15 @@ function _createProxyFn(type, server) {
     for (const pass of server._getPasses(type)) {
       let stop;
       try {
-        stop = pass(req, res, requestOptions, server, head, (error, _req, _res, url) => {
+        stop = pass(req2, res, requestOptions, server, head, (error, _req, _res, url) => {
           if (server.listenerCount("error") > 0) {
-            server.emit("error", error, req, res, url);
+            server.emit("error", error, req2, res, url);
             _resolve();
           } else _reject(error);
         });
       } catch (error) {
         if (server.listenerCount("error") > 0) {
-          server.emit("error", error, req, res, requestOptions.target || requestOptions.forward);
+          server.emit("error", error, req2, res, requestOptions.target || requestOptions.forward);
           _resolve();
         } else _reject(error);
         break;
@@ -130314,23 +130332,23 @@ var BODY_PARSER_ERROR_MESSAGE = `[HPM] Connection reset (ECONNRESET) detected wi
 
       For more details, see: https://github.com/chimurai/http-proxy-middleware/issues/40
 `;
-function hasParsedBody(req) {
-  return Boolean(req && req.method === "POST" && "body" in req && req.body);
+function hasParsedBody(req2) {
+  return Boolean(req2 && req2.method === "POST" && "body" in req2 && req2.body);
 }
 var debugProxyErrorsPlugin = definePlugin((proxyServer, options) => {
-  proxyServer.on("error", (error, req, res, target) => {
+  proxyServer.on("error", (error, req2, res, target) => {
     debug(`httpxy error event: 
 %O`, error);
-    if (error.code === "ECONNRESET" && hasParsedBody(req)) {
+    if (error.code === "ECONNRESET" && hasParsedBody(req2)) {
       console.error(styleText("red", BODY_PARSER_ERROR_MESSAGE));
     }
   });
-  proxyServer.on("proxyReq", (proxyReq, req, socket) => {
+  proxyServer.on("proxyReq", (proxyReq, req2, socket) => {
     socket.on("error", (error) => {
       debug("Socket error in proxyReq event: \n%O", error);
     });
   });
-  proxyServer.on("proxyRes", (proxyRes, req, res) => {
+  proxyServer.on("proxyRes", (proxyRes, req2, res) => {
     res.on("close", () => {
       if (!res.writableEnded) {
         debug("Destroying proxyRes in proxyRes close event");
@@ -130338,7 +130356,7 @@ var debugProxyErrorsPlugin = definePlugin((proxyServer, options) => {
       }
     });
   });
-  proxyServer.on("proxyReqWs", (proxyReq, req, socket) => {
+  proxyServer.on("proxyReqWs", (proxyReq, req2, socket) => {
     socket.on("error", (error) => {
       debug("Socket error in proxyReqWs event: \n%O", error);
     });
@@ -130348,12 +130366,12 @@ var debugProxyErrorsPlugin = definePlugin((proxyServer, options) => {
       debug("Socket error in open event: \n%O", error);
     });
   });
-  proxyServer.on("close", (req, socket, head) => {
+  proxyServer.on("close", (req2, socket, head) => {
     socket.on("error", (error) => {
       debug("Socket error in close event: \n%O", error);
     });
   });
-  proxyServer.on("econnreset", (error, req, res, target) => {
+  proxyServer.on("econnreset", (error, req2, res, target) => {
     debug(`httpxy econnreset event: 
 %O`, error);
   });
@@ -130397,8 +130415,8 @@ function isSocketLike(obj) {
   return obj && typeof obj.write === "function" && !("writeHead" in obj);
 }
 var errorResponsePlugin = definePlugin((proxyServer, options) => {
-  proxyServer.on("error", (err, req, res, target) => {
-    if (!req || !res) {
+  proxyServer.on("error", (err, req2, res, target) => {
+    if (!req2 || !res) {
       throw err;
     }
     if (isResponseLike(res)) {
@@ -130406,8 +130424,8 @@ var errorResponsePlugin = definePlugin((proxyServer, options) => {
         const statusCode = getStatusCode(err.code);
         res.writeHead(statusCode);
       }
-      const host = req.headers && req.headers.host;
-      res.end(`Error occurred while trying to proxy: ${sanitize(host)}${sanitize(req.url)}`);
+      const host = req2.headers && req2.headers.host;
+      res.end(`Error occurred while trying to proxy: ${sanitize(host)}${sanitize(req2.url)}`);
     } else if (isSocketLike(res)) {
       res.destroy();
     }
@@ -130453,16 +130471,16 @@ function getPort2(sockets) {
 // node_modules/.pnpm/http-proxy-middleware@4.2.0/node_modules/http-proxy-middleware/dist/plugins/default/logger-plugin.js
 var loggerPlugin = definePlugin((proxyServer, options) => {
   const logger3 = getLogger(options);
-  proxyServer.on("error", (err, req, res, target) => {
-    const hostname = req?.headers?.host;
-    const requestHref = `${hostname}${req?.url}`;
+  proxyServer.on("error", (err, req2, res, target) => {
+    const hostname = req2?.headers?.host;
+    const requestHref = `${hostname}${req2?.url}`;
     const targetHref = `${target?.href}`;
     const errorMessage = "[HPM] Error occurred while proxying request %s to %s [%s] (%s)";
     const errReference = "https://nodejs.org/api/errors.html#errors_common_system_errors";
     logger3.error(errorMessage, requestHref, targetHref, err.code || err, errReference);
   });
-  proxyServer.on("proxyRes", (proxyRes, req, res) => {
-    const originalUrl = req.originalUrl ?? `${req.baseUrl || ""}${req.url}`;
+  proxyServer.on("proxyRes", (proxyRes, req2, res) => {
+    const originalUrl = req2.originalUrl ?? `${req2.baseUrl || ""}${req2.url}`;
     let target;
     try {
       const port = getPort2(proxyRes.req?.agent?.sockets);
@@ -130474,13 +130492,13 @@ var loggerPlugin = definePlugin((proxyServer, options) => {
       target.pathname = proxyRes.req.path;
     }
     const targetUrl = target.toString();
-    const exchange = `[HPM] ${req.method} ${originalUrl} -> ${targetUrl} [${proxyRes.statusCode}]`;
+    const exchange = `[HPM] ${req2.method} ${originalUrl} -> ${targetUrl} [${proxyRes.statusCode}]`;
     logger3.info(exchange);
   });
   proxyServer.on("open", (socket) => {
     logger3.info("[HPM] Client connected: %o", socket.address());
   });
-  proxyServer.on("close", (req, proxySocket, proxyHead) => {
+  proxyServer.on("close", (req2, proxySocket, proxyHead) => {
     logger3.info("[HPM] Client disconnected: %o", proxySocket.address());
   });
 });
@@ -130520,7 +130538,7 @@ function getPlugins(options) {
 // node_modules/.pnpm/http-proxy-middleware@4.2.0/node_modules/http-proxy-middleware/dist/path-filter.js
 var import_is_glob = __toESM(require_is_glob(), 1);
 var import_micromatch = __toESM(require_micromatch(), 1);
-function matchPathFilter(pathFilter = "/", uri, req) {
+function matchPathFilter(pathFilter = "/", uri, req2) {
   if (isStringPath(pathFilter)) {
     return matchSingleStringPath(pathFilter, uri);
   }
@@ -130538,7 +130556,7 @@ function matchPathFilter(pathFilter = "/", uri, req) {
   }
   if (typeof pathFilter === "function") {
     const pathname = getUrlPathName(uri);
-    return Boolean(pathFilter(pathname, req));
+    return Boolean(pathFilter(pathname, req2));
   }
   throw new HttpProxyMiddlewareError('[HPM] Invalid pathFilter. Expecting something like: "/api" or ["/api", "/ajax"]', "HPM_INVALID_PATH_FILTER_CONFIG");
 }
@@ -130636,20 +130654,20 @@ function parsePathRewriteRules(rewriteConfig) {
 
 // node_modules/.pnpm/http-proxy-middleware@4.2.0/node_modules/http-proxy-middleware/dist/router.js
 var debug4 = Debug.extend("router");
-async function getTarget(req, res, config) {
+async function getTarget(req2, res, config) {
   let newTarget;
   const router11 = config.router;
   if (isPlainObject(router11)) {
-    newTarget = getTargetFromProxyTable(req, router11);
+    newTarget = getTargetFromProxyTable(req2, router11);
   } else if (typeof router11 === "function") {
-    newTarget = await router11(req, res, config);
+    newTarget = await router11(req2, res, config);
   }
   return newTarget;
 }
-function getTargetFromProxyTable(req, table) {
+function getTargetFromProxyTable(req2, table) {
   let result;
-  const host = req.headers.host ?? "";
-  const path = req.url ?? "";
+  const host = req2.headers.host ?? "";
+  const path = req2.url ?? "";
   for (const [key, value] of Object.entries(table)) {
     if (containsPath(key)) {
       if (isHostAndPathKey(key)) {
@@ -130749,22 +130767,22 @@ var HttpProxyMiddleware = class {
     this.proxy = createProxyServer({});
     this.registerPlugins(this.proxy, this.proxyOptions);
     this.pathRewriter = createPathRewriter(this.proxyOptions.pathRewrite);
-    this.middleware.upgrade = (req, socket, head) => {
-      const server = this.#getServer(req);
+    this.middleware.upgrade = (req2, socket, head) => {
+      const server = this.#getServer(req2);
       if (server && !this.wsInternalSubscribedServers.has(server)) {
-        this.handleUpgrade(req, socket, head);
+        this.handleUpgrade(req2, socket, head);
       }
     };
   }
-  #getServer(req) {
-    return req.socket?.server;
+  #getServer(req2) {
+    return req2.socket?.server;
   }
   // https://github.com/Microsoft/TypeScript/wiki/'this'-in-TypeScript#red-flags-for-this
-  middleware = (async (req, res, next) => {
-    if (this.shouldProxy(this.proxyOptions.pathFilter, req)) {
+  middleware = (async (req2, res, next) => {
+    if (this.shouldProxy(this.proxyOptions.pathFilter, req2)) {
       let activeProxyOptions;
       try {
-        activeProxyOptions = await this.prepareProxyRequest(req, res);
+        activeProxyOptions = await this.prepareProxyRequest(req2, res);
         if (!activeProxyOptions.target && !activeProxyOptions.forward) {
           throw new Error("Must provide a proper URL as target");
         }
@@ -130774,15 +130792,15 @@ var HttpProxyMiddleware = class {
       }
       try {
         Debug(`proxy request to target: %O`, activeProxyOptions.target);
-        await this.proxy.web(req, res, activeProxyOptions);
+        await this.proxy.web(req2, res, activeProxyOptions);
       } catch (err) {
-        this.proxy.emit("error", err, req, res, activeProxyOptions.target);
+        this.proxy.emit("error", err, req2, res, activeProxyOptions.target);
         next?.(err);
       }
     } else {
       next?.();
     }
-    const server = this.#getServer(req);
+    const server = this.#getServer(req2);
     if (server && !this.activeServers.has(server)) {
       Debug("registering server close listener");
       this.activeServers.add(server);
@@ -130816,25 +130834,25 @@ var HttpProxyMiddleware = class {
       this.wsInternalSubscribedServers.add(server);
     }
   };
-  handleUpgrade = async (req, socket, head) => {
+  handleUpgrade = async (req2, socket, head) => {
     try {
-      if (this.shouldProxy(this.proxyOptions.pathFilter, req)) {
-        const activeProxyOptions = await this.prepareProxyRequest(req, void 0);
-        await this.proxy.ws(req, socket, activeProxyOptions, head);
+      if (this.shouldProxy(this.proxyOptions.pathFilter, req2)) {
+        const activeProxyOptions = await this.prepareProxyRequest(req2, void 0);
+        await this.proxy.ws(req2, socket, activeProxyOptions, head);
         Debug("server upgrade event received. Proxying WebSocket");
       }
     } catch (err) {
-      this.proxy.emit("error", err, req, socket);
+      this.proxy.emit("error", err, req2, socket);
     }
   };
   /**
    * Determine whether request should be proxied.
    */
-  shouldProxy = (pathFilter, req) => {
+  shouldProxy = (pathFilter, req2) => {
     try {
-      return matchPathFilter(pathFilter, req.url, req);
+      return matchPathFilter(pathFilter, req2.url, req2);
     } catch (err) {
-      Debug("Error: matchPathFilter() called with request url: ", `"${req.url}"`);
+      Debug("Error: matchPathFilter() called with request url: ", `"${req2.url}"`);
       this.logger.error(err);
       return false;
     }
@@ -130847,18 +130865,18 @@ var HttpProxyMiddleware = class {
    * @param {Object} req
    * @return {Object} proxy options
    */
-  prepareProxyRequest = async (req, res) => {
+  prepareProxyRequest = async (req2, res) => {
     const newProxyOptions = Object.assign({}, this.proxyOptions);
-    await this.applyRouter(req, res, newProxyOptions);
+    await this.applyRouter(req2, res, newProxyOptions);
     normalizeIPv6LiteralTargets(newProxyOptions);
-    await this.applyPathRewrite(req, res, this.pathRewriter, newProxyOptions);
+    await this.applyPathRewrite(req2, res, this.pathRewriter, newProxyOptions);
     return newProxyOptions;
   };
   // Modify option.target when router present.
-  applyRouter = async (req, res, options) => {
+  applyRouter = async (req2, res, options) => {
     let newTarget;
     if (options.router) {
-      newTarget = await getTarget(req, res, options);
+      newTarget = await getTarget(req2, res, options);
       if (newTarget) {
         Debug('router new target: "%s"', newTarget);
         options.target = newTarget;
@@ -130866,14 +130884,14 @@ var HttpProxyMiddleware = class {
     }
   };
   // rewrite path
-  applyPathRewrite = async (req, res, pathRewriter, options) => {
-    if (req.url && pathRewriter) {
-      const path = await pathRewriter(req.url, req, res, options);
+  applyPathRewrite = async (req2, res, pathRewriter, options) => {
+    if (req2.url && pathRewriter) {
+      const path = await pathRewriter(req2.url, req2, res, options);
       if (typeof path === "string") {
         Debug("pathRewrite new path: %s", path);
-        req.url = path;
+        req2.url = path;
       } else {
-        Debug("pathRewrite: no rewritten path found: %s", req.url);
+        Debug("pathRewrite: no rewritten path found: %s", req2.url);
       }
     }
   };
@@ -130891,11 +130909,11 @@ var debug6 = Debug.extend("response-interceptor");
 // artifacts/api-server/src/middlewares/clerkProxyMiddleware.ts
 var CLERK_FAPI = "https://frontend-api.clerk.dev";
 var CLERK_PROXY_PATH = "/api/__clerk";
-function getClerkProxyHost(req) {
-  const forwarded = req.headers["x-forwarded-host"];
+function getClerkProxyHost(req2) {
+  const forwarded = req2.headers["x-forwarded-host"];
   const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   const firstHop = raw?.split(",")[0]?.trim();
-  return firstHop || req.headers.host?.trim() || void 0;
+  return firstHop || req2.headers.host?.trim() || void 0;
 }
 function clerkProxyMiddleware() {
   if (process.env.NODE_ENV !== "production") {
@@ -130913,14 +130931,14 @@ function clerkProxyMiddleware() {
     selfHandleResponse: true,
     pathRewrite: (path) => path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ""),
     on: {
-      proxyReq: (proxyReq, req) => {
-        const protocol = req.headers["x-forwarded-proto"] || "https";
-        const host = getClerkProxyHost(req) || "";
+      proxyReq: (proxyReq, req2) => {
+        const protocol = req2.headers["x-forwarded-proto"] || "https";
+        const host = getClerkProxyHost(req2) || "";
         const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
         proxyReq.setHeader("Clerk-Proxy-Url", proxyUrl);
         proxyReq.setHeader("Clerk-Secret-Key", secretKey);
-        const xff = req.headers["x-forwarded-for"];
-        const clientIp = (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim() || req.socket?.remoteAddress || "";
+        const xff = req2.headers["x-forwarded-for"];
+        const clientIp = (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim() || req2.socket?.remoteAddress || "";
         if (clientIp) {
           proxyReq.setHeader("X-Forwarded-For", clientIp);
         }
@@ -130932,7 +130950,7 @@ function clerkProxyMiddleware() {
       // be re-sent with a Content-Length; the body is forwarded untouched so
       // Content-Encoding is preserved. Length-known responses (e.g. /npm/*
       // assets) and body-less responses stream through without buffering.
-      proxyRes: (proxyRes, req, res) => {
+      proxyRes: (proxyRes, req2, res) => {
         const headers = { ...proxyRes.headers };
         delete headers["transfer-encoding"];
         delete headers["connection"];
@@ -130941,7 +130959,7 @@ function clerkProxyMiddleware() {
         if (status < 200 || status === 204) {
           delete headers["content-length"];
         }
-        const bodyless = req.method === "HEAD" || status < 200 || status === 204 || status === 304;
+        const bodyless = req2.method === "HEAD" || status < 200 || status === 204 || status === 304;
         if (headers["content-length"] !== void 0 || bodyless) {
           res.writeHead(status, headers);
           proxyRes.on("error", () => res.destroy());
@@ -130969,26 +130987,26 @@ function clerkProxyMiddleware() {
 
 // artifacts/api-server/src/middlewares/csrf-guard.ts
 var MUTATING_METHODS = /* @__PURE__ */ new Set(["POST", "PUT", "PATCH", "DELETE"]);
-function csrfProtection(req, res, next) {
-  const method = req.method.toUpperCase();
+function csrfProtection(req2, res, next) {
+  const method = req2.method.toUpperCase();
   if (!MUTATING_METHODS.has(method)) {
     return next();
   }
-  if (req.path.includes("/webhook") || req.path.includes("/razorpay/webhook")) {
+  if (req2.path.includes("/webhook") || req2.path.includes("/razorpay/webhook")) {
     return next();
   }
-  const authHeader = req.headers.authorization;
+  const authHeader = req2.headers.authorization;
   if (authHeader && authHeader.trim().length > 0) {
     return next();
   }
-  const secFetchSite = req.headers["sec-fetch-site"];
+  const secFetchSite = req2.headers["sec-fetch-site"];
   if (secFetchSite === "cross-site") {
     res.status(403).json({
       error: "Cross-site request forgery blocked (sec-fetch-site: cross-site)."
     });
     return;
   }
-  const origin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : void 0);
+  const origin = req2.headers.origin || (req2.headers.referer ? new URL(req2.headers.referer).origin : void 0);
   if (origin && !isAllowedOrigin(origin)) {
     res.status(403).json({
       error: "Forbidden: Origin verification failed for mutating request."
@@ -131000,10 +131018,10 @@ function csrfProtection(req, res, next) {
 
 // artifacts/api-server/src/middlewares/request-id.ts
 import { randomUUID as randomUUID18 } from "node:crypto";
-var requestIdMiddleware = (req, res, next) => {
-  const existingId = req.headers["x-request-id"];
+var requestIdMiddleware = (req2, res, next) => {
+  const existingId = req2.headers["x-request-id"];
   const requestId = typeof existingId === "string" && existingId.length > 0 ? existingId : `req_${randomUUID18().replace(/-/g, "")}`;
-  req.id = requestId;
+  req2.id = requestId;
   res.setHeader("X-Request-Id", requestId);
   next();
 };
@@ -131021,8 +131039,8 @@ var AppError = class extends Error {
   code;
   details;
 };
-var globalErrorHandler = (err, req, res, _next) => {
-  const requestId = req.id ?? "unknown";
+var globalErrorHandler = (err, req2, res, _next) => {
+  const requestId = req2.id ?? "unknown";
   const isProduction3 = process.env.NODE_ENV === "production";
   if (err instanceof ZodError) {
     const details = err.errors.map((e) => ({
@@ -131084,13 +131102,13 @@ app.use(
   (0, import_pino_http.default)({
     logger: logger2,
     // Use the request-id middleware's value for log correlation
-    genReqId: (req) => req.id,
+    genReqId: (req2) => req2.id,
     serializers: {
-      req(req) {
+      req(req2) {
         return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0]
+          id: req2.id,
+          method: req2.method,
+          url: req2.url?.split("?")[0]
         };
       },
       res(res) {
@@ -131114,9 +131132,9 @@ app.use(
 app.use(csrfProtection);
 if (process.env.CLERK_SECRET_KEY) {
   app.use(
-    clerkMiddleware((req) => ({
+    clerkMiddleware((req2) => ({
       publishableKey: publishableKeyFromHost(
-        getClerkProxyHost(req) ?? "",
+        getClerkProxyHost(req2) ?? "",
         process.env.CLERK_PUBLISHABLE_KEY
       )
     }))

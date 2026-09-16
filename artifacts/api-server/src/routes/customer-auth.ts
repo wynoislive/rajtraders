@@ -162,6 +162,15 @@ async function createSession(userId: string): Promise<string> {
   return token;
 }
 
+function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function getUserIdFromToken(token?: string): Promise<string | null> {
   if (!token) return null;
   const clean = token.replace(/^Bearer\s+/i, "").trim();
@@ -334,8 +343,8 @@ router.post("/register", authLimiter, validate({ body: RegisterBodySchema }), as
         ? "Notice: Account re-registered within 15-day deletion window. Welcome offer codes are forfeited."
         : null,
     });
-  } catch (err: any) {
-    if (err?.code === "23505") {
+  } catch (err: unknown) {
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: unknown }).code === "23505") {
       res.status(400).json({ error: "An account with this email or mobile number already exists. Please log in." });
       return;
     }
@@ -377,7 +386,7 @@ router.post("/login", authLimiter, validate({ body: LoginBodySchema }), async (r
 
     // No TOTP — proceed with email OTP
     await issueVerificationOtp(req, res, user, cleanEmail);
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Login error");
     res.status(500).json({ error: "Failed to authenticate. Please try again." });
   }
@@ -433,7 +442,7 @@ router.post("/verify-login-otp", otpLimiter, validate({ body: VerifyOtpBodySchem
       token,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Verify OTP error");
     res.status(500).json({ error: "Verification failed. Please try again." });
   }
@@ -450,7 +459,7 @@ router.post("/resend-login-otp", otpLimiter, validate({ body: ResendOtpBodySchem
       return;
     }
     await issueVerificationOtp(req, res, foundUsers[0], cleanEmail);
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Resend OTP error");
     res.status(500).json({ error: "Failed to resend verification code." });
   }
@@ -478,7 +487,7 @@ router.get("/me", async (req: Request, res: Response) => {
       email: user.email,
       totpEnabled: totpRecords.length > 0,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to fetch profile." });
   }
 });
@@ -516,7 +525,7 @@ router.put("/profile", validate({ body: UpdateProfileBodySchema }), async (req: 
       message: "Profile updated successfully.",
       user: { id: updatedUser.id, firstName: updatedUser.firstName, lastName: updatedUser.lastName, mobileNumber: updatedUser.mobileNumber, email: updatedUser.email },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Profile update error");
     res.status(500).json({ error: "Failed to update profile." });
   }
@@ -556,7 +565,7 @@ router.post("/change-password", changePasswordLimiter, validate({ body: ChangePa
 
     req.log.info({ userId }, "Customer successfully changed password via Settings & Security");
     res.status(200).json({ success: true, message: "Password changed successfully!" });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Change password error");
     res.status(500).json({ error: "Failed to change password. Please try again." });
   }
@@ -589,7 +598,7 @@ router.delete("/delete-account", async (req: Request, res: Response) => {
       message: "Your account and personal data have been completely deleted in compliance with Play Store privacy policies. Note: A 15-day new-user offer lockdown applies if you register again.",
       penaltyExpiresAt: penaltyExpiresAt.toISOString(),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Account deletion error");
     res.status(500).json({ error: "Failed to delete account. Please try again." });
   }
@@ -631,7 +640,7 @@ router.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPassword
     req.log.info({ email: cleanEmail, expiresAt }, "Sent password recovery email");
 
     res.status(200).json({ success: true, message: "Password recovery email has been sent. The token is valid for 60 minutes.", previewUrl: emailResult.previewUrl });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Forgot password error");
     res.status(500).json({ error: "Failed to process recovery request." });
   }
@@ -668,7 +677,7 @@ router.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordBo
 
     req.log.info({ email: cleanEmail }, "Password successfully reset; 15-min lockout enacted");
     res.status(200).json({ success: true, message: "Password reset successful! You may now sign in with your new password." });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Reset password error");
     res.status(500).json({ error: "Failed to reset password." });
   }
@@ -717,7 +726,7 @@ router.post("/totp/setup", async (req: Request, res: Response) => {
       manualEntryKey: secret,
       message: "Scan the QR code with your authenticator app, then verify with a code to enable TOTP.",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "TOTP setup error");
     res.status(500).json({ error: "Failed to set up TOTP." });
   }
@@ -759,7 +768,7 @@ router.post("/totp/enable", validate({ body: TotpVerifyBodySchema }), async (req
       recoveryCodes: plaintextCodes,
       message: "TOTP has been enabled! Save these recovery codes in a safe place. Each code can only be used once.",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "TOTP enable error");
     res.status(500).json({ error: "Failed to enable TOTP." });
   }
@@ -788,7 +797,7 @@ router.post("/totp/disable", validate({ body: TotpVerifyBodySchema }), async (re
     req.log.info({ userId }, "TOTP disabled");
 
     res.status(200).json({ success: true, message: "TOTP has been disabled. You will now use email OTP for login verification." });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "TOTP disable error");
     res.status(500).json({ error: "Failed to disable TOTP." });
   }
@@ -821,7 +830,7 @@ router.post("/totp/verify", otpLimiter, validate({ body: TotpLoginVerifySchema }
       token,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "TOTP verify error");
     res.status(500).json({ error: "TOTP verification failed." });
   }
@@ -841,7 +850,7 @@ router.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema }),
     if (totpRecords.length === 0) { res.status(400).json({ error: "TOTP is not enabled for this account." }); return; }
 
     const record = totpRecords[0];
-    const hashedCodes: string[] = JSON.parse(record.recoveryCodes || "[]");
+    const hashedCodes: string[] = safeJsonParse(record.recoveryCodes, []);
     const matchIndex = verifyRecoveryCode(recoveryCode, hashedCodes);
 
     if (matchIndex === -1) {
@@ -863,7 +872,7 @@ router.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema }),
       remainingRecoveryCodes: hashedCodes.length,
       message: `Recovery code accepted. You have ${hashedCodes.length} recovery codes remaining.`,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "TOTP recovery error");
     res.status(500).json({ error: "TOTP recovery failed." });
   }
@@ -876,7 +885,7 @@ router.get("/addresses", async (req: Request, res: Response) => {
   try {
     const addresses = await db.select().from(customerAddressesTable).where(eq(customerAddressesTable.userId, userId)).orderBy(desc(customerAddressesTable.isDefault), desc(customerAddressesTable.createdAt));
     res.json(addresses);
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to fetch addresses." });
   }
 });
@@ -909,7 +918,7 @@ router.post("/addresses", async (req: Request, res: Response) => {
       isDefault: Boolean(isDefault),
     }).returning();
     res.status(201).json(inserted);
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to save address." });
   }
 });
@@ -945,7 +954,7 @@ router.put("/addresses/:id", async (req: Request, res: Response) => {
     }).where(eq(customerAddressesTable.id, id)).returning();
 
     res.json(updated);
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to update address." });
   }
 });
@@ -957,7 +966,7 @@ router.delete("/addresses/:id", async (req: Request, res: Response) => {
   try {
     await db.delete(customerAddressesTable).where(and(eq(customerAddressesTable.id, id), eq(customerAddressesTable.userId, userId)));
     res.json({ success: true, message: "Address deleted successfully." });
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to delete address." });
   }
 });
@@ -976,7 +985,7 @@ router.get("/favorites", async (req: Request, res: Response) => {
     const products = await db.select().from(productsTable).where(and(eq(productsTable.status, "active"), eq(productsTable.approvalStatus, "approved")));
     const favProducts = products.filter(p => productIds.includes(p.id));
     res.json(favProducts);
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to fetch wishlist." });
   }
 });
@@ -996,7 +1005,7 @@ router.post("/favorites/toggle", async (req: Request, res: Response) => {
       await db.insert(customerFavoritesTable).values({ userId, productId });
       res.json({ isFavorite: true, message: "Added to favorites." });
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to toggle favorite." });
   }
 });
@@ -1011,9 +1020,9 @@ router.get("/orders", async (req: Request, res: Response) => {
       ...o,
       formattedOrderId: `#RAJ-${o.id.substring(0, 6).toUpperCase()}`,
       estimatedEta: "30-45 mins",
-      items: JSON.parse(o.itemsJson || "[]"),
+      items: safeJsonParse(o.itemsJson, []),
     })));
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to fetch customer orders." });
   }
 });
@@ -1030,9 +1039,9 @@ router.get("/orders/:id", async (req: Request, res: Response) => {
       ...o,
       formattedOrderId: `#RAJ-${o.id.substring(0, 6).toUpperCase()}`,
       estimatedEta: "30-45 mins",
-      items: JSON.parse(o.itemsJson || "[]"),
+      items: safeJsonParse(o.itemsJson, []),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to fetch order details." });
   }
 });
@@ -1045,7 +1054,7 @@ router.get("/notifications", async (req: Request, res: Response) => {
     const notifications = await db.select().from(customerNotificationsTable).where(eq(customerNotificationsTable.userId, userId)).orderBy(desc(customerNotificationsTable.createdAt)).limit(30);
     const unreadCount = notifications.filter(n => !n.isRead).length;
     res.json({ notifications, unreadCount });
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to fetch notifications." });
   }
 });
@@ -1056,7 +1065,7 @@ router.put("/notifications/read-all", async (req: Request, res: Response) => {
   try {
     await db.update(customerNotificationsTable).set({ isRead: true }).where(eq(customerNotificationsTable.userId, userId));
     res.json({ success: true, message: "All notifications marked as read." });
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to update notifications." });
   }
 });

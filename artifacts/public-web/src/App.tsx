@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { useLocation, Link } from 'wouter';
+import type { Product } from '@workspace/api-client-react';
 import { SeoHead } from './components/SeoHead';
 import {
   ShoppingBag,
@@ -39,6 +40,19 @@ import {
   Package,
   LogOut
 } from 'lucide-react';
+
+export type StorefrontProduct = Product & {
+  prepTimeMinutes?: number;
+  isBestseller?: boolean;
+  isVeg?: boolean;
+};
+
+export interface OrderItem {
+  name?: string;
+  productName?: string;
+  quantity: number;
+  priceCents: number;
+}
 
 
 function getApiUrl(path: string): string {
@@ -103,7 +117,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'bestseller'>('relevance');
 
   // Cart & Auth State
-  const [cart, setCart] = useState<Array<{ product: any; quantity: number }>>(() => {
+  const [cart, setCart] = useState<Array<{ product: StorefrontProduct; quantity: number }>>(() => {
     try { return JSON.parse(localStorage.getItem('raj_cart') || '[]'); } catch { return []; }
   });
   const [showCartDrawer, setShowCartDrawer] = useState(false);
@@ -122,11 +136,21 @@ export default function App() {
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'raj_token' || e.key === 'raj_user') {
-        setUser(JSON.parse(localStorage.getItem('raj_user') || 'null'));
+        try {
+          setUser(JSON.parse(localStorage.getItem('raj_user') || 'null'));
+        } catch {
+          setUser(null);
+          localStorage.removeItem('raj_user');
+        }
         setToken(localStorage.getItem('raj_token'));
       }
       if (e.key === 'raj_cart') {
-        try { setCart(JSON.parse(e.newValue || '[]')); } catch {}
+        try {
+          setCart(JSON.parse(e.newValue || '[]'));
+        } catch {
+          setCart([]);
+          localStorage.removeItem('raj_cart');
+        }
       }
     };
     window.addEventListener('storage', handleStorageChange);
@@ -214,13 +238,15 @@ export default function App() {
   };
 
   useEffect(() => {
-    let timer: any;
+    let timer: ReturnType<typeof setInterval> | undefined;
     if (otpRequired && resendCooldown > 0) {
       timer = setInterval(() => {
         setResendCooldown((prev) => Math.max(0, prev - 1));
       }, 1000);
     }
-    return () => clearInterval(timer);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, [otpRequired, resendCooldown]);
 
   useEffect(() => {
@@ -252,7 +278,7 @@ export default function App() {
 
 
   // Products State
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<StorefrontProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
 
   const fallbackCelebrationProducts = useMemo(() => [
@@ -320,7 +346,7 @@ export default function App() {
 
   const currentProduct = useMemo(() => {
     if (!params?.slug) return null;
-    return products.find((p: any) => p.slug === params.slug || p.id === params.slug) || null;
+    return products.find((p: StorefrontProduct) => p.slug === params.slug || p.id === params.slug) || null;
   }, [params, products]);
 
   // Advanced Filtered & Sorted Products
@@ -395,7 +421,7 @@ export default function App() {
     }
   };
 
-  const addToCart = (product: any) => {
+  const addToCart = (product: StorefrontProduct) => {
     if (!shopSettings.isStoreOpen) {
       showToast('Store is currently closed for new orders.', 'error');
       return;
@@ -411,7 +437,7 @@ export default function App() {
     showToast(`Added ${product.name} to bag!`, 'success');
   };
 
-  const toggleFavorite = async (product: any) => {
+  const toggleFavorite = async (product: StorefrontProduct) => {
     const isFav = favorites.includes(product.id);
     const updatedFavs = isFav ? favorites.filter(id => id !== product.id) : [...favorites, product.id];
     setFavorites(updatedFavs);
@@ -429,16 +455,17 @@ export default function App() {
     showToast(isFav ? 'Removed from favorites' : 'Added to favorites!', 'success');
   };
 
-  const shareProduct = (product: any) => {
+  const shareProduct = (product: StorefrontProduct) => {
     const url = `https://sundarvan.xyz/products/${product.slug}`;
     navigator.clipboard.writeText(url);
     showToast('Product link copied to clipboard!', 'success');
   };
 
-  const handleLogin = async (e: any) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const email = e.target.email.value;
-    const password = e.target.password.value;
+    const formData = new FormData(e.currentTarget);
+    const email = (formData.get('email') as string) || '';
+    const password = (formData.get('password') as string) || '';
     setAuthLoading(true);
     setAuthError(null);
     try {
@@ -470,14 +497,15 @@ export default function App() {
     }
   };
 
-  const handleRegister = async (e: any) => {
+  const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const firstName = e.target.firstName.value;
-    const lastName = e.target.lastName.value;
-    const mobileNumber = e.target.mobileNumber.value;
-    const email = e.target.email.value;
-    const password = e.target.password.value;
-    const confirmPassword = e.target.confirmPassword.value;
+    const formData = new FormData(e.currentTarget);
+    const firstName = (formData.get('firstName') as string) || '';
+    const lastName = (formData.get('lastName') as string) || '';
+    const mobileNumber = (formData.get('mobileNumber') as string) || '';
+    const email = (formData.get('email') as string) || '';
+    const password = (formData.get('password') as string) || '';
+    const confirmPassword = (formData.get('confirmPassword') as string) || '';
     if (password !== confirmPassword) {
       setAuthError('Passwords do not match.');
       return;
@@ -513,7 +541,7 @@ export default function App() {
     }
   };
 
-  const handleVerifyOtp = async (e: any) => {
+  const handleVerifyOtp = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setAuthLoading(true);
     setAuthError(null);
@@ -565,9 +593,10 @@ export default function App() {
     }
   };
 
-  const handleForgotPassword = async (e: any) => {
+  const handleForgotPassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const email = e.target.email.value;
+    const formData = new FormData(e.currentTarget);
+    const email = (formData.get('email') as string) || '';
     setAuthLoading(true);
     setAuthError(null);
     try {
@@ -590,12 +619,13 @@ export default function App() {
     }
   };
 
-  const handleResetPassword = async (e: any) => {
+  const handleResetPassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const email = e.target.email.value;
-    const tokenInput = e.target.token.value;
-    const newPassword = e.target.newPassword.value;
-    const confirmPassword = e.target.confirmPassword.value;
+    const formData = new FormData(e.currentTarget);
+    const email = (formData.get('email') as string) || '';
+    const tokenInput = (formData.get('token') as string) || '';
+    const newPassword = (formData.get('newPassword') as string) || '';
+    const confirmPassword = (formData.get('confirmPassword') as string) || '';
     if (newPassword !== confirmPassword) {
       setAuthError('Passwords do not match.');
       return;
@@ -694,8 +724,9 @@ export default function App() {
       } else {
         showToast(orderData.error || 'Failed to place order.', 'error');
       }
-    } catch (err: any) {
-      showToast('Checkout error: ' + err.message, 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'An unexpected error occurred during checkout.';
+      showToast('Checkout error: ' + msg, 'error');
     } finally {
       setIsCheckingOut(false);
     }
@@ -986,9 +1017,9 @@ export default function App() {
                               </div>
 
                               <div className="space-y-2 text-xs">
-                                {Array.isArray(order.items) && order.items.map((item: any, idx: number) => (
+                                {Array.isArray(order.items) && order.items.map((item: OrderItem, idx: number) => (
                                   <div key={idx} className="flex justify-between font-semibold">
-                                    <span>{item.quantity}x {item.name}</span>
+                                    <span>{item.quantity}x {item.name || item.productName}</span>
                                     <span>{money(item.priceCents * item.quantity)}</span>
                                   </div>
                                 ))}
@@ -1073,11 +1104,13 @@ export default function App() {
                         </div>
                       )}
 
-                      <form onSubmit={async (e: any) => {
+                      <form onSubmit={async (e: FormEvent<HTMLFormElement>) => {
                         e.preventDefault();
-                        const oldPass = e.target.oldPassword.value;
-                        const newPass = e.target.newPassword.value;
-                        const confirmPass = e.target.confirmPassword.value;
+                        const form = e.currentTarget;
+                        const formData = new FormData(form);
+                        const oldPass = (formData.get('oldPassword') as string) || '';
+                        const newPass = (formData.get('newPassword') as string) || '';
+                        const confirmPass = (formData.get('confirmPassword') as string) || '';
 
                         if (newPass !== confirmPass) {
                           setChangePassNotice({ type: 'error', message: 'New password and confirmation password do not match.' });
@@ -1142,11 +1175,13 @@ export default function App() {
                   {activeAccountTab === 'profile' && (
                     <div className="space-y-6 max-w-md">
                       <h2 className="text-xl font-black text-[#0E3D42]">Edit Profile Details</h2>
-                      <form onSubmit={async (e: any) => {
+                      <form onSubmit={async (e: FormEvent<HTMLFormElement>) => {
                         e.preventDefault();
-                        const firstName = e.target.firstName.value;
-                        const lastName = e.target.lastName.value;
-                        const mobileNumber = e.target.mobileNumber.value;
+                        const form = e.currentTarget;
+                        const formData = new FormData(form);
+                        const firstName = (formData.get('firstName') as string) || '';
+                        const lastName = (formData.get('lastName') as string) || '';
+                        const mobileNumber = (formData.get('mobileNumber') as string) || '';
                         try {
                           const res = await fetch(getApiUrl('/api/v1/auth/profile'), {
                             method: 'PUT',
@@ -1353,7 +1388,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredProducts.map((product: any) => (
+                  {filteredProducts.map((product: StorefrontProduct) => (
                     <div key={product.id} className="bg-white rounded-3xl border border-[#0E3D42]/10 overflow-hidden shadow-md hover:shadow-xl transition group flex flex-col justify-between">
                       <div>
                         <div className="relative aspect-square bg-[#EFE8DC] overflow-hidden">

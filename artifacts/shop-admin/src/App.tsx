@@ -72,6 +72,7 @@ import {
   useValidateDiscount,
   setAuthTokenGetter,
   setBaseUrl,
+  type Product,
 } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -95,6 +96,23 @@ export interface StaffUser {
   permissions?: string[];
   active?: boolean;
   permanent?: boolean;
+  expiresAt?: string | null;
+}
+
+export type AdminProduct = Product & {
+  prepTimeMinutes?: number;
+  subCategory?: string;
+  deletedAt?: string | null;
+};
+
+export interface DiscountItem {
+  id: string;
+  code: string;
+  type: string;
+  value: number | string;
+  minSpendCents?: number;
+  active: boolean;
+  usageCount?: number;
   expiresAt?: string | null;
 }
 
@@ -228,7 +246,7 @@ const navItems = [
   { href: '/settings', label: 'Store & Delivery', icon: Settings2, permissionKey: 'settings' },
 ];
 
-function AdminLoginPage({ onLoginSuccess }: { onLoginSuccess: (token: string, staff: any) => void }) {
+function AdminLoginPage({ onLoginSuccess }: { onLoginSuccess: (token: string, staff: StaffUser) => void }) {
   const [email, setEmail] = useState('admin@rajtraders.com');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -635,14 +653,14 @@ function Products() {
     },
   ], []);
 
-  const rawProductsList = (adminProducts.data && adminProducts.data.length > 0)
-    ? adminProducts.data
-    : defaultProductsList;
-  const trashCount = rawProductsList.filter((item: any) => item.status === 'archived').length;
+  const rawProductsList: AdminProduct[] = (adminProducts.data && adminProducts.data.length > 0)
+    ? (adminProducts.data as AdminProduct[])
+    : (defaultProductsList as unknown as AdminProduct[]);
+  const trashCount = rawProductsList.filter((item: AdminProduct) => item.status === 'archived').length;
 
   const products = useMemo(
     () =>
-      rawProductsList.filter((item: any) => {
+      rawProductsList.filter((item: AdminProduct) => {
         const matchesSearch = `${item.name} ${item.category} ${item.slug}`.toLowerCase().includes(search.toLowerCase());
         if (!matchesSearch) return false;
 
@@ -660,7 +678,7 @@ function Products() {
     setDialog('create');
   };
 
-  const openEdit = (product: any) => {
+  const openEdit = (product: AdminProduct) => {
     setEditingId(product.id);
     setForm({
       name: product.name || '',
@@ -724,9 +742,9 @@ function Products() {
       client.invalidateQueries({ queryKey: getListAdminProductsQueryKey() });
       client.invalidateQueries({ queryKey: getListProductsQueryKey() });
       client.invalidateQueries({ queryKey: getGetAdminSummaryQueryKey() });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      const msg = typeof e?.message === 'string' ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : String(e);
       setNotice(`Failed to save product: ${msg}`);
     }
   };
@@ -750,7 +768,7 @@ function Products() {
     }
   };
 
-  const handleRestore = async (product: any) => {
+  const handleRestore = async (product: AdminProduct) => {
     try {
       await fetch(getApiUrl(`/api/v1/admin/products/${product.id}/restore`), {
         method: 'POST',
@@ -865,7 +883,7 @@ function Products() {
             <span>Status</span>
             <span className="text-right">Actions</span>
           </div>
-          {products.map((product: any) => {
+          {products.map((product: AdminProduct) => {
             const daysOld = Math.floor((Date.now() - new Date(product.deletedAt || product.updatedAt || Date.now()).getTime()) / (1000 * 60 * 60 * 24));
             const daysRemaining = Math.max(1, 30 - daysOld);
 
@@ -1349,8 +1367,9 @@ function StaffManagement() {
         const err = await res.json();
         setErrorMessage(err.error || 'Failed to create staff account.');
       }
-    } catch (e: any) {
-      setErrorMessage(e.message || 'Failed to create staff account.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to create staff account.';
+      setErrorMessage(msg);
     }
   };
 
@@ -1372,8 +1391,9 @@ function StaffManagement() {
         const err = await res.json();
         alert(err.error || 'Failed to remove staff member.');
       }
-    } catch (e: any) {
-      alert(e.message || 'Error executing delete request.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Error executing delete request.';
+      alert(msg);
     } finally {
       setDeleting(false);
     }
@@ -1663,7 +1683,7 @@ function StoreSettings() {
       });
       const data = await res.json();
       setTestEmailResult(data);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTestEmailResult({ success: false, error: 'Network error while triggering test email.' });
     } finally {
       setTestingProvider(null);
@@ -1724,7 +1744,7 @@ function StoreSettings() {
         const err = await res.json();
         setErrorMessage(err.error || 'Failed to update settings.');
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setErrorMessage('Network error while saving settings.');
     } finally {
       setSaving(false);
@@ -2251,14 +2271,14 @@ function Orders() {
 }
 
 function Discounts() {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<DiscountItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState<'create' | 'edit' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DiscountItem | null>(null);
 
   const [form, setForm] = useState({
     code: '',
@@ -2269,7 +2289,7 @@ function Discounts() {
     expiresAt: '',
   });
 
-  const defaultDiscounts = useMemo(
+  const defaultDiscounts: DiscountItem[] = useMemo(
     () => [
       { id: 'disc_wel10', code: 'WELCOME10', type: 'percentage', value: 10, minSpendCents: 5000, active: true, usageCount: 42, expiresAt: '2026-12-31' },
       { id: 'disc_fest20', code: 'FESTIVE20', type: 'percentage', value: 20, minSpendCents: 10000, active: true, usageCount: 19, expiresAt: '2026-11-15' },
@@ -2303,7 +2323,7 @@ function Discounts() {
     setDialog('create');
   };
 
-  const openEdit = (item: any) => {
+  const openEdit = (item: DiscountItem) => {
     setEditingId(item.id);
     setForm({
       code: item.code,
@@ -2694,11 +2714,16 @@ function App() {
   const [shopInfo, setShopInfo] = useState({ shopName: 'RAJ TRADERS', shopDomain: 'sundarvan.xyz' });
 
   const [staffToken, setStaffToken] = useState<string | null>(() => localStorage.getItem('raj_staff_token'));
-  const [staffUser, setStaffUser] = useState<any>(() => {
-    try { return JSON.parse(localStorage.getItem('raj_staff_user') || 'null'); } catch { return null; }
+  const [staffUser, setStaffUser] = useState<StaffUser | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('raj_staff_user') || 'null');
+    } catch {
+      localStorage.removeItem('raj_staff_user');
+      return null;
+    }
   });
 
-  const login = (token: string, user: any) => {
+  const login = (token: string, user: StaffUser) => {
     setStaffToken(token);
     setStaffUser(user);
     localStorage.setItem('raj_staff_token', token);

@@ -167,8 +167,8 @@ router.get("/v1/storefront/summary", async (_req, res): Promise<void> => {
     res.json(
       GetStorefrontSummaryResponse.parse({
         shopName,
-        featuredCount: products.filter((product: any) => product.featured).length,
-        categories: [...new Set(products.map((product: any) => product.category))],
+        featuredCount: products.filter((product) => product.featured).length,
+        categories: [...new Set(products.map((product) => product.category))],
         firstOrderOffer: policy?.offerCode ?? "WELCOME10",
         updatedAt: new Date().toISOString(),
       }),
@@ -310,7 +310,7 @@ router.get("/sitemap.xml", async (_req, res): Promise<void> => {
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const baseUrl = `https://${settings?.shopDomain || "sundarvan.xyz"}`;
 
-    const categories = [...new Set(products.map((p: any) => p.category))];
+    const categories = [...new Set(products.map((p) => p.category))];
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

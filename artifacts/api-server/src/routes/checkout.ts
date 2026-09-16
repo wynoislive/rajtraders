@@ -98,7 +98,7 @@ router.post("/validate-delivery", async (req: Request, res: Response) => {
         ? `Within delivery range: ${distanceKm} km (max ${settings.deliveryRadiusKm} km).`
         : `Out of delivery range: ${distanceKm} km away. Maximum delivery radius is ${settings.deliveryRadiusKm} km.`,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Error validating delivery address");
     res.status(500).json({ error: "Failed to validate delivery address." });
   }
@@ -115,7 +115,7 @@ router.get("/shop-info", async (_req: Request, res: Response) => {
       isDeliveryEnabled: settings.isDeliveryEnabled,
       razorpayKeyId: settings.razorpayKeyId,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: "Failed to load shop info." });
   }
 });
@@ -349,7 +349,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
 
         const rzpData = (await rzpResponse.json()) as { id: string };
         razorpayOrderId = rzpData.id;
-      } catch (err: any) {
+      } catch (err: unknown) {
         req.log.warn("Falling back to local generated Razorpay order ID for sandbox.");
         razorpayOrderId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       }
@@ -399,7 +399,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
       status: "created",
       idempotencyKey,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Error creating checkout order");
     res.status(500).json({ error: "Failed to initialize payment checkout." });
   }
@@ -508,7 +508,7 @@ router.post("/verify-payment", async (req: Request<{}, {}, VerifyPaymentBody>, r
       createdAt: order.createdAt,
       message: "Payment verified successfully.",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Error verifying payment");
     res.status(500).json({ error: "Failed to verify payment." });
   }
@@ -533,7 +533,7 @@ router.get("/orders", async (req: Request, res: Response) => {
 
     const filtered = filterOrders(userOrders, req.query);
     res.status(200).json(filtered);
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Error listing orders");
     res.status(500).json({ error: "Failed to load order history." });
   }
@@ -578,7 +578,7 @@ router.post("/orders/:id/cancel", async (req: Request, res: Response) => {
       status: "cancelled",
       message: "Order has been cancelled.",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Error cancelling order");
     res.status(500).json({ error: "Failed to cancel order." });
   }

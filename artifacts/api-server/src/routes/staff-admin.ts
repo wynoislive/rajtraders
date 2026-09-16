@@ -118,9 +118,9 @@ router.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodySc
     }
 
     let userPermissions: string[] = [];
-    if ((staff as any).permissions) {
+    if (staff.permissions) {
       try {
-        userPermissions = JSON.parse((staff as any).permissions);
+        userPermissions = JSON.parse(staff.permissions);
       } catch {
         userPermissions = getDefaultPermissions(staff.role);
       }
@@ -155,7 +155,7 @@ router.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodySc
       token,
       staff: session,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Staff login error");
     res.status(500).json({ error: "Authentication failed." });
   }
@@ -167,14 +167,9 @@ router.use(requireAdmin);
 // 2. List All Staff (Main Admin & Admin)
 router.get("/staff", async (req: Request, res: Response) => {
   try {
-    // Purge any legacy starter admin
-    await db.delete(adminUsersTable).where(eq(adminUsersTable.email, "admin@harborlane.shop"));
-
     const list = await db.select().from(adminUsersTable);
 
-    const formatted = list
-      .filter((u: any) => u.email !== "admin@harborlane.shop")
-      .map((u: any) => {
+    const formatted = list.map((u) => {
         const isExpired = u.expiresAt ? new Date(u.expiresAt).getTime() < Date.now() : false;
         let perms: string[] = [];
         if (u.permissions) {
@@ -201,7 +196,8 @@ router.get("/staff", async (req: Request, res: Response) => {
       });
 
     res.status(200).json(formatted);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    req.log.error({ err }, "Error fetching staff list");
     res.status(500).json({ error: "Failed to load staff members." });
   }
 });
@@ -216,57 +212,55 @@ router.post("/staff", validate({ body: CreateStaffBodySchema }), async (req: Req
     return;
   }
 
-  const { name, email, password, role, permissions, expiresAtHours, expiresAtDate } = req.body;
+  const { email, password, name, role, permissions, expiresAtHours, expiresAtDate } = req.body;
   const cleanEmail = email.trim().toLowerCase();
 
   try {
     const existing = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, cleanEmail)).limit(1);
     if (existing.length > 0) {
-      res.status(400).json({ error: "A staff account with this email already exists." });
+      res.status(400).json({ error: "A staff account with this email address already exists." });
       return;
     }
 
     let expirationDate: Date | null = null;
-    if (expiresAtHours && typeof expiresAtHours === "number") {
+    if (expiresAtHours) {
       expirationDate = new Date(Date.now() + expiresAtHours * 60 * 60 * 1000);
-    } else if (expiresAtDate && typeof expiresAtDate === "string") {
-      const parsed = new Date(expiresAtDate);
-      if (!isNaN(parsed.getTime())) expirationDate = parsed;
+    } else if (expiresAtDate) {
+      expirationDate = new Date(expiresAtDate);
     }
 
-    const id = randomUUID();
-    const passwordHash = hashPassword(password);
     const assignedPermissions = Array.isArray(permissions) && permissions.length > 0
       ? permissions
       : getDefaultPermissions(role);
 
-    await db.insert(adminUsersTable).values({
-      id,
-      name: name.trim(),
-      email: cleanEmail,
-      passwordHash,
-      role: role as AdminRole,
-      permissions: JSON.stringify(assignedPermissions),
-      expiresAt: expirationDate,
-      active: true,
-      createdBy: currentStaff?.userId || "main_admin_01",
-    });
-
-    req.log.info({ id, email: cleanEmail, role, expiresAt: expirationDate }, "Created new staff member");
+    const [created] = await db
+      .insert(adminUsersTable)
+      .values({
+        email: cleanEmail,
+        passwordHash: hashPassword(password),
+        name: name.trim(),
+        role: role as AdminRole,
+        permissions: JSON.stringify(assignedPermissions),
+        active: true,
+        expiresAt: expirationDate,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
 
     res.status(201).json({
       success: true,
-      message: `Staff account created with role ${role}.`,
+      message: "Staff member created successfully.",
       staff: {
-        id,
-        name: name.trim(),
-        email: cleanEmail,
-        role,
+        id: created.id,
+        name: created.name,
+        email: created.email,
+        role: created.role,
         permissions: assignedPermissions,
         expiresAt: expirationDate ? expirationDate.toISOString() : null,
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Create staff error");
     res.status(500).json({ error: "Failed to create staff account." });
   }
@@ -286,7 +280,7 @@ router.put("/staff/:id", validate({ body: UpdateStaffBodySchema }), async (req: 
   const { role, permissions, active, expiresAtDate, expiresAtHours } = req.body;
 
   try {
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
@@ -303,7 +297,8 @@ router.put("/staff/:id", validate({ body: UpdateStaffBodySchema }), async (req: 
     await db.update(adminUsersTable).set(updateData).where(eq(adminUsersTable.id, id));
 
     res.status(200).json({ success: true, message: "Staff account updated successfully." });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    req.log.error({ err }, "Update staff error");
     res.status(500).json({ error: "Failed to update staff account." });
   }
 });
@@ -337,7 +332,8 @@ router.delete("/staff/:id", async (req: Request, res: Response) => {
 
     await db.delete(adminUsersTable).where(eq(adminUsersTable.id, id));
     res.status(200).json({ success: true, message: "Staff account deleted successfully." });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    req.log.error({ err }, "Delete staff error");
     res.status(500).json({ error: "Failed to delete staff account." });
   }
 });

@@ -388,7 +388,7 @@ export async function ensureDbReady(): Promise<any> {
           if (dbInstance) await syncEnvToShopSettings(dbInstance);
         }
         isInitialized = true;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("ensureDbReady error:", err);
       }
       return dbInstance;

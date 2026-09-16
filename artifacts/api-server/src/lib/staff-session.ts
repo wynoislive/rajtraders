@@ -55,6 +55,8 @@ export async function getStaffFromToken(token?: string): Promise<StaffSession | 
         }
         return session;
       } catch {
+        // Corrupted session payload: purge key immediately to protect state
+        await redis.del(`session:staff:${clean}`);
         // Fallthrough to memory fallback
       }
     }

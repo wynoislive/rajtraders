@@ -44,7 +44,7 @@ router.post("/storage/upload", async (req: Request, res: Response) => {
       key: uniqueKey,
       storage: "CDN Storage (Cloudflare R2 ready)",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Image upload error");
     res.status(500).json({ error: "Failed to process photo upload." });
   }
