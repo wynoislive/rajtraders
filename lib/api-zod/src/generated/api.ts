@@ -45,9 +45,16 @@ export const ListProductsResponseItem = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(listProductsResponseInventoryMin),
+  "prepTimeMinutes": zod.number().optional(),
+  "isBestseller": zod.boolean().optional(),
+  "isVeg": zod.boolean().optional(),
+  "gstRatePercentage": zod.number().optional(),
+  "hsnCode": zod.string().nullish(),
+  "approvalStatus": zod.string().optional(),
+  "deletedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).passthrough()
 export const ListProductsResponse = zod.array(ListProductsResponseItem)
 
 
@@ -78,9 +85,16 @@ export const GetProductResponse = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(getProductResponseInventoryMin),
+  "prepTimeMinutes": zod.number().optional(),
+  "isBestseller": zod.boolean().optional(),
+  "isVeg": zod.boolean().optional(),
+  "gstRatePercentage": zod.number().optional(),
+  "hsnCode": zod.string().nullish(),
+  "approvalStatus": zod.string().optional(),
+  "deletedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).passthrough()
 
 
 /**
@@ -198,9 +212,16 @@ export const ListAdminProductsResponseItem = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(listAdminProductsResponseInventoryMin),
+  "prepTimeMinutes": zod.number().optional(),
+  "isBestseller": zod.boolean().optional(),
+  "isVeg": zod.boolean().optional(),
+  "gstRatePercentage": zod.number().optional(),
+  "hsnCode": zod.string().nullish(),
+  "approvalStatus": zod.string().optional(),
+  "deletedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).passthrough()
 export const ListAdminProductsResponse = zod.array(ListAdminProductsResponseItem)
 
 
@@ -225,8 +246,13 @@ export const CreateProductBody = zod.object({
   "imageUrl": zod.string(),
   "status": zod.enum(['active', 'draft']).optional(),
   "featured": zod.boolean().optional(),
-  "inventory": zod.number().min(createProductBodyInventoryMin)
-})
+  "inventory": zod.number().min(createProductBodyInventoryMin),
+  "prepTimeMinutes": zod.number().optional(),
+  "isBestseller": zod.boolean().optional(),
+  "isVeg": zod.boolean().optional(),
+  "gstRatePercentage": zod.number().optional(),
+  "hsnCode": zod.string().nullish(),
+}).passthrough()
 
 export const createProductResponsePriceCentsMin = 0;
 
@@ -248,9 +274,16 @@ export const CreateProductResponse = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(createProductResponseInventoryMin),
+  "prepTimeMinutes": zod.number().optional(),
+  "isBestseller": zod.boolean().optional(),
+  "isVeg": zod.boolean().optional(),
+  "gstRatePercentage": zod.number().optional(),
+  "hsnCode": zod.string().nullish(),
+  "approvalStatus": zod.string().optional(),
+  "deletedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).passthrough()
 
 
 /**
@@ -278,8 +311,13 @@ export const UpdateProductBody = zod.object({
   "imageUrl": zod.string().optional(),
   "status": zod.enum(['active', 'draft', 'archived']).optional(),
   "featured": zod.boolean().optional(),
-  "inventory": zod.number().min(updateProductBodyInventoryMin).optional()
-})
+  "inventory": zod.number().min(updateProductBodyInventoryMin).optional(),
+  "prepTimeMinutes": zod.number().optional(),
+  "isBestseller": zod.boolean().optional(),
+  "isVeg": zod.boolean().optional(),
+  "gstRatePercentage": zod.number().optional(),
+  "hsnCode": zod.string().nullish(),
+}).passthrough()
 
 export const updateProductResponsePriceCentsMin = 0;
 
@@ -301,9 +339,16 @@ export const UpdateProductResponse = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(updateProductResponseInventoryMin),
+  "prepTimeMinutes": zod.number().optional(),
+  "isBestseller": zod.boolean().optional(),
+  "isVeg": zod.boolean().optional(),
+  "gstRatePercentage": zod.number().optional(),
+  "hsnCode": zod.string().nullish(),
+  "approvalStatus": zod.string().optional(),
+  "deletedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-})
+}).passthrough()
 
 
 /**

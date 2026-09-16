@@ -170,7 +170,7 @@ router.get("/staff", async (req: Request, res: Response) => {
   try {
     const list = await db.select().from(adminUsersTable);
 
-    const formatted = list.map((u) => {
+    const formatted = list.map((u: any) => {
         const isExpired = u.expiresAt ? new Date(u.expiresAt).getTime() < Date.now() : false;
         let perms: string[] = [];
         if (u.permissions) {

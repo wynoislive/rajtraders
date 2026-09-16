@@ -242271,9 +242271,16 @@ var ListProductsResponseItem = objectType({
   "status": enumType(["active", "draft", "archived"]),
   "featured": booleanType(),
   "inventory": numberType().min(listProductsResponseInventoryMin),
+  "prepTimeMinutes": numberType().optional(),
+  "isBestseller": booleanType().optional(),
+  "isVeg": booleanType().optional(),
+  "gstRatePercentage": numberType().optional(),
+  "hsnCode": stringType().nullish(),
+  "approvalStatus": stringType().optional(),
+  "deletedAt": stringType().nullish(),
   "createdAt": stringType(),
   "updatedAt": stringType()
-});
+}).passthrough();
 var ListProductsResponse = arrayType(ListProductsResponseItem);
 var GetProductParams = objectType({
   "productId": coerce.string()
@@ -242293,9 +242300,16 @@ var GetProductResponse = objectType({
   "status": enumType(["active", "draft", "archived"]),
   "featured": booleanType(),
   "inventory": numberType().min(getProductResponseInventoryMin),
+  "prepTimeMinutes": numberType().optional(),
+  "isBestseller": booleanType().optional(),
+  "isVeg": booleanType().optional(),
+  "gstRatePercentage": numberType().optional(),
+  "hsnCode": stringType().nullish(),
+  "approvalStatus": stringType().optional(),
+  "deletedAt": stringType().nullish(),
   "createdAt": stringType(),
   "updatedAt": stringType()
-});
+}).passthrough();
 var GetStorefrontSummaryResponse = objectType({
   "shopName": stringType(),
   "featuredCount": numberType(),
@@ -242362,9 +242376,16 @@ var ListAdminProductsResponseItem = objectType({
   "status": enumType(["active", "draft", "archived"]),
   "featured": booleanType(),
   "inventory": numberType().min(listAdminProductsResponseInventoryMin),
+  "prepTimeMinutes": numberType().optional(),
+  "isBestseller": booleanType().optional(),
+  "isVeg": booleanType().optional(),
+  "gstRatePercentage": numberType().optional(),
+  "hsnCode": stringType().nullish(),
+  "approvalStatus": stringType().optional(),
+  "deletedAt": stringType().nullish(),
   "createdAt": stringType(),
   "updatedAt": stringType()
-});
+}).passthrough();
 var ListAdminProductsResponse = arrayType(ListAdminProductsResponseItem);
 var createProductBodyPriceCentsMin = 0;
 var createProductBodyCompareAtPriceCentsMin = 0;
@@ -242378,8 +242399,13 @@ var CreateProductBody = objectType({
   "imageUrl": stringType(),
   "status": enumType(["active", "draft"]).optional(),
   "featured": booleanType().optional(),
-  "inventory": numberType().min(createProductBodyInventoryMin)
-});
+  "inventory": numberType().min(createProductBodyInventoryMin),
+  "prepTimeMinutes": numberType().optional(),
+  "isBestseller": booleanType().optional(),
+  "isVeg": booleanType().optional(),
+  "gstRatePercentage": numberType().optional(),
+  "hsnCode": stringType().nullish()
+}).passthrough();
 var createProductResponsePriceCentsMin = 0;
 var createProductResponseCompareAtPriceCentsMin = 0;
 var createProductResponseInventoryMin = 0;
@@ -242395,9 +242421,16 @@ var CreateProductResponse = objectType({
   "status": enumType(["active", "draft", "archived"]),
   "featured": booleanType(),
   "inventory": numberType().min(createProductResponseInventoryMin),
+  "prepTimeMinutes": numberType().optional(),
+  "isBestseller": booleanType().optional(),
+  "isVeg": booleanType().optional(),
+  "gstRatePercentage": numberType().optional(),
+  "hsnCode": stringType().nullish(),
+  "approvalStatus": stringType().optional(),
+  "deletedAt": stringType().nullish(),
   "createdAt": stringType(),
   "updatedAt": stringType()
-});
+}).passthrough();
 var UpdateProductParams = objectType({
   "productId": coerce.string()
 });
@@ -242413,8 +242446,13 @@ var UpdateProductBody = objectType({
   "imageUrl": stringType().optional(),
   "status": enumType(["active", "draft", "archived"]).optional(),
   "featured": booleanType().optional(),
-  "inventory": numberType().min(updateProductBodyInventoryMin).optional()
-});
+  "inventory": numberType().min(updateProductBodyInventoryMin).optional(),
+  "prepTimeMinutes": numberType().optional(),
+  "isBestseller": booleanType().optional(),
+  "isVeg": booleanType().optional(),
+  "gstRatePercentage": numberType().optional(),
+  "hsnCode": stringType().nullish()
+}).passthrough();
 var updateProductResponsePriceCentsMin = 0;
 var updateProductResponseCompareAtPriceCentsMin = 0;
 var updateProductResponseInventoryMin = 0;
@@ -242430,9 +242468,16 @@ var UpdateProductResponse = objectType({
   "status": enumType(["active", "draft", "archived"]),
   "featured": booleanType(),
   "inventory": numberType().min(updateProductResponseInventoryMin),
+  "prepTimeMinutes": numberType().optional(),
+  "isBestseller": booleanType().optional(),
+  "isVeg": booleanType().optional(),
+  "gstRatePercentage": numberType().optional(),
+  "hsnCode": stringType().nullish(),
+  "approvalStatus": stringType().optional(),
+  "deletedAt": stringType().nullish(),
   "createdAt": stringType(),
   "updatedAt": stringType()
-});
+}).passthrough();
 var ArchiveProductParams = objectType({
   "productId": coerce.string()
 });
@@ -251229,7 +251274,7 @@ router2.get("/sitemap.xml", async (_req, res) => {
   </url>
   ${categories.map((cat) => `
   <url>
-    <loc>${baseUrl}/?category=${encodeURIComponent(cat)}</loc>
+    <loc>${baseUrl}/?category=${encodeURIComponent(String(cat))}</loc>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>`).join("")}
@@ -277171,7 +277216,7 @@ router4.post("/v1/admin/products", requirePermission("products"), async (req, re
 });
 var handleUpdateProduct = async (req, res) => {
   const staff = await getStaffFromToken(req.headers.authorization);
-  const { productId } = req.params;
+  const productId = String(req.params.productId);
   const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
   const isSubAdminOrMod = staff && (staff.role === "SUB_ADMIN" || staff.role === "MODERATOR");
   try {
@@ -277180,7 +277225,6 @@ var handleUpdateProduct = async (req, res) => {
     };
     if (name) {
       updateData.name = name.trim();
-      updateData.slug = slugify(name);
     }
     if (description !== void 0) updateData.description = description.trim();
     if (priceCents !== void 0) updateData.priceCents = Math.round(Number(priceCents));
@@ -277211,30 +277255,15 @@ var handleUpdateProduct = async (req, res) => {
     }
     res.json(productResponse2(updated));
   } catch (err) {
-    res.json({
-      id: productId,
-      name: name || "Updated Product",
-      slug: name ? slugify(name) : "updated-product",
-      description: description || "Updated product description",
-      priceCents: priceCents || 5e3,
-      category: category || "General",
-      imageUrl: imageUrl || "https://images.unsplash.com/photo-1596755389378-c31d21fd1273",
-      status: status || "active",
-      featured: Boolean(featured),
-      inventory: inventory || 10,
-      prepTimeMinutes: prepTimeMinutes || 30,
-      isBestseller: Boolean(isBestseller),
-      isVeg: isVeg !== false,
-      approvalStatus: "approved",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("ADMIN UPDATE PRODUCT ERROR:", err);
+    res.status(500).json({ error: "Failed to update product: " + msg });
   }
 };
 router4.patch("/v1/admin/products/:productId", requirePermission("products"), handleUpdateProduct);
 router4.put("/v1/admin/products/:productId", requirePermission("products"), handleUpdateProduct);
 router4.delete("/v1/admin/products/:productId", requirePermission("products"), async (req, res) => {
-  const { productId } = req.params;
+  const productId = String(req.params.productId);
   try {
     await db.update(productsTable).set({ status: "archived", deletedAt: /* @__PURE__ */ new Date() }).where(eq(productsTable.id, productId));
   } catch (err) {
@@ -279389,7 +279418,7 @@ router5.put("/addresses/:id", async (req, res) => {
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const { id } = req.params;
+  const id = String(req.params.id);
   const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req.body;
   try {
     const existing = await db.select().from(customerAddressesTable).where(and(eq(customerAddressesTable.id, id), eq(customerAddressesTable.userId, userId))).limit(1);

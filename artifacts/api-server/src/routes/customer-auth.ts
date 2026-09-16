@@ -926,7 +926,7 @@ router.post("/addresses", async (req: Request, res: Response) => {
 router.put("/addresses/:id", async (req: Request, res: Response) => {
   const userId = await getUserIdFromToken(req.headers.authorization);
   if (!userId) { res.status(401).json({ error: "Unauthorized." }); return; }
-  const { id } = req.params;
+  const id = String(req.params.id);
   const { label, fullAddress, houseNumber, buildingSociety, landmark, pincode, city, state, latitude, longitude, deliveryInstructions, isDefault } = req.body;
 
   try {

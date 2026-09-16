@@ -1128,7 +1128,7 @@ function ProductDialog({ open, mode, form, setForm, busy, onClose, onSubmit }: {
             <input type="checkbox" checked={form.isBestseller} onChange={(e) => update('isBestseller', e.target.checked)} className="size-4 accent-[hsl(var(--primary))]" /> ⭐ Bestseller Badge
           </label>
           <label className="flex items-center gap-2 text-xs font-extrabold">
-            <input type="checkbox" checked={form.isVeg !== false} onChange={(e) => update('isVeg', e.target.checked)} className="size-4 accent-[hsl(var(--primary))]" /> 🟢 100% Veg Product
+            <input type="checkbox" checked={Boolean(form.isVeg)} onChange={(e) => update('isVeg', e.target.checked)} className="size-4 accent-[hsl(var(--primary))]" /> 🟢 100% Veg Product
           </label>
         </div>
       </div>

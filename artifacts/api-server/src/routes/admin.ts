@@ -153,20 +153,20 @@ router.get("/v1/admin/summary", async (_req, res): Promise<void> => {
       db.select().from(registrationClaimsTable),
       db.select().from(registrationPoliciesTable),
     ]);
-    const activeDiscounts = discounts.filter((discount) => {
+    const activeDiscounts = discounts.filter((discount: any) => {
       const now = Date.now();
       const startsAtMs = discount.startsAt ? new Date(discount.startsAt).getTime() : 0;
       const expiresAtMs = discount.expiresAt ? new Date(discount.expiresAt).getTime() : null;
       return discount.active && startsAtMs <= now && (!expiresAtMs || expiresAtMs >= now);
     });
     const recentActivity = [
-      ...products.map((product) => ({
+      ...products.map((product: any) => ({
         id: `product-${product.id}`,
         label: product.approvalStatus === "pending_approval" ? "Product pending approval" : "Product in catalog",
         detail: `${product.name} (${product.prepTimeMinutes}m prep)`,
         timestamp: iso(product.updatedAt) as string,
       })),
-      ...discounts.map((discount) => ({
+      ...discounts.map((discount: any) => ({
         id: `discount-${discount.id}`,
         label: "Discount configured",
         detail: discount.code,
@@ -179,11 +179,11 @@ router.get("/v1/admin/summary", async (_req, res): Promise<void> => {
 
     res.json(
       GetAdminSummaryResponse.parse({
-        activeProducts: products.filter((product) => product.status === "active" && product.approvalStatus === "approved").length,
-        draftProducts: products.filter((product) => product.status === "draft" || product.approvalStatus === "pending_approval").length,
+        activeProducts: products.filter((product: any) => product.status === "active" && product.approvalStatus === "approved").length,
+        draftProducts: products.filter((product: any) => product.status === "draft" || product.approvalStatus === "pending_approval").length,
         liveDiscounts: activeDiscounts.length,
         firstOrderRegistrations: claims.length,
-        inventoryValueCents: products.reduce((total: number, product) => total + (product.priceCents || 0) * (product.inventory || 0), 0),
+        inventoryValueCents: products.reduce((total: number, product: any) => total + (product.priceCents || 0) * (product.inventory || 0), 0),
         recentActivity,
         policies,
       }),
@@ -273,7 +273,7 @@ router.post("/v1/admin/products", requirePermission("products"), async (req, res
 
 const handleUpdateProduct = async (req: Request, res: Response): Promise<void> => {
   const staff = await getStaffFromToken(req.headers.authorization);
-  const { productId } = req.params;
+  const productId = String(req.params.productId);
   const { name, description, priceCents, compareAtPriceCents, category, imageUrl, status, featured, inventory, prepTimeMinutes, isBestseller, isVeg } = req.body;
 
   const isSubAdminOrMod = staff && (staff.role === "SUB_ADMIN" || staff.role === "MODERATOR");
@@ -285,7 +285,6 @@ const handleUpdateProduct = async (req: Request, res: Response): Promise<void> =
 
     if (name) {
       updateData.name = name.trim();
-      updateData.slug = slugify(name);
     }
     if (description !== undefined) updateData.description = description.trim();
     if (priceCents !== undefined) updateData.priceCents = Math.round(Number(priceCents));
@@ -325,24 +324,9 @@ const handleUpdateProduct = async (req: Request, res: Response): Promise<void> =
 
     res.json(productResponse(updated));
   } catch (err: unknown) {
-    res.json({
-      id: productId,
-      name: name || "Updated Product",
-      slug: name ? slugify(name) : "updated-product",
-      description: description || "Updated product description",
-      priceCents: priceCents || 5000,
-      category: category || "General",
-      imageUrl: imageUrl || "https://images.unsplash.com/photo-1596755389378-c31d21fd1273",
-      status: status || "active",
-      featured: Boolean(featured),
-      inventory: inventory || 10,
-      prepTimeMinutes: prepTimeMinutes || 30,
-      isBestseller: Boolean(isBestseller),
-      isVeg: isVeg !== false,
-      approvalStatus: "approved",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("ADMIN UPDATE PRODUCT ERROR:", err);
+    res.status(500).json({ error: "Failed to update product: " + msg });
   }
 };
 
@@ -350,7 +334,7 @@ router.patch("/v1/admin/products/:productId", requirePermission("products"), han
 router.put("/v1/admin/products/:productId", requirePermission("products"), handleUpdateProduct);
 
 router.delete("/v1/admin/products/:productId", requirePermission("products"), async (req, res): Promise<void> => {
-  const { productId } = req.params;
+  const productId = String(req.params.productId);
   try {
     await db
       .update(productsTable)

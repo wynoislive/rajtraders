@@ -36,6 +36,13 @@ export interface Product {
   featured: boolean;
   /** @minimum 0 */
   inventory: number;
+  prepTimeMinutes?: number;
+  isBestseller?: boolean;
+  isVeg?: boolean;
+  gstRatePercentage?: number;
+  hsnCode?: string | null;
+  approvalStatus?: string;
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +72,11 @@ export interface ProductInput {
   featured?: boolean;
   /** @minimum 0 */
   inventory: number;
+  prepTimeMinutes?: number;
+  isBestseller?: boolean;
+  isVeg?: boolean;
+  gstRatePercentage?: number;
+  hsnCode?: string | null;
 }
 
 export type ProductUpdateStatus = typeof ProductUpdateStatus[keyof typeof ProductUpdateStatus];
@@ -93,6 +105,12 @@ export interface ProductUpdate {
   featured?: boolean;
   /** @minimum 0 */
   inventory?: number;
+  prepTimeMinutes?: number;
+  isBestseller?: boolean;
+  isVeg?: boolean;
+  gstRatePercentage?: number;
+  hsnCode?: string | null;
+  approvalStatus?: string;
 }
 
 export type DiscountType = typeof DiscountType[keyof typeof DiscountType];
