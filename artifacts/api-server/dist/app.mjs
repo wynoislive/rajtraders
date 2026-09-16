@@ -250620,7 +250620,7 @@ VALUES (
   'MAIN_ADMIN',
   true
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (email) DO NOTHING;
 
 
 -- New Customer Tables
@@ -251038,42 +251038,7 @@ router2.get("/v1/products", async (req, res) => {
       const fallbackProducts = await db.select().from(productsTable).where(eq(productsTable.status, "active"));
       res.json(ListProductsResponse.parse(fallbackProducts.map(productResponse)));
     } catch (fallbackErr) {
-      res.json([
-        {
-          id: "prod_1",
-          name: "Harbor Linen Overshirt",
-          slug: "harbor-linen-overshirt",
-          description: "A breathable everyday layer with a relaxed cut and soft washed finish.",
-          priceCents: 8900,
-          compareAtPriceCents: 12e3,
-          category: "Apparel",
-          imageUrl: "https://images.unsplash.com/photo-1596755389378-c31d21fd1273?auto=format&fit=crop&w=900&q=80",
-          status: "active",
-          featured: true,
-          inventory: 24,
-          prepTimeMinutes: 30,
-          approvalStatus: "approved",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        },
-        {
-          id: "prod_2",
-          name: "Stoneware Pour-Over Set",
-          slug: "stoneware-pour-over-set",
-          description: "Hand-finished stoneware for slow mornings and generous pours.",
-          priceCents: 5400,
-          compareAtPriceCents: null,
-          category: "Home",
-          imageUrl: "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=900&q=80",
-          status: "active",
-          featured: true,
-          inventory: 12,
-          prepTimeMinutes: 30,
-          approvalStatus: "approved",
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }
-      ]);
+      res.json([]);
     }
   }
 });
@@ -277157,46 +277122,8 @@ router4.get("/v1/admin/products", async (req, res) => {
     const products = await db.select().from(productsTable).where(search ? ilike(productsTable.name, `%${search}%`) : void 0).orderBy(desc(productsTable.updatedAt));
     res.json(ListAdminProductsResponse.parse(products.map(productResponse2)));
   } catch (err) {
-    res.json([
-      {
-        id: "prod_1",
-        name: "Harbor Linen Overshirt",
-        slug: "harbor-linen-overshirt",
-        description: "A breathable everyday layer with a relaxed cut and soft washed finish.",
-        priceCents: 8900,
-        compareAtPriceCents: 12e3,
-        category: "Apparel",
-        imageUrl: "https://images.unsplash.com/photo-1596755389378-c31d21fd1273?auto=format&fit=crop&w=900&q=80",
-        status: "active",
-        featured: true,
-        inventory: 24,
-        prepTimeMinutes: 30,
-        isBestseller: false,
-        isVeg: true,
-        approvalStatus: "approved",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      },
-      {
-        id: "prod_2",
-        name: "Stoneware Pour-Over Set",
-        slug: "stoneware-pour-over-set",
-        description: "Hand-finished stoneware for slow mornings and generous pours.",
-        priceCents: 5400,
-        compareAtPriceCents: null,
-        category: "Home",
-        imageUrl: "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=900&q=80",
-        status: "active",
-        featured: true,
-        inventory: 12,
-        prepTimeMinutes: 30,
-        isBestseller: false,
-        isVeg: true,
-        approvalStatus: "approved",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-      }
-    ]);
+    console.error("ADMIN GET PRODUCTS CAUGHT ERROR:", err);
+    res.json([]);
   }
 });
 router4.post("/v1/admin/products", requirePermission("products"), async (req, res) => {

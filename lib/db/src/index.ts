@@ -200,7 +200,7 @@ VALUES (
   'MAIN_ADMIN',
   true
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (email) DO NOTHING;
 
 
 -- New Customer Tables

@@ -536,9 +536,9 @@ function Overview() {
     firstOrderRegistrations: 28,
     inventoryValueCents: 1800000,
     recentActivity: [
-      { id: '1', label: 'Catalog Engine Active', detail: 'Harbor Linen Overshirt updated in master inventory', timestamp: new Date().toISOString() },
+      { id: '1', label: 'Catalog Engine Active', detail: 'Master bakery catalog synchronized with cloud database', timestamp: new Date().toISOString() },
       { id: '2', label: 'Welcome Policy Live', detail: 'WELCOME10 offer code verified for new registrants', timestamp: new Date(Date.now() - 3600000).toISOString() },
-      { id: '3', label: 'Haversine Radius Active', detail: 'Store geofence set to 15km anchor radius', timestamp: new Date(Date.now() - 7200000).toISOString() },
+      { id: '3', label: 'Local Delivery Fleet', detail: 'Store delivery active for Pali service area', timestamp: new Date(Date.now() - 7200000).toISOString() },
     ]
   };
   const data = summary.data || defaultSummary;
@@ -546,7 +546,7 @@ function Overview() {
 
   const defaultStorefront = {
     featuredCount: 4,
-    categories: ['Shirts', 'Tops', 'Pants', 'Outerwear'],
+    categories: ['Cakes & Desserts', 'Party Decorations', 'Custom Orders', 'Bakery Delights'],
     firstOrderOffer: 'WELCOME10',
     updatedAt: new Date().toISOString()
   };
