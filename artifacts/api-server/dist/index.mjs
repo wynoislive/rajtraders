@@ -123482,11 +123482,11 @@ __export(schema_exports, {
 });
 
 // lib/db/src/schema/products.ts
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID } from "node:crypto";
 var productsTable = pgTable(
   "products",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID2),
+    id: text("id").primaryKey().$defaultFn(randomUUID),
     name: text("name").notNull(),
     slug: text("slug").notNull().unique(),
     description: text("description").notNull(),
@@ -123517,9 +123517,9 @@ var productsTable = pgTable(
 );
 
 // lib/db/src/schema/discounts.ts
-import { randomUUID as randomUUID3 } from "node:crypto";
+import { randomUUID as randomUUID2 } from "node:crypto";
 var discountsTable = pgTable("discounts", {
-  id: text("id").primaryKey().$defaultFn(randomUUID3),
+  id: text("id").primaryKey().$defaultFn(randomUUID2),
   code: text("code").notNull().unique(),
   type: text("type").notNull().default("percentage"),
   value: real("value").notNull(),
@@ -123533,9 +123533,9 @@ var discountsTable = pgTable("discounts", {
 });
 
 // lib/db/src/schema/registrations.ts
-import { randomUUID as randomUUID4 } from "node:crypto";
+import { randomUUID as randomUUID3 } from "node:crypto";
 var registrationPoliciesTable = pgTable("registration_policies", {
-  id: text("id").primaryKey().$defaultFn(randomUUID4),
+  id: text("id").primaryKey().$defaultFn(randomUUID3),
   name: text("name").notNull(),
   description: text("description").notNull(),
   offerCode: text("offer_code").notNull(),
@@ -123546,20 +123546,20 @@ var registrationPoliciesTable = pgTable("registration_policies", {
 });
 
 // lib/db/src/schema/registration-claims.ts
-import { randomUUID as randomUUID5 } from "node:crypto";
+import { randomUUID as randomUUID4 } from "node:crypto";
 var registrationClaimsTable = pgTable("registration_claims", {
-  id: text("id").primaryKey().$defaultFn(randomUUID5),
+  id: text("id").primaryKey().$defaultFn(randomUUID4),
   email: text("email").notNull().unique(),
   policyId: text("policy_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
 // lib/db/src/schema/orders.ts
-import { randomUUID as randomUUID6 } from "node:crypto";
+import { randomUUID as randomUUID5 } from "node:crypto";
 var ordersTable = pgTable(
   "orders",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID6),
+    id: text("id").primaryKey().$defaultFn(randomUUID5),
     idempotencyKey: text("idempotency_key").notNull().unique(),
     razorpayOrderId: text("razorpay_order_id").notNull().unique(),
     razorpayPaymentId: text("razorpay_payment_id"),
@@ -123589,9 +123589,9 @@ var ordersTable = pgTable(
 );
 
 // lib/db/src/schema/users.ts
-import { randomUUID as randomUUID7 } from "node:crypto";
+import { randomUUID as randomUUID6 } from "node:crypto";
 var usersTable = pgTable("users", {
-  id: text("id").primaryKey().$defaultFn(randomUUID7),
+  id: text("id").primaryKey().$defaultFn(randomUUID6),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   mobileNumber: text("mobile_number").notNull().unique(),
@@ -123659,10 +123659,10 @@ var shopSettingsTable = pgTable("shop_settings", {
 });
 
 // lib/db/src/schema/admin-users.ts
-import { randomUUID as randomUUID8 } from "node:crypto";
+import { randomUUID as randomUUID7 } from "node:crypto";
 var adminRoles = ["MAIN_ADMIN", "ADMIN", "SUB_ADMIN", "MODERATOR"];
 var adminUsersTable = pgTable("admin_users", {
-  id: text("id").primaryKey().$defaultFn(randomUUID8),
+  id: text("id").primaryKey().$defaultFn(randomUUID7),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
@@ -123677,11 +123677,11 @@ var adminUsersTable = pgTable("admin_users", {
 });
 
 // lib/db/src/schema/security-compliance.ts
-import { randomUUID as randomUUID9 } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 var deletedAccountsLogTable = pgTable(
   "deleted_accounts_log",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID9),
+    id: text("id").primaryKey().$defaultFn(randomUUID8),
     email: text("email").notNull(),
     mobileNumber: text("mobile_number").notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }).notNull().defaultNow(),
@@ -123695,7 +123695,7 @@ var deletedAccountsLogTable = pgTable(
 var passwordResetsTable = pgTable(
   "password_resets",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID9),
+    id: text("id").primaryKey().$defaultFn(randomUUID8),
     userId: text("user_id").notNull(),
     email: text("email").notNull(),
     tokenHash: text("token_hash").notNull(),
@@ -123710,7 +123710,7 @@ var passwordResetsTable = pgTable(
   ]
 );
 var passwordLockoutsTable = pgTable("password_lockouts", {
-  id: text("id").primaryKey().$defaultFn(randomUUID9),
+  id: text("id").primaryKey().$defaultFn(randomUUID8),
   email: text("email").notNull().unique(),
   lockedUntil: timestamp("locked_until", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
@@ -123718,7 +123718,7 @@ var passwordLockoutsTable = pgTable("password_lockouts", {
 var emailVerificationsTable = pgTable(
   "email_verifications",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID9),
+    id: text("id").primaryKey().$defaultFn(randomUUID8),
     userId: text("user_id").notNull(),
     email: text("email").notNull(),
     otpCode: text("otp_code").notNull(),
@@ -123735,11 +123735,11 @@ var emailVerificationsTable = pgTable(
 );
 
 // lib/db/src/schema/totp-secrets.ts
-import { randomUUID as randomUUID10 } from "node:crypto";
+import { randomUUID as randomUUID9 } from "node:crypto";
 var totpSecretsTable = pgTable(
   "totp_secrets",
   {
-    id: text("id").primaryKey().$defaultFn(() => randomUUID10()),
+    id: text("id").primaryKey().$defaultFn(() => randomUUID9()),
     userId: text("user_id").notNull(),
     encryptedSecret: text("encrypted_secret").notNull(),
     isEnabled: boolean("is_enabled").notNull().default(false),
@@ -123754,11 +123754,11 @@ var totpSecretsTable = pgTable(
 );
 
 // lib/db/src/schema/customer-addresses.ts
-import { randomUUID as randomUUID11 } from "node:crypto";
+import { randomUUID as randomUUID10 } from "node:crypto";
 var customerAddressesTable = pgTable(
   "customer_addresses",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID11),
+    id: text("id").primaryKey().$defaultFn(randomUUID10),
     userId: text("user_id").notNull(),
     label: text("label").notNull().default("Home"),
     // Home, Work, Other
@@ -123782,11 +123782,11 @@ var customerAddressesTable = pgTable(
 );
 
 // lib/db/src/schema/customer-favorites.ts
-import { randomUUID as randomUUID12 } from "node:crypto";
+import { randomUUID as randomUUID11 } from "node:crypto";
 var customerFavoritesTable = pgTable(
   "customer_favorites",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID12),
+    id: text("id").primaryKey().$defaultFn(randomUUID11),
     userId: text("user_id").notNull(),
     productId: text("product_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
@@ -123798,11 +123798,11 @@ var customerFavoritesTable = pgTable(
 );
 
 // lib/db/src/schema/customer-notifications.ts
-import { randomUUID as randomUUID13 } from "node:crypto";
+import { randomUUID as randomUUID12 } from "node:crypto";
 var customerNotificationsTable = pgTable(
   "customer_notifications",
   {
-    id: text("id").primaryKey().$defaultFn(randomUUID13),
+    id: text("id").primaryKey().$defaultFn(randomUUID12),
     userId: text("user_id").notNull(),
     title: text("title").notNull(),
     message: text("message").notNull(),
@@ -124640,6 +124640,7 @@ var storefront_default = router2;
 
 // artifacts/api-server/src/routes/admin.ts
 var import_express5 = __toESM(require_express2(), 1);
+import { randomUUID as randomUUID14 } from "node:crypto";
 
 // artifacts/api-server/src/lib/redis.ts
 var import_ioredis = __toESM(require_built3(), 1);
@@ -124811,7 +124812,7 @@ var requireAdmin = async (req, res, next) => {
 
 // artifacts/api-server/src/routes/staff-admin.ts
 var import_express4 = __toESM(require_express2(), 1);
-import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID14 } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } from "node:crypto";
 
 // artifacts/api-server/src/middlewares/validate.ts
 function validate(schemas) {
@@ -126596,7 +126597,7 @@ router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodyS
       res.status(401).json({ error: "Invalid staff email or password." });
       return;
     }
-    const token = `staff_${randomUUID14().replace(/-/g, "")}`;
+    const token = `staff_${randomUUID13().replace(/-/g, "")}`;
     const session = {
       userId: staff.id,
       name: staff.name,
@@ -126668,7 +126669,7 @@ router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req, re
       const parsed = new Date(expiresAtDate);
       if (!isNaN(parsed.getTime())) expirationDate = parsed;
     }
-    const id = randomUUID14();
+    const id = randomUUID13();
     const passwordHash = hashPassword(password);
     await db.insert(adminUsersTable).values({
       id,
@@ -127266,7 +127267,7 @@ router4.post("/v1/admin/products", async (req, res) => {
   const approvalStatus = isSubAdminOrMod ? "pending_approval" : "approved";
   const initialStatus = isSubAdminOrMod ? "draft" : status ?? "active";
   const baseSlug = slugify(cleanName) || "product";
-  const uniqueSlug = `${baseSlug}-${randomUUID().substring(0, 6)}`;
+  const uniqueSlug = `${baseSlug}-${randomUUID14().substring(0, 6)}`;
   try {
     const [created] = await db.insert(productsTable).values({
       name: cleanName,
