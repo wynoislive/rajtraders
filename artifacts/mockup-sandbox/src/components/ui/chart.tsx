@@ -64,13 +64,22 @@ const ChartContainer = React.forwardRef<
 })
 ChartContainer.displayName = "Chart"
 
+function sanitizeCssValue(value: string): string {
+  return value.replace(/<\/style/gi, "").replace(/[<>"'`\\]/g, "");
+}
+
+function sanitizeCssIdentifier(val: string): string {
+  return val.replace(/[^a-zA-Z0-9\-_]/g, "");
+}
+
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
+  const safeId = sanitizeCssIdentifier(id);
   const colorConfig = Object.entries(config).filter(
-    ([, config]) => config.theme || config.color
-  )
+    ([, config]) => config.theme || config.color,
+  );
 
   if (!colorConfig.length) {
-    return null
+    return null;
   }
 
   return (
@@ -79,23 +88,27 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
         __html: Object.entries(THEMES)
           .map(
             ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
+${prefix} [data-chart="${safeId}"] {
 ${colorConfig
   .map(([key, itemConfig]) => {
     const color =
       itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
-      itemConfig.color
-    return color ? `  --color-${key}: ${color};` : null
+      itemConfig.color;
+    if (!color) return null;
+    const safeKey = sanitizeCssIdentifier(key);
+    const safeColor = sanitizeCssValue(color);
+    return `  --color-${safeKey}: ${safeColor};`;
   })
-  .join("\n")}
+  .filter(Boolean)
+  .join('\n')}
 }
-`
+`,
           )
-          .join("\n"),
+          .join('\n'),
       }}
     />
-  )
-}
+  );
+};
 
 const ChartTooltip = RechartsPrimitive.Tooltip
 

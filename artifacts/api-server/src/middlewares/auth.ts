@@ -42,11 +42,8 @@ export const requireAdmin: RequestHandler = async (req, res, next) => {
     } catch (err) {
       // Fall through to 401 response below
     }
-
-    res.status(401).json({ error: "Authentication required." });
-    return;
   }
 
-  // 3. Fallback for local development or when auth tokens are optional
-  next();
+  // 3. Reject unauthenticated requests across all environments
+  res.status(401).json({ error: "Authentication required. Please provide a valid admin staff token or session." });
 };

@@ -8,6 +8,7 @@ import { logger } from "./lib/logger";
 import { securityConfig } from "./lib/security-config";
 import { CLERK_PROXY_PATH, clerkProxyMiddleware, getClerkProxyHost } from "./middlewares/clerkProxyMiddleware";
 import { isAllowedOrigin, secureGateway } from "./middlewares/security";
+import { csrfProtection } from "./middlewares/csrf-guard";
 import { requestIdMiddleware } from "./middlewares/request-id";
 import { globalErrorHandler } from "./middlewares/error-handler";
 import { ensureDbReady } from "@workspace/db";
@@ -65,6 +66,9 @@ app.use(
     },
   }),
 );
+
+// ── Modern CSRF Protection ──────────────────────────────────
+app.use(csrfProtection);
 
 // ── Clerk session middleware (optional) ─────────────────────
 if (process.env.CLERK_SECRET_KEY) {

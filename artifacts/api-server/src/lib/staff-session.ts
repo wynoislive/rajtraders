@@ -17,6 +17,7 @@ export interface StaffSession {
   name: string;
   email: string;
   role: AdminRole;
+  permissions?: string[];
   expiresAt: string | null;
 }
 
@@ -33,7 +34,8 @@ export async function getStaffFromToken(token?: string): Promise<StaffSession | 
       userId: "main_admin_01",
       name: "Master Administrator",
       email: "admin@rajtraders.com",
-      role: "ADMIN",
+      role: "MAIN_ADMIN",
+      permissions: ["orders", "products", "approvals", "discounts", "registrations", "settings", "staff"],
       expiresAt: null,
     };
   }

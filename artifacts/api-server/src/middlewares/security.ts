@@ -5,23 +5,46 @@ import { securityConfig } from "../lib/security-config";
 import { getRedisClient } from "../lib/redis";
 
 // ── CORS origin check ───────────────────────────────────────
+const isProduction = process.env.NODE_ENV === "production";
+
 const allowedOrigins = new Set(
   (process.env.CORS_ORIGINS ?? "")
     .split(",")
-    .map((value) => value.trim())
+    .map((value) => value.trim().toLowerCase())
     .filter(Boolean),
 );
 
+const TRUSTED_PRODUCTION_HOSTS = new Set([
+  "sundarvan.xyz",
+  "admin.sundarvan.xyz",
+  "api.sundarvan.xyz",
+]);
+
 export function isAllowedOrigin(origin: string | undefined): boolean {
+  // Allow non-browser requests without Origin header (e.g. mobile app or server-to-server)
   if (!origin) return true;
-  if (allowedOrigins.has(origin)) return true;
+
   try {
-    const hostname = new URL(origin).hostname.toLowerCase();
-    if (hostname === "sundarvan.xyz" || hostname.endsWith(".sundarvan.xyz") || hostname === "localhost" || hostname === "127.0.0.1") {
+    const parsed = new URL(origin);
+    const hostname = parsed.hostname.toLowerCase();
+    const originLower = origin.toLowerCase().replace(/\/$/, "");
+
+    if (allowedOrigins.has(originLower)) return true;
+
+    // Production domain & subdomains (must be HTTPS)
+    if (TRUSTED_PRODUCTION_HOSTS.has(hostname) || hostname.endsWith(".sundarvan.xyz")) {
+      return parsed.protocol === "https:";
+    }
+
+    // Localhost only in non-production environments
+    if (!isProduction && (hostname === "localhost" || hostname === "127.0.0.1")) {
       return true;
     }
-  } catch {}
-  return allowedOrigins.size === 0;
+  } catch {
+    return false;
+  }
+
+  return false;
 }
 
 // ── Rate limit store (Redis or in-memory fallback) ──────────
@@ -135,10 +158,22 @@ export const secureGateway: RequestHandler[] = [
           directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "https:"],
-            fontSrc: ["'self'", "https:", "data:"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            imgSrc: [
+              "'self'",
+              "data:",
+              "https://sundarvan.xyz",
+              "https://*.sundarvan.xyz",
+              "https://*.r2.cloudflarestorage.com",
+              "https://images.unsplash.com",
+            ],
+            connectSrc: [
+              "'self'",
+              "https://api.sundarvan.xyz",
+              "https://*.supabase.co",
+              "https://api.razorpay.com",
+            ],
+            fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
             objectSrc: ["'none'"],
             frameSrc: ["'none'"],
             baseUri: ["'self'"],

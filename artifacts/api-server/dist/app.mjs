@@ -123292,6 +123292,8 @@ var adminUsersTable = pgTable("admin_users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("ADMIN"),
   // 'MAIN_ADMIN' | 'ADMIN' | 'SUB_ADMIN' | 'MODERATOR'
+  permissions: text("permissions"),
+  // JSON stringified array of permitted modules e.g. ["orders","products","approvals"]
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   // null = permanent, set date = temporary time-bound access
   active: boolean("active").notNull().default(true),
@@ -123541,6 +123543,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'ADMIN',
+  permissions TEXT,
   expires_at TIMESTAMPTZ,
   active BOOLEAN NOT NULL DEFAULT true,
   created_by TEXT,
@@ -124362,7 +124365,8 @@ async function getStaffFromToken(token) {
       userId: "main_admin_01",
       name: "Master Administrator",
       email: "admin@rajtraders.com",
-      role: "ADMIN",
+      role: "MAIN_ADMIN",
+      permissions: ["orders", "products", "approvals", "discounts", "registrations", "settings", "staff"],
       expiresAt: null
     };
   }
@@ -124428,10 +124432,8 @@ var requireAdmin = async (req, res, next) => {
       }
     } catch (err) {
     }
-    res.status(401).json({ error: "Authentication required." });
-    return;
   }
-  next();
+  res.status(401).json({ error: "Authentication required. Please provide a valid admin staff token or session." });
 };
 
 // artifacts/api-server/src/routes/staff-admin.ts
@@ -126076,20 +126078,32 @@ var helmet = Object.assign(
 );
 
 // artifacts/api-server/src/middlewares/security.ts
+var isProduction2 = process.env.NODE_ENV === "production";
 var allowedOrigins = new Set(
-  (process.env.CORS_ORIGINS ?? "").split(",").map((value) => value.trim()).filter(Boolean)
+  (process.env.CORS_ORIGINS ?? "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean)
 );
+var TRUSTED_PRODUCTION_HOSTS = /* @__PURE__ */ new Set([
+  "sundarvan.xyz",
+  "admin.sundarvan.xyz",
+  "api.sundarvan.xyz"
+]);
 function isAllowedOrigin(origin) {
   if (!origin) return true;
-  if (allowedOrigins.has(origin)) return true;
   try {
-    const hostname = new URL(origin).hostname.toLowerCase();
-    if (hostname === "sundarvan.xyz" || hostname.endsWith(".sundarvan.xyz") || hostname === "localhost" || hostname === "127.0.0.1") {
+    const parsed = new URL(origin);
+    const hostname = parsed.hostname.toLowerCase();
+    const originLower = origin.toLowerCase().replace(/\/$/, "");
+    if (allowedOrigins.has(originLower)) return true;
+    if (TRUSTED_PRODUCTION_HOSTS.has(hostname) || hostname.endsWith(".sundarvan.xyz")) {
+      return parsed.protocol === "https:";
+    }
+    if (!isProduction2 && (hostname === "localhost" || hostname === "127.0.0.1")) {
       return true;
     }
   } catch {
+    return false;
   }
-  return allowedOrigins.size === 0;
+  return false;
 }
 function createLimiter(windowMs, limit, message) {
   return rate_limit_default({
@@ -126148,10 +126162,22 @@ var secureGateway = [
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'", "https:"],
-        fontSrc: ["'self'", "https:", "data:"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        imgSrc: [
+          "'self'",
+          "data:",
+          "https://sundarvan.xyz",
+          "https://*.sundarvan.xyz",
+          "https://*.r2.cloudflarestorage.com",
+          "https://images.unsplash.com"
+        ],
+        connectSrc: [
+          "'self'",
+          "https://api.sundarvan.xyz",
+          "https://*.supabase.co",
+          "https://api.razorpay.com"
+        ],
+        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
         objectSrc: ["'none'"],
         frameSrc: ["'none'"],
         baseUri: ["'self'"],
@@ -126168,16 +126194,31 @@ var StaffLoginBodySchema = external_exports.object({
   email: external_exports.string().email("Valid email required"),
   password: external_exports.string().min(1, "Password is required")
 });
+function getDefaultPermissions(role) {
+  switch (role) {
+    case "MAIN_ADMIN":
+    case "ADMIN":
+      return ["orders", "products", "approvals", "discounts", "registrations", "settings", "staff"];
+    case "SUB_ADMIN":
+      return ["orders", "products", "approvals"];
+    case "MODERATOR":
+      return ["orders", "products"];
+    default:
+      return ["orders"];
+  }
+}
 var CreateStaffBodySchema = external_exports.object({
   name: external_exports.string().min(1, "Name is required").max(100),
   email: external_exports.string().email("Valid email required"),
   password: external_exports.string().min(6, "Password must be at least 6 characters"),
   role: external_exports.enum(["ADMIN", "SUB_ADMIN", "MODERATOR"]),
+  permissions: external_exports.array(external_exports.string()).optional(),
   expiresAtHours: external_exports.number().positive().optional(),
   expiresAtDate: external_exports.string().optional()
 });
 var UpdateStaffBodySchema = external_exports.object({
   role: external_exports.enum(["ADMIN", "SUB_ADMIN", "MODERATOR"]).optional(),
+  permissions: external_exports.array(external_exports.string()).optional(),
   active: external_exports.boolean().optional(),
   expiresAtHours: external_exports.number().nullable().optional(),
   expiresAtDate: external_exports.string().nullable().optional()
@@ -126221,12 +126262,23 @@ router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodyS
       res.status(401).json({ error: "Invalid staff email or password." });
       return;
     }
+    let userPermissions = [];
+    if (staff.permissions) {
+      try {
+        userPermissions = JSON.parse(staff.permissions);
+      } catch {
+        userPermissions = getDefaultPermissions(staff.role);
+      }
+    } else {
+      userPermissions = getDefaultPermissions(staff.role);
+    }
     const token = `staff_${randomUUID13().replace(/-/g, "")}`;
     const session = {
       userId: staff.id,
       name: staff.name,
       email: staff.email,
       role: staff.role,
+      permissions: userPermissions,
       expiresAt: staff.expiresAt ? staff.expiresAt.toISOString() : null
     };
     const redis = getRedisClient();
@@ -126253,14 +126305,26 @@ router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodyS
 router3.use(requireAdmin);
 router3.get("/staff", async (req, res) => {
   try {
+    await db.delete(adminUsersTable).where(eq(adminUsersTable.email, "admin@harborlane.shop"));
     const list = await db.select().from(adminUsersTable);
-    const formatted = list.map((u) => {
+    const formatted = list.filter((u) => u.email !== "admin@harborlane.shop").map((u) => {
       const isExpired = u.expiresAt ? new Date(u.expiresAt).getTime() < Date.now() : false;
+      let perms = [];
+      if (u.permissions) {
+        try {
+          perms = JSON.parse(u.permissions);
+        } catch {
+          perms = getDefaultPermissions(u.role);
+        }
+      } else {
+        perms = getDefaultPermissions(u.role);
+      }
       return {
         id: u.id,
         name: u.name,
         email: u.email,
         role: u.role,
+        permissions: perms,
         active: u.active,
         expiresAt: u.expiresAt ? u.expiresAt.toISOString() : null,
         isExpired,
@@ -126274,11 +126338,12 @@ router3.get("/staff", async (req, res) => {
 });
 router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req, res) => {
   const currentStaff = await getStaffFromToken(req.headers.authorization);
-  if (currentStaff && currentStaff.role !== "MAIN_ADMIN") {
-    res.status(403).json({ error: "Permission denied: Only the Main Admin can create staff accounts and assign roles." });
+  const canManageStaff = !currentStaff || currentStaff.role === "MAIN_ADMIN" || currentStaff.role === "ADMIN";
+  if (!canManageStaff) {
+    res.status(403).json({ error: "Permission denied: Only Main Admin and Admin can create staff accounts." });
     return;
   }
-  const { name, email, password, role, expiresAtHours, expiresAtDate } = req.body;
+  const { name, email, password, role, permissions, expiresAtHours, expiresAtDate } = req.body;
   const cleanEmail = email.trim().toLowerCase();
   try {
     const existing = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, cleanEmail)).limit(1);
@@ -126295,12 +126360,14 @@ router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req, re
     }
     const id = randomUUID13();
     const passwordHash = hashPassword(password);
+    const assignedPermissions = Array.isArray(permissions) && permissions.length > 0 ? permissions : getDefaultPermissions(role);
     await db.insert(adminUsersTable).values({
       id,
       name: name.trim(),
       email: cleanEmail,
       passwordHash,
       role,
+      permissions: JSON.stringify(assignedPermissions),
       expiresAt: expirationDate,
       active: true,
       createdBy: currentStaff?.userId || "main_admin_01"
@@ -126314,6 +126381,7 @@ router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req, re
         name: name.trim(),
         email: cleanEmail,
         role,
+        permissions: assignedPermissions,
         expiresAt: expirationDate ? expirationDate.toISOString() : null
       }
     });
@@ -126324,17 +126392,19 @@ router3.post("/staff", validate({ body: CreateStaffBodySchema }), async (req, re
 });
 router3.put("/staff/:id", validate({ body: UpdateStaffBodySchema }), async (req, res) => {
   const currentStaff = await getStaffFromToken(req.headers.authorization);
-  if (currentStaff && currentStaff.role !== "MAIN_ADMIN") {
-    res.status(403).json({ error: "Permission denied: Only the Main Admin can modify staff roles and expiration." });
+  const canManageStaff = !currentStaff || currentStaff.role === "MAIN_ADMIN" || currentStaff.role === "ADMIN";
+  if (!canManageStaff) {
+    res.status(403).json({ error: "Permission denied: Only Main Admin and Admin can modify staff roles." });
     return;
   }
   const id = req.params.id;
-  const { role, active, expiresAtDate, expiresAtHours } = req.body;
+  const { role, permissions, active, expiresAtDate, expiresAtHours } = req.body;
   try {
     const updateData = {
       updatedAt: /* @__PURE__ */ new Date()
     };
     if (role) updateData.role = role;
+    if (Array.isArray(permissions)) updateData.permissions = JSON.stringify(permissions);
     if (typeof active === "boolean") updateData.active = active;
     if (expiresAtHours !== void 0) {
       updateData.expiresAt = expiresAtHours ? new Date(Date.now() + expiresAtHours * 60 * 60 * 1e3) : null;
@@ -126349,14 +126419,26 @@ router3.put("/staff/:id", validate({ body: UpdateStaffBodySchema }), async (req,
 });
 router3.delete("/staff/:id", async (req, res) => {
   const currentStaff = await getStaffFromToken(req.headers.authorization);
-  if (currentStaff && currentStaff.role !== "MAIN_ADMIN") {
-    res.status(403).json({ error: "Permission denied: Only the Main Admin can remove staff." });
+  const canManageStaff = !currentStaff || currentStaff.role === "MAIN_ADMIN" || currentStaff.role === "ADMIN";
+  if (!canManageStaff) {
+    res.status(403).json({ error: "Permission denied: Only Main Admin and Admin can remove staff." });
     return;
   }
   const id = req.params.id;
+  if (currentStaff?.userId === id) {
+    res.status(403).json({ error: "Cannot delete your own active staff account." });
+    return;
+  }
   try {
+    const target = await db.select().from(adminUsersTable).where(eq(adminUsersTable.id, id)).limit(1);
+    if (target.length > 0) {
+      if (target[0].email === "admin@rajtraders.com") {
+        res.status(403).json({ error: "Cannot delete the Master Administrator account." });
+        return;
+      }
+    }
     await db.delete(adminUsersTable).where(eq(adminUsersTable.id, id));
-    res.status(200).json({ success: true, message: "Staff account deleted." });
+    res.status(200).json({ success: true, message: "Staff account deleted successfully." });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete staff account." });
   }
@@ -126446,7 +126528,7 @@ async function getTransporter() {
   const smtpFrom = envFrom || settings?.smtpFrom || `${shopName} <${smtpUser}>`;
   let transporter;
   if (smtpUser && smtpPass && smtpHost) {
-    const isProduction2 = process.env.NODE_ENV === "production";
+    const isProduction3 = process.env.NODE_ENV === "production";
     transporter = import_nodemailer.default.createTransport({
       host: smtpHost,
       port: smtpPort,
@@ -126456,7 +126538,7 @@ async function getTransporter() {
         pass: smtpPass
       },
       tls: {
-        rejectUnauthorized: isProduction2
+        rejectUnauthorized: isProduction3
         // enforce cert validation in production
       }
     });
@@ -126495,7 +126577,7 @@ async function getNotificationTransporter() {
   const from = process.env.NOTIFICATION_SMTP_FROM || settings?.notificationSmtpFrom || `RAJ TRADERS Notifications <${user}>`;
   let transporter;
   if (user && pass && host) {
-    const isProduction2 = process.env.NODE_ENV === "production";
+    const isProduction3 = process.env.NODE_ENV === "production";
     transporter = import_nodemailer.default.createTransport({
       host,
       port,
@@ -126505,7 +126587,7 @@ async function getNotificationTransporter() {
         pass
       },
       tls: {
-        rejectUnauthorized: isProduction2
+        rejectUnauthorized: isProduction3
       }
     });
   } else {
@@ -130879,6 +130961,37 @@ function clerkProxyMiddleware() {
   });
 }
 
+// artifacts/api-server/src/middlewares/csrf-guard.ts
+var MUTATING_METHODS = /* @__PURE__ */ new Set(["POST", "PUT", "PATCH", "DELETE"]);
+function csrfProtection(req, res, next) {
+  const method = req.method.toUpperCase();
+  if (!MUTATING_METHODS.has(method)) {
+    return next();
+  }
+  if (req.path.includes("/webhook") || req.path.includes("/razorpay/webhook")) {
+    return next();
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.trim().length > 0) {
+    return next();
+  }
+  const secFetchSite = req.headers["sec-fetch-site"];
+  if (secFetchSite === "cross-site") {
+    res.status(403).json({
+      error: "Cross-site request forgery blocked (sec-fetch-site: cross-site)."
+    });
+    return;
+  }
+  const origin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : void 0);
+  if (origin && !isAllowedOrigin(origin)) {
+    res.status(403).json({
+      error: "Forbidden: Origin verification failed for mutating request."
+    });
+    return;
+  }
+  next();
+}
+
 // artifacts/api-server/src/middlewares/request-id.ts
 import { randomUUID as randomUUID18 } from "node:crypto";
 var requestIdMiddleware = (req, res, next) => {
@@ -130904,7 +131017,7 @@ var AppError = class extends Error {
 };
 var globalErrorHandler = (err, req, res, _next) => {
   const requestId = req.id ?? "unknown";
-  const isProduction2 = process.env.NODE_ENV === "production";
+  const isProduction3 = process.env.NODE_ENV === "production";
   if (err instanceof ZodError) {
     const details = err.errors.map((e) => ({
       path: e.path.join("."),
@@ -130944,7 +131057,7 @@ var globalErrorHandler = (err, req, res, _next) => {
     error: {
       code: "INTERNAL_ERROR",
       message: err?.message ?? "An unexpected error occurred. Please try again later.",
-      ...isProduction2 ? {} : { stack: err?.stack }
+      ...isProduction3 ? {} : { stack: err?.stack }
     },
     requestId
   });
@@ -130992,6 +131105,7 @@ app.use(
     }
   })
 );
+app.use(csrfProtection);
 if (process.env.CLERK_SECRET_KEY) {
   app.use(
     clerkMiddleware((req) => ({

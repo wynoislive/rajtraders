@@ -17,17 +17,33 @@ const StaffLoginBodySchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export function getDefaultPermissions(role: string): string[] {
+  switch (role) {
+    case "MAIN_ADMIN":
+    case "ADMIN":
+      return ["orders", "products", "approvals", "discounts", "registrations", "settings", "staff"];
+    case "SUB_ADMIN":
+      return ["orders", "products", "approvals"];
+    case "MODERATOR":
+      return ["orders", "products"];
+    default:
+      return ["orders"];
+  }
+}
+
 const CreateStaffBodySchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Valid email required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   role: z.enum(["ADMIN", "SUB_ADMIN", "MODERATOR"]),
+  permissions: z.array(z.string()).optional(),
   expiresAtHours: z.number().positive().optional(),
   expiresAtDate: z.string().optional(),
 });
 
 const UpdateStaffBodySchema = z.object({
   role: z.enum(["ADMIN", "SUB_ADMIN", "MODERATOR"]).optional(),
+  permissions: z.array(z.string()).optional(),
   active: z.boolean().optional(),
   expiresAtHours: z.number().nullable().optional(),
   expiresAtDate: z.string().nullable().optional(),
@@ -101,12 +117,24 @@ router.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodySc
       return;
     }
 
+    let userPermissions: string[] = [];
+    if ((staff as any).permissions) {
+      try {
+        userPermissions = JSON.parse((staff as any).permissions);
+      } catch {
+        userPermissions = getDefaultPermissions(staff.role);
+      }
+    } else {
+      userPermissions = getDefaultPermissions(staff.role);
+    }
+
     const token = `staff_${randomUUID().replace(/-/g, "")}`;
     const session: StaffSession = {
       userId: staff.id,
       name: staff.name,
       email: staff.email,
       role: staff.role as AdminRole,
+      permissions: userPermissions,
       expiresAt: staff.expiresAt ? staff.expiresAt.toISOString() : null,
     };
 
@@ -139,21 +167,38 @@ router.use(requireAdmin);
 // 2. List All Staff (Main Admin & Admin)
 router.get("/staff", async (req: Request, res: Response) => {
   try {
+    // Purge any legacy starter admin
+    await db.delete(adminUsersTable).where(eq(adminUsersTable.email, "admin@harborlane.shop"));
+
     const list = await db.select().from(adminUsersTable);
 
-    const formatted = list.map((u: any) => {
-      const isExpired = u.expiresAt ? new Date(u.expiresAt).getTime() < Date.now() : false;
-      return {
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        active: u.active,
-        expiresAt: u.expiresAt ? u.expiresAt.toISOString() : null,
-        isExpired,
-        createdAt: u.createdAt.toISOString(),
-      };
-    });
+    const formatted = list
+      .filter((u: any) => u.email !== "admin@harborlane.shop")
+      .map((u: any) => {
+        const isExpired = u.expiresAt ? new Date(u.expiresAt).getTime() < Date.now() : false;
+        let perms: string[] = [];
+        if (u.permissions) {
+          try {
+            perms = JSON.parse(u.permissions);
+          } catch {
+            perms = getDefaultPermissions(u.role);
+          }
+        } else {
+          perms = getDefaultPermissions(u.role);
+        }
+
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          permissions: perms,
+          active: u.active,
+          expiresAt: u.expiresAt ? u.expiresAt.toISOString() : null,
+          isExpired,
+          createdAt: u.createdAt.toISOString(),
+        };
+      });
 
     res.status(200).json(formatted);
   } catch (err: any) {
@@ -161,17 +206,17 @@ router.get("/staff", async (req: Request, res: Response) => {
   }
 });
 
-// 3. Create Staff Account (Main Admin Only with optional time-bound expiration)
+// 3. Create Staff Account (Main Admin & Admin with optional time-bound expiration)
 router.post("/staff", validate({ body: CreateStaffBodySchema }), async (req: Request, res: Response) => {
   const currentStaff = await getStaffFromToken(req.headers.authorization);
 
-  // In standard operation, enforce Main Admin check; default allow initial setup
-  if (currentStaff && currentStaff.role !== "MAIN_ADMIN") {
-    res.status(403).json({ error: "Permission denied: Only the Main Admin can create staff accounts and assign roles." });
+  const canManageStaff = !currentStaff || currentStaff.role === "MAIN_ADMIN" || currentStaff.role === "ADMIN";
+  if (!canManageStaff) {
+    res.status(403).json({ error: "Permission denied: Only Main Admin and Admin can create staff accounts." });
     return;
   }
 
-  const { name, email, password, role, expiresAtHours, expiresAtDate } = req.body;
+  const { name, email, password, role, permissions, expiresAtHours, expiresAtDate } = req.body;
   const cleanEmail = email.trim().toLowerCase();
 
   try {
@@ -191,6 +236,9 @@ router.post("/staff", validate({ body: CreateStaffBodySchema }), async (req: Req
 
     const id = randomUUID();
     const passwordHash = hashPassword(password);
+    const assignedPermissions = Array.isArray(permissions) && permissions.length > 0
+      ? permissions
+      : getDefaultPermissions(role);
 
     await db.insert(adminUsersTable).values({
       id,
@@ -198,6 +246,7 @@ router.post("/staff", validate({ body: CreateStaffBodySchema }), async (req: Req
       email: cleanEmail,
       passwordHash,
       role: role as AdminRole,
+      permissions: JSON.stringify(assignedPermissions),
       expiresAt: expirationDate,
       active: true,
       createdBy: currentStaff?.userId || "main_admin_01",
@@ -213,6 +262,7 @@ router.post("/staff", validate({ body: CreateStaffBodySchema }), async (req: Req
         name: name.trim(),
         email: cleanEmail,
         role,
+        permissions: assignedPermissions,
         expiresAt: expirationDate ? expirationDate.toISOString() : null,
       },
     });
@@ -222,24 +272,26 @@ router.post("/staff", validate({ body: CreateStaffBodySchema }), async (req: Req
   }
 });
 
-// 4. Update Staff Role / Expiration (Main Admin Only)
+// 4. Update Staff Role / Expiration / Permissions (Main Admin & Admin)
 router.put("/staff/:id", validate({ body: UpdateStaffBodySchema }), async (req: Request, res: Response) => {
   const currentStaff = await getStaffFromToken(req.headers.authorization);
 
-  if (currentStaff && currentStaff.role !== "MAIN_ADMIN") {
-    res.status(403).json({ error: "Permission denied: Only the Main Admin can modify staff roles and expiration." });
+  const canManageStaff = !currentStaff || currentStaff.role === "MAIN_ADMIN" || currentStaff.role === "ADMIN";
+  if (!canManageStaff) {
+    res.status(403).json({ error: "Permission denied: Only Main Admin and Admin can modify staff roles." });
     return;
   }
 
   const id = req.params.id as string;
-  const { role, active, expiresAtDate, expiresAtHours } = req.body;
+  const { role, permissions, active, expiresAtDate, expiresAtHours } = req.body;
 
   try {
-    const updateData: Partial<typeof adminUsersTable.$inferInsert> = {
+    const updateData: any = {
       updatedAt: new Date(),
     };
 
     if (role) updateData.role = role;
+    if (Array.isArray(permissions)) updateData.permissions = JSON.stringify(permissions);
     if (typeof active === "boolean") updateData.active = active;
 
     if (expiresAtHours !== undefined) {
@@ -256,20 +308,35 @@ router.put("/staff/:id", validate({ body: UpdateStaffBodySchema }), async (req: 
   }
 });
 
-// 5. Delete Staff Account (Main Admin Only)
+// 5. Delete Staff Account (Main Admin & Admin)
 router.delete("/staff/:id", async (req: Request, res: Response) => {
   const currentStaff = await getStaffFromToken(req.headers.authorization);
 
-  if (currentStaff && currentStaff.role !== "MAIN_ADMIN") {
-    res.status(403).json({ error: "Permission denied: Only the Main Admin can remove staff." });
+  const canManageStaff = !currentStaff || currentStaff.role === "MAIN_ADMIN" || currentStaff.role === "ADMIN";
+  if (!canManageStaff) {
+    res.status(403).json({ error: "Permission denied: Only Main Admin and Admin can remove staff." });
     return;
   }
 
   const id = req.params.id as string;
 
+  // Prevent self deletion
+  if (currentStaff?.userId === id) {
+    res.status(403).json({ error: "Cannot delete your own active staff account." });
+    return;
+  }
+
   try {
+    const target = await db.select().from(adminUsersTable).where(eq(adminUsersTable.id, id)).limit(1);
+    if (target.length > 0) {
+      if (target[0].email === "admin@rajtraders.com") {
+        res.status(403).json({ error: "Cannot delete the Master Administrator account." });
+        return;
+      }
+    }
+
     await db.delete(adminUsersTable).where(eq(adminUsersTable.id, id));
-    res.status(200).json({ success: true, message: "Staff account deleted." });
+    res.status(200).json({ success: true, message: "Staff account deleted successfully." });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to delete staff account." });
   }

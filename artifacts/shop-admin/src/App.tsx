@@ -207,14 +207,14 @@ function AdminGate({ children, isError, isLoading, retry }: { children: ReactNod
 }
 
 const navItems = [
-  { href: '/', label: 'Overview', icon: LayoutDashboard },
-  { href: '/orders', label: 'Orders', icon: Receipt },
-  { href: '/products', label: 'Products', icon: Package },
-  { href: '/approvals', label: 'Approvals', icon: ClipboardCheck },
-  { href: '/staff', label: 'Staff & RBAC', icon: ShieldCheck },
-  { href: '/discounts', label: 'Discounts', icon: BadgePercent },
-  { href: '/registrations', label: 'Registrations', icon: UserRoundPlus },
-  { href: '/settings', label: 'Store & Delivery', icon: Settings2 },
+  { href: '/', label: 'Overview', icon: LayoutDashboard, permissionKey: 'overview' },
+  { href: '/orders', label: 'Orders', icon: Receipt, permissionKey: 'orders' },
+  { href: '/products', label: 'Products', icon: Package, permissionKey: 'products' },
+  { href: '/approvals', label: 'Approvals', icon: ClipboardCheck, permissionKey: 'approvals' },
+  { href: '/staff', label: 'Staff & RBAC', icon: ShieldCheck, permissionKey: 'staff' },
+  { href: '/discounts', label: 'Discounts', icon: BadgePercent, permissionKey: 'discounts' },
+  { href: '/registrations', label: 'Registrations', icon: UserRoundPlus, permissionKey: 'registrations' },
+  { href: '/settings', label: 'Store & Delivery', icon: Settings2, permissionKey: 'settings' },
 ];
 
 function AdminLoginPage({ onLoginSuccess }: { onLoginSuccess: (token: string, staff: any) => void }) {
@@ -343,9 +343,18 @@ function Shell({ children }: { children: ReactNode }) {
     { id: '2', title: 'Catalog Engine Online', detail: 'PGlite WASM database initialized & ready', time: '12m ago', unread: true },
     { id: '3', title: 'RBAC Security Queue', detail: 'Sub-Admin & Moderator approval workflow active', time: '45m ago', unread: false },
   ]);
-  const active = navItems.find((item) => item.href === location)?.label ?? 'Shop Admin';
-  const unreadCount = notifications.filter((n) => n.unread).length;
   const { staffUser, logout } = useContext(AdminAuthContext);
+  const isSuperAdmin = staffUser?.role === 'MAIN_ADMIN' || staffUser?.role === 'ADMIN';
+
+  const accessibleNavItems = navItems.filter((item) => {
+    if (isSuperAdmin) return true;
+    if (item.permissionKey === 'overview') return true;
+    if (item.permissionKey === 'staff') return false; // Non-admin cannot view Staff & RBAC
+    return staffUser?.permissions?.includes(item.permissionKey);
+  });
+
+  const active = accessibleNavItems.find((item) => item.href === location)?.label ?? 'Shop Admin';
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
   const clearNotifications = () => setNotifications([]);
@@ -362,7 +371,7 @@ function Shell({ children }: { children: ReactNode }) {
         </div>
         <div className="mt-8 px-3 font-mono text-[10px] font-medium uppercase tracking-[.18em] text-[hsl(var(--sidebar-foreground)/.45)]">Workspace</div>
         <nav className="mt-3 space-y-1" aria-label="Main navigation">
-          {navItems.map(({ href, label, icon: Icon }) => (
+          {accessibleNavItems.map(({ href, label, icon: Icon }) => (
             <Link href={href} key={href} onClick={() => setMobileNav(false)} data-testid={`link-nav-${label.toLowerCase()}`} className={cx('group flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold transition-colors', location === href ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.64)] hover:bg-[hsl(var(--sidebar-accent)/.65)] hover:text-[hsl(var(--sidebar-foreground))]')}>
               <span className="flex items-center gap-3"><Icon size={17} strokeWidth={location === href ? 2.4 : 1.8} /><span>{label}</span></span>
               {location === href && <span className="size-1.5 rounded-full bg-[hsl(var(--sidebar-primary))]" />}
@@ -376,7 +385,9 @@ function Shell({ children }: { children: ReactNode }) {
             <div className="mt-0.5 text-xs text-[hsl(var(--sidebar-foreground)/.55)] truncate">{staffUser?.email || 'admin@rajtraders.com'}</div>
           </div>
           <div className="space-y-1">
-            <Link href="/settings" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-bold text-[hsl(var(--sidebar-foreground)/.67)] transition hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]" data-testid="button-settings"><Settings2 size={17} /> Store & Delivery</Link>
+            {(isSuperAdmin || staffUser?.permissions?.includes('settings')) && (
+              <Link href="/settings" className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-bold text-[hsl(var(--sidebar-foreground)/.67)] transition hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]" data-testid="button-settings"><Settings2 size={17} /> Store & Delivery</Link>
+            )}
             <button onClick={logout} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition">
               <span>Sign Out of Admin</span>
               <Lock size={15} />
@@ -1216,19 +1227,35 @@ function Approvals() {
 
 // ─── Staff & RBAC Management Component ──────────────────────
 
+const TAB_PERMISSIONS = [
+  { key: 'orders', label: 'Orders & Shipments', desc: 'View, update order status & dispatch' },
+  { key: 'products', label: 'Products Catalog', desc: 'Create and edit product listings' },
+  { key: 'approvals', label: 'Approvals Queue', desc: 'Review & approve sub-admin drafts' },
+  { key: 'discounts', label: 'Discounts & Coupons', desc: 'Create, toggle promotional discount codes' },
+  { key: 'registrations', label: 'Registrations & Claims', desc: 'Manage customer accounts & claim policies' },
+  { key: 'settings', label: 'Store & Delivery', desc: 'Store details, geofence, Razorpay & SMTP' },
+];
+
 function StaffManagement() {
+  const { staffUser } = useContext(AdminAuthContext);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
     email: '',
     password: '',
     role: 'SUB_ADMIN',
+    permissions: ['orders', 'products', 'approvals'] as string[],
     accessDuration: 'permanent', // '24h', '7d', '30d', 'permanent'
   });
+
+  const isSuperAdmin = staffUser?.role === 'MAIN_ADMIN' || staffUser?.role === 'ADMIN';
 
   const fetchStaff = async () => {
     setLoading(true);
@@ -1238,7 +1265,7 @@ function StaffManagement() {
       });
       if (res.ok) {
         const data = await res.json();
-        setStaffList(data);
+        setStaffList(data.filter((u: any) => u.email !== 'admin@harborlane.shop'));
       }
     } catch (e) {
       console.error(e);
@@ -1251,8 +1278,31 @@ function StaffManagement() {
     fetchStaff();
   }, []);
 
+  const handleRoleChange = (newRole: string) => {
+    let defaultPerms: string[] = ['orders'];
+    if (newRole === 'ADMIN') {
+      defaultPerms = ['orders', 'products', 'approvals', 'discounts', 'registrations', 'settings'];
+    } else if (newRole === 'SUB_ADMIN') {
+      defaultPerms = ['orders', 'products', 'approvals'];
+    } else if (newRole === 'MODERATOR') {
+      defaultPerms = ['orders', 'products'];
+    }
+    setForm((prev) => ({ ...prev, role: newRole, permissions: defaultPerms }));
+  };
+
+  const togglePermission = (permKey: string) => {
+    setForm((prev) => {
+      const current = prev.permissions;
+      const updated = current.includes(permKey)
+        ? current.filter((k) => k !== permKey)
+        : [...current, permKey];
+      return { ...prev, permissions: updated };
+    });
+  };
+
   const handleCreateStaff = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     try {
       let expiresAtHours: number | null = null;
       if (form.accessDuration === '24h') expiresAtHours = 24;
@@ -1263,10 +1313,11 @@ function StaffManagement() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
-          name: form.name,
-          email: form.email,
+          name: form.name.trim(),
+          email: form.email.trim(),
           password: form.password,
           role: form.role,
+          permissions: form.permissions,
           expiresAtHours,
         }),
       });
@@ -1275,13 +1326,45 @@ function StaffManagement() {
         setModal(false);
         setNotice(`New ${form.role} account created successfully!`);
         fetchStaff();
-        setForm({ name: '', email: '', password: '', role: 'SUB_ADMIN', accessDuration: 'permanent' });
+        setForm({
+          name: '',
+          email: '',
+          password: '',
+          role: 'SUB_ADMIN',
+          permissions: ['orders', 'products', 'approvals'],
+          accessDuration: 'permanent',
+        });
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to create staff account.');
+        setErrorMessage(err.error || 'Failed to create staff account.');
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setErrorMessage(e.message || 'Failed to create staff account.');
+    }
+  };
+
+  const handleDeleteStaff = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setErrorMessage(null);
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/admin/staff/${deleteTarget.id}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+
+      if (res.ok) {
+        setNotice(`Staff account ${deleteTarget.name} (${deleteTarget.email}) removed successfully.`);
+        setDeleteTarget(null);
+        fetchStaff();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to remove staff member.');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error executing delete request.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1292,12 +1375,24 @@ function StaffManagement() {
     MODERATOR: 'slate',
   };
 
+  if (!isSuperAdmin) {
+    return (
+      <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-8 text-center my-6">
+        <ShieldAlert className="mx-auto size-12 text-red-500" />
+        <h2 className="mt-4 text-xl font-bold">Access Restricted</h2>
+        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))] max-w-md mx-auto">
+          Staff & Role-Based Access Control (RBAC) is exclusively accessible to the Main Admin and Admins.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageIntro
         eyebrow="Security & Permissions"
         title="Role-Based Access Control (RBAC)"
-        detail="Only the Main Admin can generate Admin/Sub-Admin/Moderator accounts and assign permissions, including temporary time-bound access."
+        detail="Only the Main Admin and Admins can generate staff accounts, select module access permissions, and revoke accounts."
         action={
           <Button onClick={() => setModal(true)}>
             <Plus size={16} /> Create Staff Account
@@ -1313,23 +1408,48 @@ function StaffManagement() {
         </div>
       )}
 
+      {errorMessage && (
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-600 dark:text-red-400">
+          <ShieldAlert size={16} />
+          {errorMessage}
+          <button className="ml-auto" onClick={() => setErrorMessage(null)}><X size={15} /></button>
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-3"><Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" /></div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))]">
-          <div className="hidden grid-cols-[1.5fr_1.5fr_120px_140px_100px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-5 py-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] md:grid">
+          <div className="hidden grid-cols-[1.3fr_1.3fr_95px_1.4fr_110px_80px_85px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-5 py-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] md:grid">
             <span>Staff Name</span>
             <span>Email</span>
             <span>Role</span>
+            <span>Permissions</span>
             <span>Access Expiration</span>
             <span>Status</span>
+            <span>Actions</span>
           </div>
 
           {staffList.map((staff) => (
-            <div key={staff.id} className="grid gap-3 border-b border-[hsl(var(--border))] px-4 py-4 last:border-0 md:grid-cols-[1.5fr_1.5fr_120px_140px_100px] md:items-center md:gap-4 md:px-5">
+            <div key={staff.id} className="grid gap-3 border-b border-[hsl(var(--border))] px-4 py-4 last:border-0 md:grid-cols-[1.3fr_1.3fr_95px_1.4fr_110px_80px_85px] md:items-center md:gap-4 md:px-5">
               <div className="font-extrabold">{staff.name}</div>
-              <div className="text-xs font-mono text-[hsl(var(--muted-foreground))]">{staff.email}</div>
+              <div className="text-xs font-mono text-[hsl(var(--muted-foreground))] truncate">{staff.email}</div>
               <div><StatusPill tone={roleColors[staff.role] || 'teal'}>{staff.role}</StatusPill></div>
+              <div className="flex flex-wrap gap-1">
+                {staff.role === 'MAIN_ADMIN' || staff.role === 'ADMIN' ? (
+                  <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                    All Tabs
+                  </span>
+                ) : Array.isArray(staff.permissions) && staff.permissions.length > 0 ? (
+                  staff.permissions.map((p: string) => (
+                    <span key={p} className="rounded-md bg-[hsl(var(--muted))] px-1.5 py-0.5 text-[9px] font-semibold text-[hsl(var(--muted-foreground))] uppercase">
+                      {p}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-[hsl(var(--muted-foreground))]">Default</span>
+                )}
+              </div>
               <div className="text-xs font-semibold">
                 {staff.expiresAt ? (
                   <span className={staff.isExpired ? 'text-[hsl(var(--destructive))] font-bold' : 'text-[hsl(var(--primary))]'}>
@@ -1340,13 +1460,58 @@ function StaffManagement() {
                 )}
               </div>
               <div><StatusPill tone={staff.active && !staff.isExpired ? 'green' : 'slate'}>{staff.active && !staff.isExpired ? 'Active' : 'Locked'}</StatusPill></div>
+              <div>
+                {staff.email === 'admin@rajtraders.com' ? (
+                  <span className="text-[11px] font-mono font-bold text-amber-600">Master</span>
+                ) : staff.id === staffUser?.userId || staff.email === staffUser?.email ? (
+                  <span className="text-[11px] font-mono text-[hsl(var(--muted-foreground))]">Current</span>
+                ) : (
+                  <button
+                    onClick={() => setDeleteTarget(staff)}
+                    title="Remove Staff Account"
+                    className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-2 py-1 text-xs font-bold text-red-500 hover:bg-red-500/20 transition"
+                  >
+                    <Trash2 size={13} />
+                    <span>Remove</span>
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <DialogFrame
+          title="Remove Staff Account"
+          detail={`Are you sure you want to remove ${deleteTarget.name} (${deleteTarget.email})?`}
+          onClose={() => setDeleteTarget(null)}
+        >
+          <div className="space-y-4 pt-2">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-xs font-medium text-red-600 dark:text-red-400">
+              Warning: Removing this staff member will immediately revoke all their active sessions and database credentials. This action cannot be undone.
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="quiet" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+                Cancel
+              </Button>
+              <button
+                onClick={handleDeleteStaff}
+                disabled={deleting}
+                className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 transition disabled:opacity-50"
+              >
+                <Trash2 size={15} />
+                {deleting ? 'Removing...' : 'Confirm Remove'}
+              </button>
+            </div>
+          </div>
+        </DialogFrame>
+      )}
+
+      {/* Create Staff Modal */}
       {modal && (
-        <DialogFrame title="Create Staff Account" detail="Assign role and optional temporary access expiration." onClose={() => setModal(false)}>
+        <DialogFrame title="Create Staff Account" detail="Assign role, granular module permissions, and optional temporary expiration." onClose={() => setModal(false)}>
           <form onSubmit={handleCreateStaff} className="space-y-4">
             <div>
               <label className="text-xs font-bold">Staff Full Name</label>
@@ -1362,11 +1527,11 @@ function StaffManagement() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-xs font-bold">Role Assignment</label>
-                <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="mt-1 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm">
+                <label className="text-xs font-bold">Role Preset</label>
+                <select value={form.role} onChange={(e) => handleRoleChange(e.target.value)} className="mt-1 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm">
                   <option value="ADMIN">Admin (Full Access & Approvals)</option>
                   <option value="SUB_ADMIN">Sub-Admin (Requires Product Approval)</option>
-                  <option value="MODERATOR">Moderator (Drafting & Review Only)</option>
+                  <option value="MODERATOR">Moderator (Drafting & Orders Only)</option>
                 </select>
               </div>
               <div>
@@ -1379,6 +1544,34 @@ function StaffManagement() {
                 </select>
               </div>
             </div>
+
+            {/* Granular Module Permission Toggles */}
+            <div className="space-y-2 pt-2 border-t border-[hsl(var(--border))]">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold">Granted Module Permissions</label>
+                <span className="text-[11px] text-[hsl(var(--muted-foreground))]">Toggle specific tab access</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {TAB_PERMISSIONS.map((perm) => (
+                  <label key={perm.key} className="flex items-start gap-2.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card)/.5)] p-2.5 cursor-pointer hover:bg-[hsl(var(--muted)/.4)] transition">
+                    <input
+                      type="checkbox"
+                      checked={form.permissions.includes(perm.key)}
+                      onChange={() => togglePermission(perm.key)}
+                      className="mt-0.5 rounded text-amber-600"
+                    />
+                    <div>
+                      <div className="text-xs font-bold">{perm.label}</div>
+                      <div className="text-[10px] text-[hsl(var(--muted-foreground))]">{perm.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {errorMessage && (
+              <div className="text-xs font-semibold text-red-500">{errorMessage}</div>
+            )}
 
             <div className="mt-6 flex justify-end gap-2 border-t border-[hsl(var(--border))] pt-4">
               <Button variant="quiet" type="button" onClick={() => setModal(false)}>Cancel</Button>
@@ -2424,7 +2617,25 @@ function DialogFrame({ title, detail, children, onClose }: { title: string; deta
   );
 }
 
-const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+function PermissionGate({ permission, children }: { permission: string; children: ReactNode }) {
+  const { staffUser } = useContext(AdminAuthContext);
+  const isSuperAdmin = staffUser?.role === 'MAIN_ADMIN' || staffUser?.role === 'ADMIN';
+  const hasPerm = isSuperAdmin || (permission !== 'staff' && staffUser?.permissions?.includes(permission));
+
+  if (!hasPerm) {
+    return (
+      <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-8 text-center my-6">
+        <ShieldAlert className="mx-auto size-12 text-red-500" />
+        <h2 className="mt-4 text-xl font-bold">Access Restricted</h2>
+        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))] max-w-md mx-auto">
+          Your staff account role ({staffUser?.role || 'STAFF'}) does not have permission to access this module. Please contact the Master Administrator for permission.
+        </p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 function Router() {
   const [location] = useLocation();
@@ -2440,13 +2651,27 @@ function Router() {
         <Switch>
           <Route path="/" component={Overview} />
           <Route path="/admin" component={Overview} />
-          <Route path="/orders" component={Orders} />
-          <Route path="/products" component={Products} />
-          <Route path="/approvals" component={Approvals} />
-          <Route path="/staff" component={StaffManagement} />
-          <Route path="/discounts" component={Discounts} />
-          <Route path="/registrations" component={Registrations} />
-          <Route path="/settings" component={StoreSettings} />
+          <Route path="/orders">
+            <PermissionGate permission="orders"><Orders /></PermissionGate>
+          </Route>
+          <Route path="/products">
+            <PermissionGate permission="products"><Products /></PermissionGate>
+          </Route>
+          <Route path="/approvals">
+            <PermissionGate permission="approvals"><Approvals /></PermissionGate>
+          </Route>
+          <Route path="/staff">
+            <PermissionGate permission="staff"><StaffManagement /></PermissionGate>
+          </Route>
+          <Route path="/discounts">
+            <PermissionGate permission="discounts"><Discounts /></PermissionGate>
+          </Route>
+          <Route path="/registrations">
+            <PermissionGate permission="registrations"><Registrations /></PermissionGate>
+          </Route>
+          <Route path="/settings">
+            <PermissionGate permission="settings"><StoreSettings /></PermissionGate>
+          </Route>
           <Route component={NotFound} />
         </Switch>
       </Shell>

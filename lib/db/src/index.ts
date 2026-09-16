@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'ADMIN',
+  permissions TEXT,
   expires_at TIMESTAMPTZ,
   active BOOLEAN NOT NULL DEFAULT true,
   created_by TEXT,

@@ -10,6 +10,7 @@ export const adminUsersTable = pgTable("admin_users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("ADMIN"), // 'MAIN_ADMIN' | 'ADMIN' | 'SUB_ADMIN' | 'MODERATOR'
+  permissions: text("permissions"), // JSON stringified array of permitted modules e.g. ["orders","products","approvals"]
   expiresAt: timestamp("expires_at", { withTimezone: true }), // null = permanent, set date = temporary time-bound access
   active: boolean("active").notNull().default(true),
   createdBy: text("created_by"),
