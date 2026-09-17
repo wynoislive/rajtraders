@@ -27,8 +27,8 @@ async function getRazorpayCredentials(): Promise<{ keyId: string; keySecret: str
 async function getShopSettings() {
   const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
   return settings || {
-    latitude: 23.3646728,
-    longitude: 81.0444592,
+    latitude: 23.3643019,
+    longitude: 81.0441434,
     deliveryRadiusKm: 10.0,
     isDeliveryEnabled: true,
     razorpayKeyId: "rzp_test_sandbox123456",
@@ -37,7 +37,8 @@ async function getShopSettings() {
     legalBusinessName: "RAJ TRADERS",
     gstinNumber: "23AAAAA0000A1Z5",
     panNumber: "AAAAA0000A",
-    shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
+    shopAddress: "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
+    googleMapsUrl: "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt",
     stateCode: "23",
     stateName: "Madhya Pradesh",
     allowedPincodesJson: '["484551","484661","484660"]',
@@ -241,7 +242,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     }
 
     const finalShippingAddress = isPickup
-      ? `⚡ Self-Pickup at Store: ${settings.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551"}`
+      ? `⚡ Self-Pickup at RT Super Bazar (RAJ TRADERS): ${settings.shopAddress || "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551"}`
       : (shippingAddress || "").trim();
 
     // Check PIN code serviceability for delivery

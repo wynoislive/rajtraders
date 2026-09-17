@@ -164,9 +164,9 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   id TEXT PRIMARY KEY,
   shop_name TEXT NOT NULL DEFAULT 'RAJ TRADERS',
   shop_domain TEXT NOT NULL DEFAULT 'sundarvan.xyz',
-  shop_address TEXT NOT NULL DEFAULT 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
-  latitude REAL NOT NULL DEFAULT 23.3646728,
-  longitude REAL NOT NULL DEFAULT 81.0444592,
+  shop_address TEXT NOT NULL DEFAULT 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
+  latitude REAL NOT NULL DEFAULT 23.3643019,
+  longitude REAL NOT NULL DEFAULT 81.0441434,
   delivery_radius_km REAL NOT NULL DEFAULT 10.0,
   is_delivery_enabled BOOLEAN NOT NULL DEFAULT true,
   razorpay_key_id TEXT NOT NULL DEFAULT 'rzp_test_sandbox123456',
@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   hostinger_mailbox_resource_id TEXT DEFAULT '',
   support_phone TEXT DEFAULT '',
   whatsapp_number TEXT DEFAULT '',
+  google_maps_url TEXT DEFAULT 'https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt',
   whatsapp_gateway_url TEXT DEFAULT '',
   whatsapp_api_key TEXT DEFAULT '',
   whatsapp_session_id TEXT DEFAULT 'default',
@@ -194,8 +195,8 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   updatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-INSERT INTO shop_settings (id, shop_name, shop_domain, shop_address, latitude, longitude, delivery_radius_km, is_delivery_enabled, razorpay_key_id, razorpay_key_secret, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
-VALUES ('default_shop', 'RAJ TRADERS', 'sundarvan.xyz', 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551', 23.3646728, 81.0444592, 10.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'RAJ TRADERS <notifications.rajtraders@gmail.com>')
+INSERT INTO shop_settings (id, shop_name, shop_domain, shop_address, latitude, longitude, delivery_radius_km, is_delivery_enabled, razorpay_key_id, razorpay_key_secret, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, google_maps_url)
+VALUES ('default_shop', 'RAJ TRADERS', 'sundarvan.xyz', 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551', 23.3643019, 81.0441434, 10.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'RAJ TRADERS <notifications.rajtraders@gmail.com>', 'https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Default MAIN_ADMIN user
@@ -394,6 +395,7 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
   if (process.env.DELIVERY_ENABLED) updates.isDeliveryEnabled = process.env.DELIVERY_ENABLED === "true";
   if (process.env.SUPPORT_PHONE) updates.supportPhone = process.env.SUPPORT_PHONE;
   if (process.env.WHATSAPP_NUMBER) updates.whatsappNumber = process.env.WHATSAPP_NUMBER;
+  if (process.env.GOOGLE_MAPS_URL) updates.googleMapsUrl = process.env.GOOGLE_MAPS_URL;
   if (process.env.WHATSAPP_GATEWAY_URL) updates.whatsappGatewayUrl = process.env.WHATSAPP_GATEWAY_URL;
   if (process.env.WHATSAPP_API_KEY) updates.whatsappApiKey = process.env.WHATSAPP_API_KEY;
   if (process.env.WHATSAPP_SESSION_ID) updates.whatsappSessionId = process.env.WHATSAPP_SESSION_ID;

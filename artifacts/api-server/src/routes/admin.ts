@@ -62,6 +62,7 @@ export const UpdateShopSettingsSchema = z.object({
   notificationSmtpFrom: z.string().max(255).optional(),
   supportPhone: z.string().max(30).optional(),
   whatsappNumber: z.string().max(30).optional(),
+  googleMapsUrl: z.string().optional(),
   socialLinkedin: z.string().max(255).optional(),
   socialInstagram: z.string().max(255).optional(),
   socialFacebook: z.string().max(255).optional(),
@@ -677,6 +678,7 @@ router.put(
       if (ordersEmail !== undefined) updateData.ordersEmail = ordersEmail.trim();
       if (supportPhone !== undefined) updateData.supportPhone = supportPhone.trim();
       if (whatsappNumber !== undefined) updateData.whatsappNumber = whatsappNumber.trim();
+      if (req.body.googleMapsUrl !== undefined) updateData.googleMapsUrl = req.body.googleMapsUrl.trim();
 
       // OpenWA WhatsApp Gateway
       if (req.body.whatsappGatewayUrl !== undefined) updateData.whatsappGatewayUrl = req.body.whatsappGatewayUrl.trim();

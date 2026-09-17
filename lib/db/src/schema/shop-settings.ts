@@ -39,6 +39,7 @@ export const shopSettingsTable = pgTable("shop_settings", {
   // Contact Phone & WhatsApp Support (Admin Configurable)
   supportPhone: text("support_phone").default(""),
   whatsappNumber: text("whatsapp_number").default(""),
+  googleMapsUrl: text("google_maps_url").default("https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"),
   // OpenWA WhatsApp Gateway API Config
   whatsappGatewayUrl: text("whatsapp_gateway_url").default(""),
   whatsappApiKey: text("whatsapp_api_key").default(""),

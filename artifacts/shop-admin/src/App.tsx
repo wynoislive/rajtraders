@@ -1637,13 +1637,14 @@ function StoreSettings() {
   const [form, setForm] = useState({
     shopName: 'RAJ TRADERS',
     shopDomain: 'sundarvan.xyz',
-    shopAddress: 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
-    latitude: 23.3646728,
-    longitude: 81.0444592,
+    shopAddress: 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
+    latitude: 23.3643019,
+    longitude: 81.0441434,
     deliveryRadiusKm: 10.0,
     isDeliveryEnabled: true,
     supportPhone: '',
     whatsappNumber: '',
+    googleMapsUrl: 'https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt',
     razorpayKeyId: 'rzp_test_sandbox123456',
     razorpayKeySecret: 'sandbox_secret',
     r2AccountId: '',
@@ -1749,12 +1750,13 @@ function StoreSettings() {
         setForm((prev) => ({
           ...prev,
           ...data,
-          latitude: data.latitude ?? 23.3646728,
-          longitude: data.longitude ?? 81.0444592,
+          latitude: data.latitude ?? 23.3643019,
+          longitude: data.longitude ?? 81.0441434,
           deliveryRadiusKm: data.deliveryRadiusKm ?? 10.0,
           isDeliveryEnabled: data.isDeliveryEnabled ?? true,
           supportPhone: data.supportPhone ?? '',
           whatsappNumber: data.whatsappNumber ?? '',
+          googleMapsUrl: data.googleMapsUrl ?? 'https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt',
           legalBusinessName: data.legalBusinessName ?? 'RAJ TRADERS',
           gstinNumber: data.gstinNumber ?? '23AAAAA0000A1Z5',
           panNumber: data.panNumber ?? 'AAAAA0000A',
@@ -1915,6 +1917,33 @@ function StoreSettings() {
               <div className="md:col-span-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Physical Offline Store Address</label>
                 <input type="text" value={form.shopAddress} onChange={(e) => setForm({ ...form, shopAddress: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold" required />
+              </div>
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                    Google Maps Place URL (RT Super Bazar)
+                  </label>
+                  {form.googleMapsUrl && (
+                    <a
+                      href={form.googleMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-bold text-[hsl(var(--primary))] hover:underline flex items-center gap-1"
+                    >
+                      <ArrowUpRight size={12} /> Open in Google Maps
+                    </a>
+                  )}
+                </div>
+                <input
+                  type="url"
+                  value={form.googleMapsUrl || ''}
+                  onChange={(e) => setForm({ ...form, googleMapsUrl: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono"
+                  placeholder="https://www.google.com/maps/place/RT+Super+Bazar/..."
+                />
+                <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
+                  Direct Google Maps listing link opened when customers click "Get Directions" or view pickup location.
+                </p>
               </div>
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Support Phone Number (Direct Call)</label>

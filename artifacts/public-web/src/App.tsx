@@ -89,12 +89,13 @@ export default function App() {
     panNumber: 'AAAAA0000A',
     stateCode: '23',
     stateName: 'Madhya Pradesh',
-    shopAddress: 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
-    latitude: 23.3646728,
-    longitude: 81.0444592,
+    shopAddress: 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
+    latitude: 23.3643019,
+    longitude: 81.0441434,
     deliveryRadiusKm: 10.0,
     supportPhone: '',
     whatsappNumber: '',
+    googleMapsUrl: 'https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt',
     allowedPincodesJson: '["484551", "484661", "484660"]',
     availableInLocation: 'BIRSINGPUR PALI',
     aboutUsText: 'Premium cakes, party decorations & artisanal local delights.',
@@ -910,8 +911,8 @@ export default function App() {
     try {
       const items = cart.map((i) => ({ productId: i.product.id, quantity: i.quantity }));
       const orderShippingAddress = fulfillmentType === 'pickup'
-        ? `⚡ Self-Pickup at Store: ${shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}`
-        : `${shippingAddress} (PIN: ${deliveryPincode})`;
+        ? `⚡ Self-Pickup at RT Super Bazar (RAJ TRADERS): ${shopSettings.shopAddress || 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}`
+        : `${deliveryHouseNumber ? `${deliveryHouseNumber}, ` : ''}${deliveryStreetAddress.trim()}, Pali, MP - ${deliveryPincode.trim()}`;
 
       const res = await fetch(getApiUrl('/api/v1/checkout/create-order'), {
         method: 'POST',
@@ -1057,8 +1058,8 @@ export default function App() {
               className="flex items-center gap-1.5 text-xs font-bold text-[#E2A93B] hover:text-white transition"
             >
               <Store size={14} />
-              <span className="hidden sm:inline">Visit Offline Store (Pali)</span>
-              <span className="sm:hidden">Store Location</span>
+              <span className="hidden sm:inline">RT Super Bazar (Pali Offline Store)</span>
+              <span className="sm:hidden">RT Super Bazar</span>
             </button>
           </div>
         </div>
@@ -1847,7 +1848,7 @@ export default function App() {
             <ul className="text-xs text-white/80 space-y-2 font-medium">
               <li className="flex items-start gap-1.5">
                 <MapPin size={15} className="text-[#E2A93B] shrink-0 mt-0.5" />
-                <span>{shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</span>
+                <span>{shopSettings.shopAddress || 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</span>
               </li>
               <li className="flex items-center gap-1.5 text-white/90">
                 <Clock size={14} className="text-[#E2A93B]" />
@@ -1868,15 +1869,15 @@ export default function App() {
                 onClick={() => setIsStoreLocationModalOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-[#E2A93B] font-bold text-xs rounded-xl transition border border-white/15"
               >
-                <Store size={14} /> View Store Map
+                <Store size={14} /> RT Super Bazar Map
               </button>
               <a
-                href="https://www.google.com/maps/search/?api=1&query=23.364672784840362,81.04445920990453"
+                href={shopSettings.googleMapsUrl || "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E2A93B] hover:bg-[#E2A93B]/90 text-[#0E3D42] font-black text-xs rounded-xl transition shadow-sm"
               >
-                <Navigation size={13} /> Get Directions
+                <Navigation size={13} /> Get Directions (Google Maps)
               </a>
               {shopSettings.whatsappNumber && (
                 <a
@@ -1902,8 +1903,8 @@ export default function App() {
             {/* Embedded Google Maps iframe */}
             <div className="overflow-hidden rounded-xl border border-white/20 shadow-md">
               <iframe
-                title="Raj Traders Store Location Map"
-                src="https://maps.google.com/maps?q=23.364672784840362,81.04445920990453&hl=en&z=17&output=embed"
+                title="RT Super Bazar Store Location Map"
+                src="https://maps.google.com/maps?q=RT+Super+Bazar,+Thana+Rd,+beside+NAGAR+PALIKA,+BIRSINGPUR,+Pali+Birsinghpur,+Madhya+Pradesh+484551&ll=23.3643019,81.0441434&hl=en&z=19&output=embed"
                 width="100%"
                 height="130"
                 style={{ border: 0 }}
@@ -2063,13 +2064,24 @@ export default function App() {
 
                     {fulfillmentType === 'pickup' && (
                       <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1.5">
-                        <div className="font-extrabold flex items-center gap-1.5 text-amber-950">
+                        <div className="font-extrabold flex items-center justify-between text-amber-950">
                           <span>⚡ Ready for Pickup in 15–30 mins (Express Pickup)</span>
+                          <span className="bg-amber-200/80 px-2 py-0.5 rounded-full text-[10px] font-black uppercase">RT Super Bazar</span>
                         </div>
                         <p className="text-[11px] text-amber-800 font-medium">
-                          Collect at: <strong>{shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551'}</strong>
+                          Collect at: <strong>{shopSettings.shopAddress || 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551'}</strong>
                         </p>
-                        <p className="text-[10px] text-amber-700 font-semibold">Store Hours: 7:00 AM – 10:00 PM (Everyday) · Zero delivery fee</p>
+                        <div className="flex items-center justify-between pt-1 border-t border-amber-200/60 text-[10px]">
+                          <span className="text-amber-700 font-semibold">Hours: 7:00 AM – 10:00 PM (Everyday)</span>
+                          <a
+                            href={shopSettings.googleMapsUrl || 'https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#0E3D42] font-black underline flex items-center gap-0.5"
+                          >
+                            <Navigation size={10} /> View on Map
+                          </a>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2538,9 +2550,9 @@ export default function App() {
                 <div className="text-xs font-bold text-[#0E3D42] flex items-start gap-2">
                   <MapPin size={16} className="text-[#E2A93B] shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-extrabold">{shopSettings.shopName || 'RAJ TRADERS'}</span>
-                    <p className="font-medium text-gray-700 mt-0.5">{shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</p>
-                    <p className="text-[11px] font-mono text-gray-500 mt-1">Plus Code: 927V+PM Pali Birsinghpur, MP</p>
+                    <span className="font-extrabold text-sm">RT Super Bazar (Raj Traders)</span>
+                    <p className="font-medium text-gray-700 mt-0.5">{shopSettings.shopAddress || 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</p>
+                    <p className="text-[11px] font-mono text-gray-500 mt-1">Plus Code: 927V+PM Pali Birsinghpur, MP · GPS: 23.3643° N, 81.0441° E</p>
                   </div>
                 </div>
 
@@ -2561,8 +2573,8 @@ export default function App() {
               {/* Responsive Google Maps Embed */}
               <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-inner">
                 <iframe
-                  title="Raj Traders Store Location Map"
-                  src="https://maps.google.com/maps?q=23.364672784840362,81.04445920990453&hl=en&z=17&output=embed"
+                  title="RT Super Bazar Store Location Map"
+                  src="https://maps.google.com/maps?q=RT+Super+Bazar,+Thana+Rd,+beside+NAGAR+PALIKA,+BIRSINGPUR,+Pali+Birsinghpur,+Madhya+Pradesh+484551&ll=23.3643019,81.0441434&hl=en&z=19&output=embed"
                   width="100%"
                   height="240"
                   style={{ border: 0 }}
@@ -2576,12 +2588,12 @@ export default function App() {
               {/* Action Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <a
-                  href="https://www.google.com/maps/search/?api=1&query=23.364672784840362,81.04445920990453"
+                  href={shopSettings.googleMapsUrl || "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-3 px-4 rounded-xl bg-[#0E3D42] hover:bg-[#0E3D42]/90 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition"
                 >
-                  <Navigation size={16} className="text-[#E2A93B]" /> Get Directions (Google Maps)
+                  <Navigation size={16} className="text-[#E2A93B]" /> Open in Google Maps (RT Super Bazar)
                 </a>
 
                 {shopSettings.whatsappNumber ? (

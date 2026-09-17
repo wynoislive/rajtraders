@@ -168,7 +168,7 @@ export async function sendOrderConfirmationWhatsApp(
     `⚡ *Fulfillment:* ${isPickup ? "Store Self-Pickup (Ready in 15–30 mins)" : "Local Home Delivery"}`,
     `📍 *${isPickup ? "Pickup Location" : "Delivery Address"}:*`,
     isPickup
-      ? (shop?.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali MP 484551")
+      ? `🏪 *RT Super Bazar (RAJ TRADERS)*\n📍 ${shop?.shopAddress || "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551"}\n🗺️ Map: ${shop?.googleMapsUrl || "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"}`
       : (order.shippingAddress || "Birsingpur Pali"),
     ``,
     `🔗 *View Invoice & Live Order:*`,
@@ -194,7 +194,12 @@ export async function sendOrderConfirmationWhatsApp(
 export async function sendOrderStatusWhatsApp(
   order: any,
   newStatus: string,
-  extraData?: { riderName?: string; riderPhone?: string; trackingUrl?: string; cancellationReason?: string },
+  extraData?: {
+    riderName?: string;
+    riderPhone?: string;
+    trackingUrl?: string;
+    cancellationReason?: string;
+  },
   settings?: any
 ): Promise<WhatsAppSendResult> {
   const customerMobile = order.customerMobile;
@@ -226,9 +231,15 @@ export async function sendOrderStatusWhatsApp(
 
   switch (newStatus.toLowerCase()) {
     case "packed":
-      statusHeader = "🎁 Your order is packed and ready!";
+      statusHeader = isPickup ? "⚡ Ready for Store Pickup!" : "🎁 Your order is packed and ready!";
       detailsText = isPickup
-        ? "Your items are ready for pickup at our offline store counter."
+        ? [
+            "Your items are ready for pickup at our retail store counter:",
+            `🏪 *RT Super Bazar (RAJ TRADERS)*`,
+            `📍 ${shop?.shopAddress || "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551"}`,
+            `🗺️ *Google Maps:* ${shop?.googleMapsUrl || "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"}`,
+            `🕒 *Hours:* 7:00 AM – 10:00 PM Everyday`,
+          ].join("\n")
         : "Our delivery fleet is assigned and preparing for dispatch.";
       break;
 
