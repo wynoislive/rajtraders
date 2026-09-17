@@ -11,6 +11,7 @@ import {
   Search,
   User,
   ShieldCheck,
+  ShieldAlert,
   Clock,
   Sparkles,
   ChevronRight,
@@ -169,6 +170,31 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('raj_user') || 'null'); } catch { return null; }
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('raj_token'));
+  const [refreshToken, setRefreshToken] = useState<string | null>(() => localStorage.getItem('raj_refresh_token'));
+  const [resetTokenStatus, setResetTokenStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
+  const [resetTokenMessage, setResetTokenMessage] = useState('');
+
+  const saveAuthSession = (accessToken: string, newRefreshToken?: string, userData?: any) => {
+    setToken(accessToken);
+    localStorage.setItem('raj_token', accessToken);
+    if (newRefreshToken) {
+      setRefreshToken(newRefreshToken);
+      localStorage.setItem('raj_refresh_token', newRefreshToken);
+    }
+    if (userData) {
+      setUser(userData);
+      localStorage.setItem('raj_user', JSON.stringify(userData));
+    }
+  };
+
+  const clearAuthSession = () => {
+    setToken(null);
+    setRefreshToken(null);
+    setUser(null);
+    localStorage.removeItem('raj_token');
+    localStorage.removeItem('raj_refresh_token');
+    localStorage.removeItem('raj_user');
+  };
 
   // Multi-tab synchronization via storage events
   useEffect(() => {
@@ -404,11 +430,39 @@ export default function App() {
       const searchParams = new URLSearchParams(window.location.search);
       const urlToken = searchParams.get('token');
       const urlEmail = searchParams.get('email');
-      if (urlToken || window.location.pathname.startsWith('/reset-password')) {
+      const isResetPath = window.location.pathname.startsWith('/reset-password');
+
+      if (urlToken || isResetPath) {
+        // Immediate address bar sanitization: wipe token and query parameters from URL bar so it never lingers on refresh
+        const cleanPath = window.location.pathname.replace(/\/reset-password\/?/, '') || '/';
+        window.history.replaceState({}, '', cleanPath);
+
         setShowAuthModal(true);
         setAuthMode('reset_password');
         if (urlEmail) setPendingEmail(urlEmail);
         if (urlToken) setResetToken(urlToken);
+
+        if (urlToken && urlEmail) {
+          setResetTokenStatus('checking');
+          fetch(getApiUrl(`/api/v1/auth/verify-reset-token?token=${encodeURIComponent(urlToken)}&email=${encodeURIComponent(urlEmail)}`))
+            .then(async (res) => {
+              const data = await res.json();
+              if (res.ok && data.valid) {
+                setResetTokenStatus('valid');
+              } else {
+                setResetTokenStatus('invalid');
+                setResetTokenMessage(data.message || 'This password reset link has expired or has already been used.');
+              }
+            })
+            .catch(() => {
+              setResetTokenStatus('invalid');
+              setResetTokenMessage('Unable to verify reset link. Please check your internet connection.');
+            });
+        } else if (urlToken) {
+          setResetTokenStatus('valid');
+        } else {
+          setResetTokenStatus('idle');
+        }
       }
     }
   }, []);
@@ -702,11 +756,8 @@ export default function App() {
         body: JSON.stringify({ email: pendingEmail, otpCode }),
       });
       const data = await res.json();
-      if (data.token && data.user) {
-        setToken(data.token);
-        setUser(data.user);
-        localStorage.setItem('raj_token', data.token);
-        localStorage.setItem('raj_user', JSON.stringify(data.user));
+      if ((data.accessToken || data.token) && data.user) {
+        saveAuthSession(data.accessToken || data.token, data.refreshToken, data.user);
         setShowAuthModal(false);
         setOtpRequired(false);
         showToast('Email verified successfully!', 'success');
@@ -785,13 +836,19 @@ export default function App() {
     try {
       const res = await fetch(getApiUrl('/api/v1/auth/reset-password'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         body: JSON.stringify({ email, token: tokenInput, newPassword, confirmPassword }),
       });
       const data = await res.json();
       if (res.ok) {
-        setAuthSuccess('Password updated! You can now sign in.');
-        setTimeout(() => setAuthMode('login'), 2000);
+        if (data.accessToken || data.token) {
+          saveAuthSession(data.accessToken || data.token, data.refreshToken, data.user);
+        }
+        setResetToken('');
+        setResetTokenStatus('idle');
+        showToast('Password updated! You have been logged in securely.', 'success');
+        setShowAuthModal(false);
+        setAuthSuccess(null);
       } else {
         setAuthError(data.error || 'Failed to reset password.');
       }
@@ -2173,21 +2230,57 @@ export default function App() {
                 </div>
               </form>
             ) : authMode === 'reset_password' ? (
-              <form onSubmit={handleResetPassword} className="space-y-3">
-                <p className="text-xs text-gray-500 font-medium leading-relaxed">
-                  Enter the reset code/token sent to your email along with your new password. (Token is valid for 60 minutes).
-                </p>
-                <input required type="email" name="email" defaultValue={pendingEmail} placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
-                <input required type="text" name="token" defaultValue={resetToken} placeholder="Reset Token / OTP Code (from Email)" autoComplete="off" className="w-full p-3 text-sm font-mono font-bold tracking-wide rounded-xl border border-gray-300" />
-                <input required type="password" name="newPassword" placeholder="New Password (min 6 chars)" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
-                <input required type="password" name="confirmPassword" placeholder="Confirm New Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
-                <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">
-                  {authLoading ? 'Updating Password...' : 'Update Password'}
-                </button>
-                <div className="text-center text-xs font-bold text-[#0E3D42]/70 pt-1">
-                  Remembered your password? <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">Sign In</button>
+              resetTokenStatus === 'checking' ? (
+                <div className="py-10 text-center space-y-4">
+                  <div className="w-9 h-9 border-3 border-[#0E3D42] border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs font-bold text-[#0E3D42]">Verifying your single-use recovery link...</p>
                 </div>
-              </form>
+              ) : resetTokenStatus === 'invalid' ? (
+                <div className="space-y-4 py-2 text-center">
+                  <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                    <ShieldAlert size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-extrabold text-[#0E3D42]">Link Expired or Already Used</h3>
+                    <p className="text-xs text-gray-600 font-medium leading-relaxed px-2">
+                      {resetTokenMessage || 'For your security, Raj Traders password recovery links are strictly single-use only and expire after 60 minutes.'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-medium text-left">
+                    🔐 <strong>Security Policy:</strong> Once a password reset link is used, it cannot be reused. Refreshing the browser or reopening the link will not allow re-editing.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('forgot_password');
+                      setAuthError(null);
+                      setResetTokenStatus('idle');
+                    }}
+                    className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow hover:bg-[#0E3D42]/90 transition"
+                  >
+                    Request a Fresh Reset Link
+                  </button>
+                  <div className="text-center text-xs font-bold text-[#0E3D42]/70 pt-1">
+                    Remembered your password? <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">Sign In</button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleResetPassword} className="space-y-3">
+                  <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                    Choose a strong new password for your account. Once changed, all other active device sessions will be logged out automatically.
+                  </p>
+                  <input required type="email" name="email" defaultValue={pendingEmail} placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                  <input required type="text" name="token" defaultValue={resetToken} placeholder="Reset Token / OTP Code (from Email)" autoComplete="off" className="w-full p-3 text-sm font-mono font-bold tracking-wide rounded-xl border border-gray-300" />
+                  <input required type="password" name="newPassword" placeholder="New Password (min 6 chars)" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                  <input required type="password" name="confirmPassword" placeholder="Confirm New Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                  <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">
+                    {authLoading ? 'Updating Password...' : 'Update Password & Sign In'}
+                  </button>
+                  <div className="text-center text-xs font-bold text-[#0E3D42]/70 pt-1">
+                    Remembered your password? <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">Sign In</button>
+                  </div>
+                </form>
+              )
             ) : (
               <form onSubmit={handleRegister} className="space-y-3">
                 <input required type="text" name="firstName" placeholder="First Name" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />

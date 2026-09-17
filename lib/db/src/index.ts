@@ -241,6 +241,17 @@ CREATE TABLE IF NOT EXISTS customer_notifications (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  family_id TEXT NOT NULL,
+  device_fingerprint TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
@@ -258,6 +269,10 @@ CREATE INDEX IF NOT EXISTS idx_customer_addresses_user_id ON customer_addresses(
 CREATE INDEX IF NOT EXISTS idx_customer_favorites_user_id ON customer_favorites(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_favorites_user_product ON customer_favorites(user_id, product_id);
 CREATE INDEX IF NOT EXISTS idx_customer_notifications_user_id ON customer_notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family_id ON refresh_tokens(family_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 
 -- Alter queries for existing tables missing new columns
 ALTER TABLE products ADD COLUMN IF NOT EXISTS prep_time_minutes INTEGER NOT NULL DEFAULT 30;
@@ -440,4 +455,4 @@ ensureDbReady().catch((e) => console.warn("ensureDbReady startup error:", e));
 export const pool = poolInstance;
 export const db = dbInstance;
 
-export * from "./schema";
+export * from "./schema/index.js";

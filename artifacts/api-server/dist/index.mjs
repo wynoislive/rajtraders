@@ -250464,6 +250464,7 @@ __export(schema_exports, {
   passwordLockoutsTable: () => passwordLockoutsTable,
   passwordResetsTable: () => passwordResetsTable,
   productsTable: () => productsTable,
+  refreshTokensTable: () => refreshTokensTable,
   registrationClaimsTable: () => registrationClaimsTable,
   registrationPoliciesTable: () => registrationPoliciesTable,
   shopSettingsTable: () => shopSettingsTable,
@@ -250848,6 +250849,28 @@ var customerCartsTable = pgTable("customer_carts", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
+// lib/db/src/schema/refresh-tokens.ts
+import { randomUUID as randomUUID13 } from "node:crypto";
+var refreshTokensTable = pgTable(
+  "refresh_tokens",
+  {
+    id: text("id").primaryKey().$defaultFn(randomUUID13),
+    userId: text("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    familyId: text("family_id").notNull(),
+    deviceFingerprint: text("device_fingerprint"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index("idx_refresh_tokens_user_id").on(table.userId),
+    index("idx_refresh_tokens_token_hash").on(table.tokenHash),
+    index("idx_refresh_tokens_family_id").on(table.familyId),
+    index("idx_refresh_tokens_expires_at").on(table.expiresAt)
+  ]
+);
+
 // lib/db/src/index.ts
 var { Pool: Pool2 } = pg3;
 var dbInstance;
@@ -251082,6 +251105,17 @@ CREATE TABLE IF NOT EXISTS customer_notifications (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  family_id TEXT NOT NULL,
+  device_fingerprint TEXT,
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
@@ -251099,6 +251133,10 @@ CREATE INDEX IF NOT EXISTS idx_customer_addresses_user_id ON customer_addresses(
 CREATE INDEX IF NOT EXISTS idx_customer_favorites_user_id ON customer_favorites(user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_favorites_user_product ON customer_favorites(user_id, product_id);
 CREATE INDEX IF NOT EXISTS idx_customer_notifications_user_id ON customer_notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family_id ON refresh_tokens(family_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 
 -- Alter queries for existing tables missing new columns
 ALTER TABLE products ADD COLUMN IF NOT EXISTS prep_time_minutes INTEGER NOT NULL DEFAULT 30;
@@ -251672,7 +251710,7 @@ var storefront_default = router2;
 
 // artifacts/api-server/src/routes/admin.ts
 var import_express5 = __toESM(require_express2(), 1);
-import { randomUUID as randomUUID14 } from "node:crypto";
+import { randomUUID as randomUUID15 } from "node:crypto";
 
 // artifacts/api-server/src/lib/redis.ts
 var import_ioredis = __toESM(require_built3(), 1);
@@ -251964,7 +252002,7 @@ function logAuditEvent(req, payload) {
 
 // artifacts/api-server/src/routes/staff-admin.ts
 var import_express4 = __toESM(require_express2(), 1);
-import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID13 } from "node:crypto";
+import { randomBytes, scryptSync, timingSafeEqual, randomUUID as randomUUID14 } from "node:crypto";
 
 // node_modules/.pnpm/express-rate-limit@8.7.0_express@5.2.1/node_modules/express-rate-limit/dist/index.mjs
 var import_ip_address = __toESM(require_ip_address(), 1);
@@ -253972,7 +254010,7 @@ router3.post("/staff/login", staffLoginLimiter, validate({ body: StaffLoginBodyS
     } else {
       userPermissions = getDefaultPermissions(staff.role);
     }
-    const token = `staff_${randomUUID13().replace(/-/g, "")}`;
+    const token = `staff_${randomUUID14().replace(/-/g, "")}`;
     const session = {
       userId: staff.id,
       name: staff.name,
@@ -277563,7 +277601,7 @@ router4.post("/v1/admin/products", requirePermission("products"), async (req, re
   const approvalStatus = isSubAdminOrMod ? "pending_approval" : "approved";
   const initialStatus = isSubAdminOrMod ? "draft" : status ?? "active";
   const baseSlug = slugify(cleanName) || "product";
-  const uniqueSlug = `${baseSlug}-${randomUUID14().substring(0, 6)}`;
+  const uniqueSlug = `${baseSlug}-${randomUUID15().substring(0, 6)}`;
   try {
     const [created] = await db.insert(productsTable).values({
       name: cleanName,
@@ -277713,7 +277751,7 @@ router4.post("/v1/admin/discounts", requirePermission("discounts"), async (req, 
     return;
   }
   const payload = parsed.data;
-  const id = randomUUID14();
+  const id = randomUUID15();
   try {
     const [inserted] = await db.insert(discountsTable).values({
       id,
@@ -278190,20 +278228,20 @@ router4.post("/v1/admin/orders/:id/approve-cancellation", requirePermission("ord
           } else {
             const errText = await refundResponse.text();
             req.log.error({ errText }, "Razorpay Refund API error");
-            refundId = `rfnd_mock_${randomUUID14().slice(0, 8)}`;
+            refundId = `rfnd_mock_${randomUUID15().slice(0, 8)}`;
           }
         } else {
-          refundId = `rfnd_mock_${randomUUID14().slice(0, 8)}`;
+          refundId = `rfnd_mock_${randomUUID15().slice(0, 8)}`;
         }
       } catch (err) {
         req.log.warn({ err }, "Error calling Razorpay refund API, using fallback refund ID");
-        refundId = `rfnd_mock_${randomUUID14().slice(0, 8)}`;
+        refundId = `rfnd_mock_${randomUUID15().slice(0, 8)}`;
       }
     } else if (preferredMethod === "wallet") {
       const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}`;
       try {
         await db.insert(discountsTable).values({
-          id: randomUUID14(),
+          id: randomUUID15(),
           code: creditCode,
           type: "fixed",
           value: order.totalCents,
@@ -278338,7 +278376,7 @@ var admin_default = router4;
 
 // artifacts/api-server/src/routes/checkout.ts
 var import_express7 = __toESM(require_express2(), 1);
-import { createHmac as createHmac2, randomUUID as randomUUID16 } from "node:crypto";
+import { createHmac as createHmac2, randomUUID as randomUUID17 } from "node:crypto";
 
 // artifacts/api-server/src/utils/geo.ts
 function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -278353,7 +278391,7 @@ function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
 
 // artifacts/api-server/src/routes/customer-auth.ts
 var import_express6 = __toESM(require_express2(), 1);
-import { randomBytes as randomBytes6, scryptSync as scryptSync3, timingSafeEqual as timingSafeEqual5, randomUUID as randomUUID15, createHash as createHash2, randomInt as randomInt2 } from "node:crypto";
+import { randomBytes as randomBytes6, scryptSync as scryptSync3, timingSafeEqual as timingSafeEqual5, randomUUID as randomUUID16, createHash as createHash2, randomInt as randomInt2 } from "node:crypto";
 
 // artifacts/api-server/src/lib/totp.ts
 import { createCipheriv, createDecipheriv, randomBytes as randomBytes5, scryptSync as scryptSync2, timingSafeEqual as timingSafeEqual4, randomInt } from "node:crypto";
@@ -279139,6 +279177,9 @@ var UpdateProfileBodySchema = external_exports.object({
   lastName: external_exports.string().min(1).max(100).optional(),
   mobileNumber: external_exports.string().optional()
 });
+var RefreshTokenBodySchema = external_exports.object({
+  refreshToken: external_exports.string().min(1, "Refresh token is required")
+});
 var TotpVerifyBodySchema = external_exports.object({
   totpCode: external_exports.string().min(6).max(6)
 });
@@ -279169,24 +279210,82 @@ function verifyPassword2(password, storedHash) {
     return false;
   }
 }
-var SESSION_TTL_MS = securityConfig.sessionTtlMs;
-var SESSION_TTL_SECONDS = securityConfig.sessionTtlSeconds;
+var ACCESS_TOKEN_TTL_MS = 15 * 60 * 1e3;
+var ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
+var REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
 var fallbackSessionStore = /* @__PURE__ */ new Map();
-async function createSession(userId) {
-  const token = `auth_${randomUUID15().replace(/-/g, "")}`;
-  const session = { userId, expiresAt: Date.now() + SESSION_TTL_MS };
+async function issueTokenPair(userId, req, existingFamilyId) {
+  const accessToken = `atk_${randomBytes6(32).toString("hex")}`;
+  const rawRefreshToken = `rtk_${randomBytes6(40).toString("hex")}`;
+  const familyId = existingFamilyId || randomUUID16();
+  const now = /* @__PURE__ */ new Date();
+  const refreshExpiresAt = new Date(now.getTime() + REFRESH_TOKEN_TTL_MS);
+  const deviceFingerprint = req ? createHash2("sha256").update(`${req.headers["user-agent"] || ""}:${req.ip || ""}`).digest("hex") : null;
+  const tokenHash = createHash2("sha256").update(rawRefreshToken).digest("hex");
+  try {
+    await db.insert(refreshTokensTable).values({
+      id: randomUUID16(),
+      userId,
+      tokenHash,
+      familyId,
+      deviceFingerprint,
+      expiresAt: refreshExpiresAt,
+      revokedAt: null
+    });
+  } catch (err) {
+    console.error("Failed to insert refresh token:", err);
+  }
+  const session = { userId, expiresAt: Date.now() + ACCESS_TOKEN_TTL_MS, familyId, deviceFingerprint };
   const redis = getRedisClient();
   if (redis) {
-    await redis.set(
-      `session:customer:${token}`,
-      JSON.stringify(session),
-      "EX",
-      SESSION_TTL_SECONDS
-    );
+    try {
+      await redis.set(
+        `session:customer:access:${accessToken}`,
+        JSON.stringify(session),
+        "EX",
+        ACCESS_TOKEN_TTL_SECONDS
+      );
+      await redis.sadd(`user:sessions:${userId}`, accessToken);
+      await redis.expire(`user:sessions:${userId}`, 30 * 24 * 60 * 60);
+    } catch {
+      fallbackSessionStore.set(accessToken, session);
+    }
   } else {
-    fallbackSessionStore.set(token, session);
+    fallbackSessionStore.set(accessToken, session);
   }
-  return token;
+  return {
+    accessToken,
+    refreshToken: rawRefreshToken,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS
+  };
+}
+async function revokeAllUserSessions(userId) {
+  const now = /* @__PURE__ */ new Date();
+  try {
+    await db.update(refreshTokensTable).set({ revokedAt: now }).where(and(eq(refreshTokensTable.userId, userId), sql`${refreshTokensTable.revokedAt} IS NULL`));
+  } catch (err) {
+  }
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const sessionKeys = await redis.smembers(`user:sessions:${userId}`);
+      if (sessionKeys && sessionKeys.length > 0) {
+        const pipeline = redis.pipeline();
+        for (const k of sessionKeys) {
+          pipeline.del(`session:customer:access:${k}`);
+          pipeline.del(`session:customer:${k}`);
+        }
+        pipeline.del(`user:sessions:${userId}`);
+        await pipeline.exec();
+      }
+    } catch {
+    }
+  }
+  for (const [key, sess] of fallbackSessionStore.entries()) {
+    if (sess.userId === userId) {
+      fallbackSessionStore.delete(key);
+    }
+  }
 }
 function safeJsonParse(raw, fallback) {
   if (!raw) return fallback;
@@ -279201,18 +279300,26 @@ async function getUserIdFromToken(token) {
   const clean3 = token.replace(/^Bearer\s+/i, "").trim();
   const redis = getRedisClient();
   if (redis) {
-    const data = await redis.get(`session:customer:${clean3}`);
-    if (!data) return null;
     try {
-      const session2 = JSON.parse(data);
-      if (Date.now() > session2.expiresAt) {
-        await redis.del(`session:customer:${clean3}`);
-        return null;
+      const accessData = await redis.get(`session:customer:access:${clean3}`);
+      if (accessData) {
+        const session2 = JSON.parse(accessData);
+        if (Date.now() > session2.expiresAt) {
+          await redis.del(`session:customer:access:${clean3}`);
+          return null;
+        }
+        return session2.userId;
       }
-      return session2.userId;
+      const legacyData = await redis.get(`session:customer:${clean3}`);
+      if (legacyData) {
+        const session2 = JSON.parse(legacyData);
+        if (Date.now() > session2.expiresAt) {
+          await redis.del(`session:customer:${clean3}`);
+          return null;
+        }
+        return session2.userId;
+      }
     } catch {
-      await redis.del(`session:customer:${clean3}`);
-      return null;
     }
   }
   const session = fallbackSessionStore.get(clean3);
@@ -279228,10 +279335,13 @@ async function deleteSession(token) {
   const clean3 = token.replace(/^Bearer\s+/i, "").trim();
   const redis = getRedisClient();
   if (redis) {
-    await redis.del(`session:customer:${clean3}`);
-  } else {
-    fallbackSessionStore.delete(clean3);
+    try {
+      await redis.del(`session:customer:access:${clean3}`);
+      await redis.del(`session:customer:${clean3}`);
+    } catch {
+    }
   }
+  fallbackSessionStore.delete(clean3);
 }
 async function checkOtpRateLimit(email) {
   const windowStart = new Date(Date.now() - OTP_RATE_LIMIT_WINDOW_MS);
@@ -279254,7 +279364,7 @@ async function issueVerificationOtp(req, res, user, cleanEmail, extra) {
   const otpCode = randomInt2(1e5, 999999).toString();
   const expiresAt = new Date(Date.now() + OTP_VALIDITY_MS);
   await db.insert(emailVerificationsTable).values({
-    id: randomUUID15(),
+    id: randomUUID16(),
     userId: user.id,
     email: cleanEmail,
     otpCode,
@@ -279298,7 +279408,7 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
     const now = /* @__PURE__ */ new Date();
     const deletedLogs = await db.select().from(deletedAccountsLogTable).where(and(eq(deletedAccountsLogTable.email, cleanEmail), gt(deletedAccountsLogTable.penaltyExpiresAt, now))).limit(1);
     let hasLockdownPenalty = deletedLogs.length > 0;
-    const userId = randomUUID15();
+    const userId = randomUUID16();
     const passwordHash = hashPassword2(password);
     await db.transaction(async (tx) => {
       await tx.insert(usersTable).values({
@@ -279310,7 +279420,7 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
         passwordHash
       });
       if (hasLockdownPenalty) {
-        await tx.insert(registrationClaimsTable).values({ id: randomUUID15(), email: cleanEmail, policyId: "forfeited_due_to_deletion_penalty" }).onConflictDoNothing({ target: registrationClaimsTable.email });
+        await tx.insert(registrationClaimsTable).values({ id: randomUUID16(), email: cleanEmail, policyId: "forfeited_due_to_deletion_penalty" }).onConflictDoNothing({ target: registrationClaimsTable.email });
         req.log.warn({ cleanEmail }, "User re-registered within 15-day deletion penalty; welcome offers forfeited.");
       }
     });
@@ -279384,11 +279494,14 @@ router5.post("/verify-login-otp", otpLimiter, validate({ body: VerifyOtpBodySche
       res.status(404).json({ error: "User account not found." });
       return;
     }
-    const token = await createSession(user.id);
+    const tokens = await issueTokenPair(user.id, req);
     req.log.info({ userId: user.id, email: user.email }, "Customer verified login OTP and signed in");
     res.status(200).json({
       success: true,
-      token,
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email }
     });
   } catch (err) {
@@ -279498,8 +279611,17 @@ router5.post("/change-password", changePasswordLimiter, validate({ body: ChangeP
     }
     const newPasswordHash = hashPassword2(newPassword);
     await db.update(usersTable).set({ passwordHash: newPasswordHash, updatedAt: /* @__PURE__ */ new Date() }).where(eq(usersTable.id, userId));
-    req.log.info({ userId }, "Customer successfully changed password via Settings & Security");
-    res.status(200).json({ success: true, message: "Password changed successfully!" });
+    await revokeAllUserSessions(userId);
+    const tokens = await issueTokenPair(userId, req);
+    req.log.info({ userId }, "Customer successfully changed password via Settings & Security; all other device sessions revoked");
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully! All other device sessions have been logged out.",
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn
+    });
   } catch (err) {
     req.log.error({ err }, "Change password error");
     res.status(500).json({ error: "Failed to change password. Please try again." });
@@ -279520,7 +279642,7 @@ router5.delete("/delete-account", async (req, res) => {
     const user = foundUsers[0];
     const deletedAt = /* @__PURE__ */ new Date();
     const penaltyExpiresAt = new Date(deletedAt.getTime() + 15 * 24 * 60 * 60 * 1e3);
-    await db.insert(deletedAccountsLogTable).values({ id: randomUUID15(), email: user.email, mobileNumber: user.mobileNumber, deletedAt, penaltyExpiresAt });
+    await db.insert(deletedAccountsLogTable).values({ id: randomUUID16(), email: user.email, mobileNumber: user.mobileNumber, deletedAt, penaltyExpiresAt });
     await db.delete(usersTable).where(eq(usersTable.id, userId));
     await db.delete(totpSecretsTable).where(eq(totpSecretsTable.userId, userId));
     await deleteSession(req.headers.authorization);
@@ -279554,7 +279676,7 @@ router5.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPasswor
     const tokenHash = createHash2("sha256").update(rawToken).digest("hex");
     const now = Date.now();
     const expiresAt = new Date(now + 60 * 60 * 1e3);
-    await db.insert(passwordResetsTable).values({ id: randomUUID15(), userId: user.id, email: cleanEmail, tokenHash, expiresAt });
+    await db.insert(passwordResetsTable).values({ id: randomUUID16(), userId: user.id, email: cleanEmail, tokenHash, expiresAt });
     const shopSettings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const shopDomain = shopSettings?.shopDomain || "myshop.com";
     const resetUrl = `https://${shopDomain}/reset-password?token=${rawToken}&email=${encodeURIComponent(cleanEmail)}`;
@@ -279564,6 +279686,66 @@ router5.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPasswor
   } catch (err) {
     req.log.error({ err }, "Forgot password error");
     res.status(500).json({ error: "Failed to process recovery request." });
+  }
+});
+router5.get("/verify-reset-token", async (req, res) => {
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  const email = typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : "";
+  if (!token || !email) {
+    res.status(400).json({
+      valid: false,
+      reason: "INVALID",
+      message: "Password reset link is incomplete or invalid."
+    });
+    return;
+  }
+  const tokenHash = createHash2("sha256").update(token).digest("hex");
+  const now = /* @__PURE__ */ new Date();
+  try {
+    const lockouts = await db.select().from(passwordLockoutsTable).where(eq(passwordLockoutsTable.email, email)).limit(1);
+    if (lockouts.length > 0 && lockouts[0].lockedUntil > now) {
+      const minutesLeft = Math.ceil((lockouts[0].lockedUntil.getTime() - now.getTime()) / 6e4);
+      res.status(429).json({
+        valid: false,
+        reason: "LOCKED_OUT",
+        message: `A password reset was recently completed. For your security, this account is temporarily locked from resets for another ${minutesLeft} minutes.`
+      });
+      return;
+    }
+    const resets = await db.select().from(passwordResetsTable).where(and(eq(passwordResetsTable.email, email), eq(passwordResetsTable.tokenHash, tokenHash))).limit(1);
+    if (resets.length === 0) {
+      res.status(404).json({
+        valid: false,
+        reason: "INVALID",
+        message: "Invalid password reset link. This link does not exist."
+      });
+      return;
+    }
+    const resetRecord = resets[0];
+    if (resetRecord.usedAt) {
+      res.status(410).json({
+        valid: false,
+        reason: "ALREADY_USED",
+        message: "This password reset link has already been used. For your security, reset links are strictly single-use only."
+      });
+      return;
+    }
+    if (now > resetRecord.expiresAt) {
+      res.status(410).json({
+        valid: false,
+        reason: "EXPIRED",
+        message: "This password reset link has expired. Links are valid for 60 minutes only."
+      });
+      return;
+    }
+    res.status(200).json({
+      valid: true,
+      email,
+      message: "Reset token is valid. You may now enter your new password."
+    });
+  } catch (err) {
+    req.log.error({ err }, "Error verifying reset token");
+    res.status(500).json({ valid: false, reason: "ERROR", message: "Failed to verify reset token." });
   }
 });
 router5.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordBodySchema }), async (req, res) => {
@@ -279586,13 +279768,90 @@ router5.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordB
     await db.update(usersTable).set({ passwordHash: newPasswordHash, updatedAt: now }).where(eq(usersTable.id, resetRecord.userId));
     await db.update(passwordResetsTable).set({ usedAt: now }).where(eq(passwordResetsTable.id, resetRecord.id));
     const lockoutUntil = new Date(now.getTime() + 15 * 60 * 1e3);
-    await db.insert(passwordLockoutsTable).values({ id: randomUUID15(), email: cleanEmail, lockedUntil: lockoutUntil }).onConflictDoUpdate({ target: passwordLockoutsTable.email, set: { lockedUntil: lockoutUntil } });
-    req.log.info({ email: cleanEmail }, "Password successfully reset; 15-min lockout enacted");
-    res.status(200).json({ success: true, message: "Password reset successful! You may now sign in with your new password." });
+    await db.insert(passwordLockoutsTable).values({ id: randomUUID16(), email: cleanEmail, lockedUntil: lockoutUntil }).onConflictDoUpdate({ target: passwordLockoutsTable.email, set: { lockedUntil: lockoutUntil } });
+    await revokeAllUserSessions(resetRecord.userId);
+    const tokens = await issueTokenPair(resetRecord.userId, req);
+    const updatedUser = (await db.select().from(usersTable).where(eq(usersTable.id, resetRecord.userId)).limit(1))[0];
+    req.log.info({ email: cleanEmail, userId: resetRecord.userId }, "Password successfully reset; all old sessions revoked, fresh tokens issued");
+    res.status(200).json({
+      success: true,
+      message: "Password reset successful! You have been logged in securely, and all other device sessions have been closed.",
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
+      user: updatedUser ? {
+        id: updatedUser.id,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        mobileNumber: updatedUser.mobileNumber,
+        email: updatedUser.email
+      } : void 0
+    });
   } catch (err) {
     req.log.error({ err }, "Reset password error");
     res.status(500).json({ error: "Failed to reset password." });
   }
+});
+router5.post("/refresh-token", validate({ body: RefreshTokenBodySchema }), async (req, res) => {
+  const { refreshToken } = req.body;
+  const clean3 = refreshToken.trim();
+  const tokenHash = createHash2("sha256").update(clean3).digest("hex");
+  const now = /* @__PURE__ */ new Date();
+  try {
+    const records = await db.select().from(refreshTokensTable).where(eq(refreshTokensTable.tokenHash, tokenHash)).limit(1);
+    if (records.length === 0) {
+      res.status(401).json({ error: "Invalid refresh token. Please sign in again." });
+      return;
+    }
+    const record = records[0];
+    if (record.revokedAt !== null) {
+      req.log.warn(
+        { userId: record.userId, familyId: record.familyId },
+        "SECURITY ALERT: Refresh token reuse detected! Revoking entire token family."
+      );
+      await db.update(refreshTokensTable).set({ revokedAt: now }).where(eq(refreshTokensTable.familyId, record.familyId));
+      await revokeAllUserSessions(record.userId);
+      res.status(401).json({
+        error: "Security alert: Session compromised (token reuse detected). All device sessions revoked. Please sign in again."
+      });
+      return;
+    }
+    if (now > record.expiresAt) {
+      res.status(401).json({ error: "Refresh token has expired. Please sign in again." });
+      return;
+    }
+    await db.update(refreshTokensTable).set({ revokedAt: now }).where(eq(refreshTokensTable.id, record.id));
+    const tokens = await issueTokenPair(record.userId, req, record.familyId);
+    res.status(200).json({
+      success: true,
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn
+    });
+  } catch (err) {
+    req.log.error({ err }, "Refresh token error");
+    res.status(500).json({ error: "Failed to refresh token." });
+  }
+});
+router5.post("/logout", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  await deleteSession(authHeader);
+  if (req.body?.refreshToken && typeof req.body.refreshToken === "string") {
+    const tokenHash = createHash2("sha256").update(req.body.refreshToken.trim()).digest("hex");
+    await db.update(refreshTokensTable).set({ revokedAt: /* @__PURE__ */ new Date() }).where(eq(refreshTokensTable.tokenHash, tokenHash));
+  }
+  res.status(200).json({ success: true, message: "Logged out successfully." });
+});
+router5.post("/logout-all", async (req, res) => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  await revokeAllUserSessions(userId);
+  res.status(200).json({ success: true, message: "All device sessions have been closed." });
 });
 router5.post("/totp/setup", async (req, res) => {
   const userId = await getUserIdFromToken(req.headers.authorization);
@@ -279618,7 +279877,7 @@ router5.post("/totp/setup", async (req, res) => {
       await db.delete(totpSecretsTable).where(eq(totpSecretsTable.userId, userId));
     }
     await db.insert(totpSecretsTable).values({
-      id: randomUUID15(),
+      id: randomUUID16(),
       userId,
       encryptedSecret: encrypted,
       isEnabled: false,
@@ -279723,11 +279982,14 @@ router5.post("/totp/verify", otpLimiter, validate({ body: TotpLoginVerifySchema 
       res.status(400).json({ error: "Invalid TOTP code. Please try again." });
       return;
     }
-    const token = await createSession(user.id);
+    const tokens = await issueTokenPair(user.id, req);
     req.log.info({ userId: user.id, email: user.email }, "Customer verified TOTP and signed in");
     res.status(200).json({
       success: true,
-      token,
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email }
     });
   } catch (err) {
@@ -279759,11 +280021,14 @@ router5.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema })
     }
     hashedCodes.splice(matchIndex, 1);
     await db.update(totpSecretsTable).set({ recoveryCodes: JSON.stringify(hashedCodes), updatedAt: /* @__PURE__ */ new Date() }).where(eq(totpSecretsTable.id, record.id));
-    const token = await createSession(user.id);
+    const tokens = await issueTokenPair(user.id, req);
     req.log.info({ userId: user.id, email: user.email, remainingCodes: hashedCodes.length }, "Customer used TOTP recovery code and signed in");
     res.status(200).json({
       success: true,
-      token,
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email },
       remainingRecoveryCodes: hashedCodes.length,
       message: `Recovery code accepted. You have ${hashedCodes.length} recovery codes remaining.`
@@ -280350,7 +280615,7 @@ router6.post("/create-order", async (req, res) => {
     const cgstCents = Math.round(totalGstCents / 2);
     const sgstCents = totalGstCents - cgstCents;
     const igstCents = 0;
-    const internalOrderId = randomUUID16();
+    const internalOrderId = randomUUID17();
     const reservation = await reserveInventory(internalOrderId, items, 900);
     if (!reservation.success) {
       res.status(409).json({
@@ -280771,14 +281036,14 @@ var approvals_default = router7;
 
 // artifacts/api-server/src/routes/storage.ts
 var import_express9 = __toESM(require_express2(), 1);
-import { randomUUID as randomUUID17 } from "node:crypto";
+import { randomUUID as randomUUID18 } from "node:crypto";
 var router8 = (0, import_express9.Router)();
 router8.use(requireAdmin);
 router8.post("/storage/upload", async (req, res) => {
   const { filename, contentType, base64Data, imageUrl } = req.body;
   try {
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
-    const uniqueKey = `products/${randomUUID17()}_${(filename || "cake-photo.jpg").replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    const uniqueKey = `products/${randomUUID18()}_${(filename || "cake-photo.jpg").replace(/[^a-zA-Z0-9.-]/g, "_")}`;
     if (settings?.r2AccountId && settings?.r2AccessKeyId && settings?.r2SecretAccessKey) {
       const publicBase = settings.r2PublicUrl || `https://pub-${settings.r2AccountId.substring(0, 8)}.r2.dev`;
       const finalUrl = `${publicBase.replace(/\/$/, "")}/${uniqueKey}`;
@@ -282412,10 +282677,10 @@ function csrfProtection(req, res, next) {
 }
 
 // artifacts/api-server/src/middlewares/request-id.ts
-import { randomUUID as randomUUID18 } from "node:crypto";
+import { randomUUID as randomUUID19 } from "node:crypto";
 var requestIdMiddleware = (req, res, next) => {
   const existingId = req.headers["x-request-id"];
-  const requestId = typeof existingId === "string" && existingId.length > 0 ? existingId : `req_${randomUUID18().replace(/-/g, "")}`;
+  const requestId = typeof existingId === "string" && existingId.length > 0 ? existingId : `req_${randomUUID19().replace(/-/g, "")}`;
   req.id = requestId;
   res.setHeader("X-Request-Id", requestId);
   next();

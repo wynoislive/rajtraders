@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { db, usersTable, deletedAccountsLogTable, passwordResetsTable, passwordLockoutsTable, registrationClaimsTable, emailVerificationsTable, shopSettingsTable, totpSecretsTable, customerAddressesTable, customerFavoritesTable, customerNotificationsTable, ordersTable, productsTable } from "@workspace/db";
-import { eq, and, ne, gt, asc, desc } from "drizzle-orm";
+import { db, usersTable, deletedAccountsLogTable, passwordResetsTable, passwordLockoutsTable, registrationClaimsTable, emailVerificationsTable, shopSettingsTable, totpSecretsTable, customerAddressesTable, customerFavoritesTable, customerNotificationsTable, ordersTable, productsTable, refreshTokensTable } from "@workspace/db";
+import { eq, and, ne, gt, asc, desc, sql } from "drizzle-orm";
 import { randomBytes, scryptSync, timingSafeEqual, randomUUID, createHash, randomInt } from "node:crypto";
 import { z } from "zod";
 import { sendPasswordRecoveryEmail, sendVerificationOtpEmail } from "../utils/mailer";
@@ -92,6 +92,9 @@ const UpdateProfileBodySchema = z.object({
   mobileNumber: z.string().optional(),
 });
 
+const RefreshTokenBodySchema = z.object({
+  refreshToken: z.string().min(1, "Refresh token is required"),
+});
 
 const TotpVerifyBodySchema = z.object({
   totpCode: z.string().min(6).max(6),
@@ -131,35 +134,123 @@ function verifyPassword(password: string, storedHash: string): boolean {
   }
 }
 
-// ── Session management (Redis primary, in-memory fallback) ──
-const SESSION_TTL_MS = securityConfig.sessionTtlMs;
-const SESSION_TTL_SECONDS = securityConfig.sessionTtlSeconds;
+// ── Dual-Token Session Management (Access + Rotating Refresh) ──
+export const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
+export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 900 seconds
+export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-interface CustomerSession {
+export interface CustomerSession {
   userId: string;
   expiresAt: number;
+  familyId?: string;
+  deviceFingerprint?: string | null;
+}
+
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
 }
 
 // In-memory fallback for local dev without Redis
-const fallbackSessionStore = new Map<string, CustomerSession>();
+export const fallbackSessionStore = new Map<string, CustomerSession>();
 
-async function createSession(userId: string): Promise<string> {
-  const token = `auth_${randomUUID().replace(/-/g, "")}`;
-  const session: CustomerSession = { userId, expiresAt: Date.now() + SESSION_TTL_MS };
+export async function issueTokenPair(userId: string, req?: Request, existingFamilyId?: string): Promise<TokenPair> {
+  const accessToken = `atk_${randomBytes(32).toString("hex")}`;
+  const rawRefreshToken = `rtk_${randomBytes(40).toString("hex")}`;
+  const familyId = existingFamilyId || randomUUID();
+  const now = new Date();
+  const refreshExpiresAt = new Date(now.getTime() + REFRESH_TOKEN_TTL_MS);
 
-  const redis = getRedisClient();
-  if (redis) {
-    await redis.set(
-      `session:customer:${token}`,
-      JSON.stringify(session),
-      "EX",
-      SESSION_TTL_SECONDS,
-    );
-  } else {
-    fallbackSessionStore.set(token, session);
+  const deviceFingerprint = req
+    ? createHash("sha256").update(`${req.headers["user-agent"] || ""}:${req.ip || ""}`).digest("hex")
+    : null;
+
+  // 1. Store Refresh Token in DB
+  const tokenHash = createHash("sha256").update(rawRefreshToken).digest("hex");
+  try {
+    await db.insert(refreshTokensTable).values({
+      id: randomUUID(),
+      userId,
+      tokenHash,
+      familyId,
+      deviceFingerprint,
+      expiresAt: refreshExpiresAt,
+      revokedAt: null,
+    });
+  } catch (err) {
+    console.error("Failed to insert refresh token:", err);
   }
 
-  return token;
+  // 2. Store Access Token in Redis or memory
+  const session: CustomerSession = { userId, expiresAt: Date.now() + ACCESS_TOKEN_TTL_MS, familyId, deviceFingerprint };
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      await redis.set(
+        `session:customer:access:${accessToken}`,
+        JSON.stringify(session),
+        "EX",
+        ACCESS_TOKEN_TTL_SECONDS
+      );
+      await redis.sadd(`user:sessions:${userId}`, accessToken);
+      await redis.expire(`user:sessions:${userId}`, 30 * 24 * 60 * 60);
+    } catch {
+      fallbackSessionStore.set(accessToken, session);
+    }
+  } else {
+    fallbackSessionStore.set(accessToken, session);
+  }
+
+  return {
+    accessToken,
+    refreshToken: rawRefreshToken,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+  };
+}
+
+export async function revokeAllUserSessions(userId: string): Promise<void> {
+  const now = new Date();
+  // 1. Revoke all refresh tokens in database
+  try {
+    await db
+      .update(refreshTokensTable)
+      .set({ revokedAt: now })
+      .where(and(eq(refreshTokensTable.userId, userId), sql`${refreshTokensTable.revokedAt} IS NULL`));
+  } catch (err) {
+    // Ignore error if table not ready
+  }
+
+  // 2. Revoke all active access sessions in Redis
+  const redis = getRedisClient();
+  if (redis) {
+    try {
+      const sessionKeys = await redis.smembers(`user:sessions:${userId}`);
+      if (sessionKeys && sessionKeys.length > 0) {
+        const pipeline = redis.pipeline();
+        for (const k of sessionKeys) {
+          pipeline.del(`session:customer:access:${k}`);
+          pipeline.del(`session:customer:${k}`);
+        }
+        pipeline.del(`user:sessions:${userId}`);
+        await pipeline.exec();
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // 3. Revoke from in-memory fallback
+  for (const [key, sess] of fallbackSessionStore.entries()) {
+    if (sess.userId === userId) {
+      fallbackSessionStore.delete(key);
+    }
+  }
+}
+
+export async function createSession(userId: string): Promise<string> {
+  const tokens = await issueTokenPair(userId);
+  return tokens.accessToken;
 }
 
 function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
@@ -177,18 +268,30 @@ export async function getUserIdFromToken(token?: string): Promise<string | null>
 
   const redis = getRedisClient();
   if (redis) {
-    const data = await redis.get(`session:customer:${clean}`);
-    if (!data) return null;
     try {
-      const session: CustomerSession = JSON.parse(data);
-      if (Date.now() > session.expiresAt) {
-        await redis.del(`session:customer:${clean}`);
-        return null;
+      // 1. Check dual-token access token
+      const accessData = await redis.get(`session:customer:access:${clean}`);
+      if (accessData) {
+        const session: CustomerSession = JSON.parse(accessData);
+        if (Date.now() > session.expiresAt) {
+          await redis.del(`session:customer:access:${clean}`);
+          return null;
+        }
+        return session.userId;
       }
-      return session.userId;
+
+      // 2. Check legacy single-token
+      const legacyData = await redis.get(`session:customer:${clean}`);
+      if (legacyData) {
+        const session: CustomerSession = JSON.parse(legacyData);
+        if (Date.now() > session.expiresAt) {
+          await redis.del(`session:customer:${clean}`);
+          return null;
+        }
+        return session.userId;
+      }
     } catch {
-      await redis.del(`session:customer:${clean}`);
-      return null;
+      // Fallback
     }
   }
 
@@ -202,15 +305,19 @@ export async function getUserIdFromToken(token?: string): Promise<string | null>
   return session.userId;
 }
 
-async function deleteSession(token?: string): Promise<void> {
+export async function deleteSession(token?: string): Promise<void> {
   if (!token) return;
   const clean = token.replace(/^Bearer\s+/i, "").trim();
   const redis = getRedisClient();
   if (redis) {
-    await redis.del(`session:customer:${clean}`);
-  } else {
-    fallbackSessionStore.delete(clean);
+    try {
+      await redis.del(`session:customer:access:${clean}`);
+      await redis.del(`session:customer:${clean}`);
+    } catch {
+      // Ignore
+    }
   }
+  fallbackSessionStore.delete(clean);
 }
 
 // ── OTP rate limiting ───────────────────────────────────────
@@ -434,12 +541,15 @@ router.post("/verify-login-otp", otpLimiter, validate({ body: VerifyOtpBodySchem
       return;
     }
 
-    const token = await createSession(user.id);
+    const tokens = await issueTokenPair(user.id, req);
     req.log.info({ userId: user.id, email: user.email }, "Customer verified login OTP and signed in");
 
     res.status(200).json({
       success: true,
-      token,
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email },
     });
   } catch (err: unknown) {
@@ -563,8 +673,19 @@ router.post("/change-password", changePasswordLimiter, validate({ body: ChangePa
     const newPasswordHash = hashPassword(newPassword);
     await db.update(usersTable).set({ passwordHash: newPasswordHash, updatedAt: new Date() }).where(eq(usersTable.id, userId));
 
-    req.log.info({ userId }, "Customer successfully changed password via Settings & Security");
-    res.status(200).json({ success: true, message: "Password changed successfully!" });
+    // Revoke all other device sessions and issue new tokens for this active session
+    await revokeAllUserSessions(userId);
+    const tokens = await issueTokenPair(userId, req);
+
+    req.log.info({ userId }, "Customer successfully changed password via Settings & Security; all other device sessions revoked");
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully! All other device sessions have been logged out.",
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
+    });
   } catch (err: unknown) {
     req.log.error({ err }, "Change password error");
     res.status(500).json({ error: "Failed to change password. Please try again." });
@@ -646,6 +767,83 @@ router.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPassword
   }
 });
 
+// ── 6.5 Verify Reset Token (Pre-flight) ──────────────────────
+router.get("/verify-reset-token", async (req: Request, res: Response): Promise<void> => {
+  const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+  const email = typeof req.query.email === "string" ? req.query.email.trim().toLowerCase() : "";
+
+  if (!token || !email) {
+    res.status(400).json({
+      valid: false,
+      reason: "INVALID",
+      message: "Password reset link is incomplete or invalid.",
+    });
+    return;
+  }
+
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const now = new Date();
+
+  try {
+    // Check lockout first
+    const lockouts = await db.select().from(passwordLockoutsTable).where(eq(passwordLockoutsTable.email, email)).limit(1);
+    if (lockouts.length > 0 && lockouts[0].lockedUntil > now) {
+      const minutesLeft = Math.ceil((lockouts[0].lockedUntil.getTime() - now.getTime()) / 60000);
+      res.status(429).json({
+        valid: false,
+        reason: "LOCKED_OUT",
+        message: `A password reset was recently completed. For your security, this account is temporarily locked from resets for another ${minutesLeft} minutes.`,
+      });
+      return;
+    }
+
+    // Lookup token in DB
+    const resets = await db
+      .select()
+      .from(passwordResetsTable)
+      .where(and(eq(passwordResetsTable.email, email), eq(passwordResetsTable.tokenHash, tokenHash)))
+      .limit(1);
+
+    if (resets.length === 0) {
+      res.status(404).json({
+        valid: false,
+        reason: "INVALID",
+        message: "Invalid password reset link. This link does not exist.",
+      });
+      return;
+    }
+
+    const resetRecord = resets[0];
+
+    if (resetRecord.usedAt) {
+      res.status(410).json({
+        valid: false,
+        reason: "ALREADY_USED",
+        message: "This password reset link has already been used. For your security, reset links are strictly single-use only.",
+      });
+      return;
+    }
+
+    if (now > resetRecord.expiresAt) {
+      res.status(410).json({
+        valid: false,
+        reason: "EXPIRED",
+        message: "This password reset link has expired. Links are valid for 60 minutes only.",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      valid: true,
+      email,
+      message: "Reset token is valid. You may now enter your new password.",
+    });
+  } catch (err: unknown) {
+    req.log.error({ err }, "Error verifying reset token");
+    res.status(500).json({ valid: false, reason: "ERROR", message: "Failed to verify reset token." });
+  }
+});
+
 // ── 7. Reset Password ───────────────────────────────────────
 router.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordBodySchema }), async (req: Request, res: Response) => {
   const { email, token, newPassword, confirmPassword } = req.body;
@@ -675,12 +873,130 @@ router.post("/reset-password", recoveryLimiter, validate({ body: ResetPasswordBo
     const lockoutUntil = new Date(now.getTime() + 15 * 60 * 1000);
     await db.insert(passwordLockoutsTable).values({ id: randomUUID(), email: cleanEmail, lockedUntil: lockoutUntil }).onConflictDoUpdate({ target: passwordLockoutsTable.email, set: { lockedUntil: lockoutUntil } });
 
-    req.log.info({ email: cleanEmail }, "Password successfully reset; 15-min lockout enacted");
-    res.status(200).json({ success: true, message: "Password reset successful! You may now sign in with your new password." });
+    // Enterprise Security: Revoke all existing sessions across other devices!
+    await revokeAllUserSessions(resetRecord.userId);
+
+    // Issue fresh dual-tokens for current device
+    const tokens = await issueTokenPair(resetRecord.userId, req);
+    const updatedUser = (await db.select().from(usersTable).where(eq(usersTable.id, resetRecord.userId)).limit(1))[0];
+
+    req.log.info({ email: cleanEmail, userId: resetRecord.userId }, "Password successfully reset; all old sessions revoked, fresh tokens issued");
+    res.status(200).json({
+      success: true,
+      message: "Password reset successful! You have been logged in securely, and all other device sessions have been closed.",
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
+      user: updatedUser
+        ? {
+            id: updatedUser.id,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            mobileNumber: updatedUser.mobileNumber,
+            email: updatedUser.email,
+          }
+        : undefined,
+    });
   } catch (err: unknown) {
     req.log.error({ err }, "Reset password error");
     res.status(500).json({ error: "Failed to reset password." });
   }
+});
+
+// ── 7.5 Refresh Token (Dual-Token Rotation & Reuse Detection) ─
+router.post("/refresh-token", validate({ body: RefreshTokenBodySchema }), async (req: Request, res: Response): Promise<void> => {
+  const { refreshToken } = req.body;
+  const clean = refreshToken.trim();
+  const tokenHash = createHash("sha256").update(clean).digest("hex");
+  const now = new Date();
+
+  try {
+    const records = await db
+      .select()
+      .from(refreshTokensTable)
+      .where(eq(refreshTokensTable.tokenHash, tokenHash))
+      .limit(1);
+
+    if (records.length === 0) {
+      res.status(401).json({ error: "Invalid refresh token. Please sign in again." });
+      return;
+    }
+
+    const record = records[0];
+
+    // Reuse detection: If the refresh token was already revoked, an attacker or compromised client is replaying it!
+    if (record.revokedAt !== null) {
+      req.log.warn(
+        { userId: record.userId, familyId: record.familyId },
+        "SECURITY ALERT: Refresh token reuse detected! Revoking entire token family."
+      );
+      // Invalidate all tokens in this family immediately
+      await db
+        .update(refreshTokensTable)
+        .set({ revokedAt: now })
+        .where(eq(refreshTokensTable.familyId, record.familyId));
+      await revokeAllUserSessions(record.userId);
+
+      res.status(401).json({
+        error: "Security alert: Session compromised (token reuse detected). All device sessions revoked. Please sign in again.",
+      });
+      return;
+    }
+
+    if (now > record.expiresAt) {
+      res.status(401).json({ error: "Refresh token has expired. Please sign in again." });
+      return;
+    }
+
+    // Revoke current refresh token (one-time rotation)
+    await db
+      .update(refreshTokensTable)
+      .set({ revokedAt: now })
+      .where(eq(refreshTokensTable.id, record.id));
+
+    // Issue new pair in the SAME family
+    const tokens = await issueTokenPair(record.userId, req, record.familyId);
+
+    res.status(200).json({
+      success: true,
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
+    });
+  } catch (err: unknown) {
+    req.log.error({ err }, "Refresh token error");
+    res.status(500).json({ error: "Failed to refresh token." });
+  }
+});
+
+// ── 7.6 Logout (Current Session) ─────────────────────────────
+router.post("/logout", async (req: Request, res: Response): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  await deleteSession(authHeader);
+
+  if (req.body?.refreshToken && typeof req.body.refreshToken === "string") {
+    const tokenHash = createHash("sha256").update(req.body.refreshToken.trim()).digest("hex");
+    await db
+      .update(refreshTokensTable)
+      .set({ revokedAt: new Date() })
+      .where(eq(refreshTokensTable.tokenHash, tokenHash));
+  }
+
+  res.status(200).json({ success: true, message: "Logged out successfully." });
+});
+
+// ── 7.7 Logout All Devices ──────────────────────────────────
+router.post("/logout-all", async (req: Request, res: Response): Promise<void> => {
+  const userId = await getUserIdFromToken(req.headers.authorization);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+
+  await revokeAllUserSessions(userId);
+  res.status(200).json({ success: true, message: "All device sessions have been closed." });
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -822,12 +1138,15 @@ router.post("/totp/verify", otpLimiter, validate({ body: TotpLoginVerifySchema }
       return;
     }
 
-    const token = await createSession(user.id);
+    const tokens = await issueTokenPair(user.id, req);
     req.log.info({ userId: user.id, email: user.email }, "Customer verified TOTP and signed in");
 
     res.status(200).json({
       success: true,
-      token,
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email },
     });
   } catch (err: unknown) {
@@ -862,12 +1181,15 @@ router.post("/totp/recover", otpLimiter, validate({ body: TotpRecoverySchema }),
     hashedCodes.splice(matchIndex, 1);
     await db.update(totpSecretsTable).set({ recoveryCodes: JSON.stringify(hashedCodes), updatedAt: new Date() }).where(eq(totpSecretsTable.id, record.id));
 
-    const token = await createSession(user.id);
+    const tokens = await issueTokenPair(user.id, req);
     req.log.info({ userId: user.id, email: user.email, remainingCodes: hashedCodes.length }, "Customer used TOTP recovery code and signed in");
 
     res.status(200).json({
       success: true,
-      token,
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: tokens.expiresIn,
       user: { id: user.id, firstName: user.firstName, lastName: user.lastName, mobileNumber: user.mobileNumber, email: user.email },
       remainingRecoveryCodes: hashedCodes.length,
       message: `Recovery code accepted. You have ${hashedCodes.length} recovery codes remaining.`,
