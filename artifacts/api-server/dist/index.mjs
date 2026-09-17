@@ -189344,17 +189344,17 @@ var require_node_abort_controller = __commonJS({
         }
       }
       static abort(reason) {
-        const controller = new AbortController();
+        const controller = new AbortController2();
         controller.abort();
         return controller.signal;
       }
       static timeout(time2) {
-        const controller = new AbortController();
+        const controller = new AbortController2();
         setTimeout(() => controller.abort(new Error("TimeoutError")), time2);
         return controller.signal;
       }
     };
-    var AbortController = class {
+    var AbortController2 = class {
       constructor() {
         this.signal = new AbortSignal();
       }
@@ -189372,7 +189372,7 @@ var require_node_abort_controller = __commonJS({
         return "AbortController";
       }
     };
-    module.exports = { AbortController, AbortSignal };
+    module.exports = { AbortController: AbortController2, AbortSignal };
   }
 });
 
@@ -189389,9 +189389,9 @@ var require_abort_controller = __commonJS({
     } else {
       AbortControllerImpl = node_abort_controller_1.AbortController;
     }
-    var AbortController = class extends AbortControllerImpl {
+    var AbortController2 = class extends AbortControllerImpl {
     };
-    exports.AbortController = AbortController;
+    exports.AbortController = AbortController2;
   }
 });
 
@@ -250656,6 +250656,13 @@ var shopSettingsTable = pgTable("shop_settings", {
   // Contact Phone & WhatsApp Support (Admin Configurable)
   supportPhone: text("support_phone").default(""),
   whatsappNumber: text("whatsapp_number").default(""),
+  // OpenWA WhatsApp Gateway API Config
+  whatsappGatewayUrl: text("whatsapp_gateway_url").default(""),
+  whatsappApiKey: text("whatsapp_api_key").default(""),
+  whatsappSessionId: text("whatsapp_session_id").default("default"),
+  whatsappSenderNumber: text("whatsapp_sender_number").default(""),
+  isWhatsappNotificationsEnabled: boolean("is_whatsapp_notifications_enabled").notNull().default(false),
+  isWhatsappOtpEnabled: boolean("is_whatsapp_otp_enabled").notNull().default(false),
   // Footer, Social & Operational Settings
   socialLinkedin: text("social_linkedin").default(""),
   socialInstagram: text("social_instagram").default(""),
@@ -251052,6 +251059,12 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   hostinger_mailbox_resource_id TEXT DEFAULT '',
   support_phone TEXT DEFAULT '',
   whatsapp_number TEXT DEFAULT '',
+  whatsapp_gateway_url TEXT DEFAULT '',
+  whatsapp_api_key TEXT DEFAULT '',
+  whatsapp_session_id TEXT DEFAULT 'default',
+  whatsapp_sender_number TEXT DEFAULT '',
+  is_whatsapp_notifications_enabled BOOLEAN DEFAULT false,
+  is_whatsapp_otp_enabled BOOLEAN DEFAULT false,
   updatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -251247,6 +251260,12 @@ async function syncEnvToShopSettings(db2) {
   if (process.env.DELIVERY_ENABLED) updates.isDeliveryEnabled = process.env.DELIVERY_ENABLED === "true";
   if (process.env.SUPPORT_PHONE) updates.supportPhone = process.env.SUPPORT_PHONE;
   if (process.env.WHATSAPP_NUMBER) updates.whatsappNumber = process.env.WHATSAPP_NUMBER;
+  if (process.env.WHATSAPP_GATEWAY_URL) updates.whatsappGatewayUrl = process.env.WHATSAPP_GATEWAY_URL;
+  if (process.env.WHATSAPP_API_KEY) updates.whatsappApiKey = process.env.WHATSAPP_API_KEY;
+  if (process.env.WHATSAPP_SESSION_ID) updates.whatsappSessionId = process.env.WHATSAPP_SESSION_ID;
+  if (process.env.WHATSAPP_SENDER_NUMBER) updates.whatsappSenderNumber = process.env.WHATSAPP_SENDER_NUMBER;
+  if (process.env.WHATSAPP_NOTIFICATIONS_ENABLED) updates.isWhatsappNotificationsEnabled = process.env.WHATSAPP_NOTIFICATIONS_ENABLED === "true";
+  if (process.env.WHATSAPP_OTP_ENABLED) updates.isWhatsappOtpEnabled = process.env.WHATSAPP_OTP_ENABLED === "true";
   if (Object.keys(updates).length > 0) {
     await db2.update(shopSettingsTable).set(updates).where(eq(shopSettingsTable.id, "default_shop"));
   }
@@ -277447,6 +277466,220 @@ function generateTaxInvoicePdf(data) {
   });
 }
 
+// artifacts/api-server/src/utils/whatsapp.ts
+function formatWhatsAppChatId(phone) {
+  if (!phone) return "";
+  let digits = phone.replace(/\D/g, "");
+  if (phone.includes("@c.us") || phone.includes("@g.us")) {
+    return phone.trim();
+  }
+  if (digits.length === 11 && digits.startsWith("0")) {
+    digits = "91" + digits.slice(1);
+  } else if (digits.length === 10) {
+    digits = "91" + digits;
+  }
+  return `${digits}@c.us`;
+}
+async function sendWhatsAppTextMessage({
+  toPhone,
+  message,
+  gatewayConfig
+}) {
+  const chatId = formatWhatsAppChatId(toPhone);
+  if (!chatId || chatId.length < 8) {
+    return { success: false, error: "Invalid recipient phone number." };
+  }
+  let gatewayUrl = gatewayConfig?.gatewayUrl;
+  let apiKey = gatewayConfig?.apiKey;
+  let sessionId = gatewayConfig?.sessionId || "default";
+  if (!gatewayUrl) {
+    try {
+      const [settings] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+      if (!settings) {
+        return { success: false, skipped: true, error: "Shop settings record not found." };
+      }
+      gatewayUrl = settings.whatsappGatewayUrl || process.env.WHATSAPP_GATEWAY_URL || "";
+      apiKey = settings.whatsappApiKey || process.env.WHATSAPP_API_KEY || "";
+      sessionId = settings.whatsappSessionId || process.env.WHATSAPP_SESSION_ID || "default";
+    } catch (dbErr) {
+      return { success: false, error: `Database error loading WhatsApp config: ${dbErr.message}` };
+    }
+  }
+  if (!gatewayUrl || gatewayUrl.trim().length === 0) {
+    return { success: false, skipped: true, error: "OpenWA gateway URL is not configured." };
+  }
+  const cleanBaseUrl = gatewayUrl.trim().replace(/\/+$/, "");
+  const endpoint = `${cleanBaseUrl}/api/sessions/${encodeURIComponent(sessionId.trim())}/messages/send-text`;
+  const headers = {
+    "Content-Type": "application/json"
+  };
+  if (apiKey && apiKey.trim().length > 0) {
+    headers["X-API-Key"] = apiKey.trim();
+  }
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12e3);
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        chatId,
+        text: message
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errMsg = data?.message || data?.error || `OpenWA Gateway responded with HTTP ${res.status}`;
+      return { success: false, error: errMsg, data };
+    }
+    return { success: true, data };
+  } catch (err) {
+    const isAbort = err.name === "AbortError";
+    const msg = isAbort ? "Request to OpenWA Gateway timed out after 12s." : err.message;
+    return { success: false, error: msg };
+  }
+}
+async function sendOrderConfirmationWhatsApp(order, settings) {
+  const customerMobile = order.customerMobile;
+  if (!customerMobile) {
+    return { success: false, skipped: true, error: "Customer mobile number not provided." };
+  }
+  let shop = settings;
+  if (!shop) {
+    const [row] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+    shop = row;
+  }
+  if (!shop?.isWhatsappNotificationsEnabled) {
+    return { success: false, skipped: true, error: "WhatsApp notifications disabled in settings." };
+  }
+  const isPickup = (order.shippingAddress || "").toLowerCase().includes("self-pickup");
+  const shortId = (order.id || "").slice(0, 8);
+  const formattedAmount = (Number(order.totalCents || 0) / 100).toFixed(2);
+  const storeName = shop?.shopName || "RAJ TRADERS";
+  const domain = shop?.shopDomain || "sundarvan.xyz";
+  const message = [
+    `*${storeName}* \u2014 Order Confirmed! \u{1F389}`,
+    ``,
+    `\u{1F4E6} *Order ID:* #${shortId}`,
+    `\u{1F4B0} *Amount Paid:* \u20B9${formattedAmount}`,
+    `\u26A1 *Fulfillment:* ${isPickup ? "Store Self-Pickup (Ready in 15\u201330 mins)" : "Local Home Delivery"}`,
+    `\u{1F4CD} *${isPickup ? "Pickup Location" : "Delivery Address"}:*`,
+    isPickup ? shop?.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali MP 484551" : order.shippingAddress || "Birsingpur Pali",
+    ``,
+    `\u{1F517} *View Invoice & Live Order:*`,
+    `https://${domain}/account`,
+    ``,
+    shop?.supportPhone ? `\u{1F4DE} Help: ${shop.supportPhone}` : `\u2709\uFE0F Help: ${shop?.supportEmail || "support@sundarvan.xyz"}`
+  ].join("\n");
+  return sendWhatsAppTextMessage({
+    toPhone: customerMobile,
+    message,
+    gatewayConfig: {
+      gatewayUrl: shop.whatsappGatewayUrl,
+      apiKey: shop.whatsappApiKey,
+      sessionId: shop.whatsappSessionId
+    }
+  });
+}
+async function sendOrderStatusWhatsApp(order, newStatus, extraData, settings) {
+  const customerMobile = order.customerMobile;
+  if (!customerMobile) {
+    return { success: false, skipped: true, error: "Customer mobile number not provided." };
+  }
+  let shop = settings;
+  if (!shop) {
+    const [row] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+    shop = row;
+  }
+  if (!shop?.isWhatsappNotificationsEnabled) {
+    return { success: false, skipped: true, error: "WhatsApp notifications disabled in settings." };
+  }
+  const shortId = (order.id || "").slice(0, 8);
+  const storeName = shop?.shopName || "RAJ TRADERS";
+  const domain = shop?.shopDomain || "sundarvan.xyz";
+  const isPickup = (order.shippingAddress || "").toLowerCase().includes("self-pickup");
+  let statusHeader = "";
+  let detailsText = "";
+  switch (newStatus.toLowerCase()) {
+    case "packed":
+      statusHeader = "\u{1F381} Your order is packed and ready!";
+      detailsText = isPickup ? "Your items are ready for pickup at our offline store counter." : "Our delivery fleet is assigned and preparing for dispatch.";
+      break;
+    case "dispatched":
+      statusHeader = "\u{1F680} Out for Delivery!";
+      detailsText = [
+        extraData?.riderName ? `\u{1F6F5} Rider: ${extraData.riderName} (${extraData.riderPhone || "Fleet"})` : "\u{1F6F5} Our delivery partner is on the way to your location.",
+        extraData?.trackingUrl ? `\u{1F4CD} Track Rider: ${extraData.trackingUrl}` : ""
+      ].filter(Boolean).join("\n");
+      break;
+    case "delivered":
+    case "completed":
+      statusHeader = isPickup ? "\u2705 Order Picked Up Successfully!" : "\u2705 Order Delivered!";
+      detailsText = "Thank you for shopping with Raj Traders. We hope you enjoy your delicacies!";
+      break;
+    case "cancelled":
+      statusHeader = "\u274C Order Cancelled";
+      detailsText = [
+        extraData?.cancellationReason ? `Reason: ${extraData.cancellationReason}` : "Your order has been cancelled.",
+        "Any payment debited will be refunded per store policy."
+      ].join("\n");
+      break;
+    default:
+      statusHeader = `Status Update: ${newStatus.toUpperCase()}`;
+      detailsText = `Your order status has been updated to: ${newStatus}`;
+  }
+  const message = [
+    `*${storeName}* \u2014 ${statusHeader}`,
+    ``,
+    `\u{1F4E6} *Order ID:* #${shortId}`,
+    detailsText,
+    ``,
+    `\u{1F517} *View Status & Details:*`,
+    `https://${domain}/account`
+  ].join("\n");
+  return sendWhatsAppTextMessage({
+    toPhone: customerMobile,
+    message,
+    gatewayConfig: {
+      gatewayUrl: shop.whatsappGatewayUrl,
+      apiKey: shop.whatsappApiKey,
+      sessionId: shop.whatsappSessionId
+    }
+  });
+}
+async function sendOtpWhatsApp(toPhone, otpCode, purpose = "verification", settings) {
+  let shop = settings;
+  if (!shop) {
+    const [row] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+    shop = row;
+  }
+  if (!shop?.isWhatsappOtpEnabled) {
+    return { success: false, skipped: true, error: "WhatsApp OTPs are disabled in store settings." };
+  }
+  const storeName = shop?.shopName || "RAJ TRADERS";
+  const purposeTitle = purpose === "password_reset" ? "Password Reset Code" : purpose === "login" ? "Login Security Code" : "Account Verification Code";
+  const message = [
+    `*${storeName}* \u2014 ${purposeTitle}`,
+    ``,
+    `Your verification code is:`,
+    `*${otpCode}*`,
+    ``,
+    `\u23F1\uFE0F Valid for 10 minutes.`,
+    `\u26A0\uFE0F Never share this code with anyone, including staff.`
+  ].join("\n");
+  return sendWhatsAppTextMessage({
+    toPhone,
+    message,
+    gatewayConfig: {
+      gatewayUrl: shop.whatsappGatewayUrl,
+      apiKey: shop.whatsappApiKey,
+      sessionId: shop.whatsappSessionId
+    }
+  });
+}
+
 // artifacts/api-server/src/routes/admin.ts
 var SECRET_MASK = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
 var UpdateShopSettingsSchema = external_exports.object({
@@ -277500,7 +277733,14 @@ var UpdateShopSettingsSchema = external_exports.object({
   panNumber: external_exports.string().max(20).optional(),
   stateCode: external_exports.string().max(10).optional(),
   stateName: external_exports.string().max(100).optional(),
-  allowedPincodesJson: external_exports.string().optional()
+  allowedPincodesJson: external_exports.string().optional(),
+  // OpenWA WhatsApp Gateway Settings
+  whatsappGatewayUrl: external_exports.string().max(255).optional(),
+  whatsappApiKey: external_exports.string().max(255).optional(),
+  whatsappSessionId: external_exports.string().max(100).optional(),
+  whatsappSenderNumber: external_exports.string().max(30).optional(),
+  isWhatsappNotificationsEnabled: external_exports.boolean().optional(),
+  isWhatsappOtpEnabled: external_exports.boolean().optional()
 }).passthrough();
 function sanitizeShopSettings(settings) {
   return {
@@ -277510,11 +277750,13 @@ function sanitizeShopSettings(settings) {
     smtpPass: settings.smtpPass ? SECRET_MASK : "",
     notificationSmtpPass: settings.notificationSmtpPass ? SECRET_MASK : "",
     hostingerApiToken: settings.hostingerApiToken ? SECRET_MASK : "",
+    whatsappApiKey: settings.whatsappApiKey ? SECRET_MASK : "",
     hasRazorpaySecret: Boolean(settings.razorpayKeySecret && settings.razorpayKeySecret.trim().length > 0),
     hasR2Secret: Boolean(settings.r2SecretAccessKey && settings.r2SecretAccessKey.trim().length > 0),
     hasSmtpPass: Boolean(settings.smtpPass && settings.smtpPass.trim().length > 0),
     hasNotificationSmtpPass: Boolean(settings.notificationSmtpPass && settings.notificationSmtpPass.trim().length > 0),
-    hasHostingerToken: Boolean(settings.hostingerApiToken && settings.hostingerApiToken.trim().length > 0)
+    hasHostingerToken: Boolean(settings.hostingerApiToken && settings.hostingerApiToken.trim().length > 0),
+    hasWhatsappApiKey: Boolean(settings.whatsappApiKey && settings.whatsappApiKey.trim().length > 0)
   };
 }
 function resolveSecretField(value) {
@@ -278030,6 +278272,13 @@ router4.put(
       if (ordersEmail !== void 0) updateData.ordersEmail = ordersEmail.trim();
       if (supportPhone !== void 0) updateData.supportPhone = supportPhone.trim();
       if (whatsappNumber !== void 0) updateData.whatsappNumber = whatsappNumber.trim();
+      if (req.body.whatsappGatewayUrl !== void 0) updateData.whatsappGatewayUrl = req.body.whatsappGatewayUrl.trim();
+      const resolvedWaApiKey = resolveSecretField(req.body.whatsappApiKey);
+      if (resolvedWaApiKey !== void 0) updateData.whatsappApiKey = resolvedWaApiKey;
+      if (req.body.whatsappSessionId !== void 0) updateData.whatsappSessionId = req.body.whatsappSessionId.trim() || "default";
+      if (req.body.whatsappSenderNumber !== void 0) updateData.whatsappSenderNumber = req.body.whatsappSenderNumber.trim();
+      if (typeof req.body.isWhatsappNotificationsEnabled === "boolean") updateData.isWhatsappNotificationsEnabled = req.body.isWhatsappNotificationsEnabled;
+      if (typeof req.body.isWhatsappOtpEnabled === "boolean") updateData.isWhatsappOtpEnabled = req.body.isWhatsappOtpEnabled;
       if (socialLinkedin !== void 0) updateData.socialLinkedin = socialLinkedin.trim();
       if (socialInstagram !== void 0) updateData.socialInstagram = socialInstagram.trim();
       if (socialFacebook !== void 0) updateData.socialFacebook = socialFacebook.trim();
@@ -278129,6 +278378,35 @@ router4.post("/v1/admin/test-email", requirePermission("settings"), async (req, 
     res.status(500).json({ success: false, error: "Failed to send test email" });
   }
 });
+router4.post("/v1/admin/test-whatsapp", requirePermission("settings"), async (req, res) => {
+  const { toPhone, customMessage } = req.body;
+  if (!toPhone || typeof toPhone !== "string") {
+    res.status(400).json({ error: "Valid recipient WhatsApp mobile number is required." });
+    return;
+  }
+  try {
+    const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+    const shopName = settings?.shopName || "RAJ TRADERS";
+    const testMsg = customMessage && typeof customMessage === "string" && customMessage.trim().length > 0 ? customMessage.trim() : `\u26A1 *${shopName} Live Test WhatsApp*
+
+Hello! This test message confirms that your *OpenWA WhatsApp Gateway* is configured and successfully dispatching messages! \u{1F389}
+
+\u{1F552} Timestamp: ${(/* @__PURE__ */ new Date()).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`;
+    const result = await sendWhatsAppTextMessage({
+      toPhone: toPhone.trim(),
+      message: testMsg,
+      gatewayConfig: {
+        gatewayUrl: settings?.whatsappGatewayUrl || "",
+        apiKey: settings?.whatsappApiKey || "",
+        sessionId: settings?.whatsappSessionId || "default"
+      }
+    });
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Failed to send test WhatsApp message");
+    res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Failed to send test WhatsApp message" });
+  }
+});
 router4.get("/v1/admin/orders", requirePermission("orders"), async (req, res) => {
   try {
     const orders = await db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt));
@@ -278167,6 +278445,9 @@ router4.post("/v1/admin/orders/:id/cancel", requirePermission("orders"), async (
       return;
     }
     await db.update(ordersTable).set({ status: "cancelled", updatedAt: /* @__PURE__ */ new Date() }).where(eq(ordersTable.id, id));
+    sendOrderStatusWhatsApp(found[0], "cancelled", {}).catch((err) => {
+      req.log.warn({ err, orderId: id }, "Background WhatsApp order cancellation message failed");
+    });
     logAuditEvent(req, {
       action: "ORDER_CANCELLED_BY_ADMIN",
       resource: "orders",
@@ -278217,6 +278498,13 @@ router4.patch("/v1/admin/orders/:id/status", requirePermission("orders"), async 
       details: { previousStatus: order.status, newStatus: status, riderName: updates.riderName }
     });
     const [updated] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    sendOrderStatusWhatsApp(updated, status, {
+      riderName: updates.riderName || updated.riderName,
+      riderPhone: updates.riderPhone || updated.riderPhone,
+      trackingUrl: updates.trackingUrl || updated.trackingUrl
+    }).catch((err) => {
+      req.log.warn({ err, orderId: id }, "Background WhatsApp order status message failed");
+    });
     res.json({ success: true, order: updated });
   } catch (err) {
     req.log.error({ err, orderId: id }, "Failed to update order status");
@@ -278322,6 +278610,9 @@ router4.post("/v1/admin/orders/:id/approve-cancellation", requirePermission("ord
       resourceId: id,
       status: "SUCCESS",
       details: { refundMethod: preferredMethod, refundId, refundAmountCents: order.totalCents }
+    });
+    sendOrderStatusWhatsApp(order, "cancelled", {}).catch((err) => {
+      req.log.warn({ err, orderId: id }, "Background WhatsApp order cancellation approval message failed");
     });
     res.json({
       success: true,
@@ -279191,10 +279482,12 @@ var VerifyOtpBodySchema = external_exports.object({
   otpCode: external_exports.string().min(6).max(6)
 });
 var ResendOtpBodySchema = external_exports.object({
-  email: external_exports.string().email()
+  email: external_exports.string().email(),
+  channel: external_exports.enum(["email", "whatsapp"]).optional()
 });
 var ForgotPasswordBodySchema = external_exports.object({
-  email: external_exports.string().email()
+  email: external_exports.string().email(),
+  channel: external_exports.enum(["email", "whatsapp"]).optional()
 });
 var ResetPasswordBodySchema = external_exports.object({
   email: external_exports.string().email(),
@@ -279388,7 +279681,7 @@ async function checkOtpRateLimit(email) {
   const retryAfterMs = oldestInWindow.createdAt.getTime() + OTP_RATE_LIMIT_WINDOW_MS - Date.now();
   return { allowed: false, retryAfterMinutes: Math.max(1, Math.ceil(retryAfterMs / 6e4)) };
 }
-async function issueVerificationOtp(req, res, user, cleanEmail, extra) {
+async function issueVerificationOtp(req, res, user, cleanEmail, extra, channel = "email") {
   const rateLimit2 = await checkOtpRateLimit(cleanEmail);
   if (!rateLimit2.allowed) {
     res.status(429).json({
@@ -279406,13 +279699,27 @@ async function issueVerificationOtp(req, res, user, cleanEmail, extra) {
     attempts: 0,
     expiresAt
   });
-  const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
-  req.log.info({ userId: user.id, email: cleanEmail }, "Sent 6-digit email verification OTP");
+  let dispatchedChannel = "email";
+  let previewUrl;
+  if (channel === "whatsapp" && user.mobileNumber) {
+    const waResult = await sendOtpWhatsApp(user.mobileNumber, otpCode, "verification");
+    if (waResult.success) {
+      dispatchedChannel = "whatsapp";
+    } else {
+      const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
+      previewUrl = emailResult.previewUrl;
+    }
+  } else {
+    const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
+    previewUrl = emailResult.previewUrl;
+  }
+  req.log.info({ userId: user.id, email: cleanEmail, channel: dispatchedChannel }, "Dispatched 6-digit verification OTP");
   res.status(200).json({
     requiresVerification: true,
     email: cleanEmail,
-    message: `A 6-digit verification code has been sent to ${cleanEmail}. (Valid for 10 minutes)`,
-    previewUrl: emailResult.previewUrl,
+    channel: dispatchedChannel,
+    message: dispatchedChannel === "whatsapp" ? `A 6-digit verification code has been sent to your WhatsApp number (${user.mobileNumber}). (Valid for 10 minutes)` : `A 6-digit verification code has been sent to ${cleanEmail}. (Valid for 10 minutes)`,
+    previewUrl,
     ...extra
   });
 }
@@ -279460,7 +279767,7 @@ router5.post("/register", authLimiter, validate({ body: RegisterBodySchema }), a
       }
     });
     req.log.info({ userId, cleanEmail, hasLockdownPenalty }, "Customer account created; sending verification OTP");
-    await issueVerificationOtp(req, res, { id: userId, firstName: firstName.trim() }, cleanEmail, {
+    await issueVerificationOtp(req, res, { id: userId, firstName: firstName.trim(), mobileNumber: mobileCheck.normalized }, cleanEmail, {
       lockdownPenaltyNotice: hasLockdownPenalty ? "Notice: Account re-registered within 15-day deletion window. Welcome offer codes are forfeited." : null
     });
   } catch (err) {
@@ -279552,7 +279859,8 @@ router5.post("/resend-login-otp", otpLimiter, validate({ body: ResendOtpBodySche
       res.status(404).json({ error: "User not found." });
       return;
     }
-    await issueVerificationOtp(req, res, foundUsers[0], cleanEmail);
+    const channel = req.body.channel === "whatsapp" ? "whatsapp" : "email";
+    await issueVerificationOtp(req, res, foundUsers[0], cleanEmail, void 0, channel);
   } catch (err) {
     req.log.error({ err }, "Resend OTP error");
     res.status(500).json({ error: "Failed to resend verification code." });
@@ -279715,9 +280023,32 @@ router5.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPasswor
     const shopSettings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const shopDomain = shopSettings?.shopDomain || "myshop.com";
     const resetUrl = `https://${shopDomain}/reset-password?token=${rawToken}&email=${encodeURIComponent(cleanEmail)}`;
+    const channel = req.body.channel === "whatsapp" ? "whatsapp" : "email";
+    if (channel === "whatsapp" && user.mobileNumber) {
+      const waMsg = `\u26A1 *${shopSettings?.shopName || "RAJ TRADERS"} - Password Reset*
+
+Hello ${user.firstName},
+
+You requested to reset your password. Tap the link below to set your new password (valid for 60 minutes):
+
+\u{1F517} ${resetUrl}
+
+If you did not request this, you can safely ignore this message.`;
+      await sendWhatsAppTextMessage({
+        toPhone: user.mobileNumber,
+        message: waMsg
+      });
+      req.log.info({ mobileNumber: user.mobileNumber, expiresAt }, "Sent password recovery WhatsApp message");
+      res.status(200).json({
+        success: true,
+        channel: "whatsapp",
+        message: `Password reset link has been sent to your WhatsApp number (${user.mobileNumber}). Valid for 60 minutes.`
+      });
+      return;
+    }
     const emailResult = await sendPasswordRecoveryEmail(cleanEmail, user.firstName, rawToken, resetUrl);
     req.log.info({ email: cleanEmail, expiresAt }, "Sent password recovery email");
-    res.status(200).json({ success: true, message: "Password recovery email has been sent. The token is valid for 60 minutes.", previewUrl: emailResult.previewUrl });
+    res.status(200).json({ success: true, channel: "email", message: "Password recovery email has been sent. The token is valid for 60 minutes.", previewUrl: emailResult.previewUrl });
   } catch (err) {
     req.log.error({ err }, "Forgot password error");
     res.status(500).json({ error: "Failed to process recovery request." });
@@ -280871,8 +281202,11 @@ router6.post("/verify-payment", async (req, res) => {
           pdfInvoiceBuffer
         );
       }
+      await sendOrderConfirmationWhatsApp(order, settings2).catch((err) => {
+        req.log.warn({ err, orderId: order.id }, "Failed to dispatch WhatsApp order confirmation");
+      });
     } catch (emailErr) {
-      req.log.error({ emailErr, orderId: order.id }, "Failed generating invoice PDF or sending confirmation email");
+      req.log.error({ emailErr, orderId: order.id }, "Failed generating invoice PDF or sending confirmation notifications");
     }
     res.status(200).json({
       success: true,

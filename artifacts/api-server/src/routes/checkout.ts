@@ -9,6 +9,7 @@ import { filterOrders } from "../utils/order-filters";
 import { reserveInventory, commitInventoryReservation } from "../lib/inventory-lock";
 import { generateTaxInvoicePdf } from "../utils/invoice-generator";
 import { sendOrderConfirmationEmail } from "../utils/mailer";
+import { sendOrderConfirmationWhatsApp } from "../utils/whatsapp";
 import { getRedisClient } from "../lib/redis";
 
 const router: Router = Router();
@@ -677,8 +678,13 @@ router.post("/verify-payment", async (req: Request<{}, {}, VerifyPaymentBody>, r
           pdfInvoiceBuffer,
         );
       }
+
+      // Dispatch WhatsApp Order Confirmation
+      await sendOrderConfirmationWhatsApp(order, settings).catch((err) => {
+        req.log.warn({ err, orderId: order.id }, "Failed to dispatch WhatsApp order confirmation");
+      });
     } catch (emailErr) {
-      req.log.error({ emailErr, orderId: order.id }, "Failed generating invoice PDF or sending confirmation email");
+      req.log.error({ emailErr, orderId: order.id }, "Failed generating invoice PDF or sending confirmation notifications");
     }
 
     res.status(200).json({

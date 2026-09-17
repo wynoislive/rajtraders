@@ -4,6 +4,7 @@ import { eq, and, ne, gt, asc, desc, sql } from "drizzle-orm";
 import { randomBytes, scryptSync, timingSafeEqual, randomUUID, createHash, randomInt } from "node:crypto";
 import { z } from "zod";
 import { sendPasswordRecoveryEmail, sendVerificationOtpEmail } from "../utils/mailer";
+import { sendOtpWhatsApp, sendWhatsAppTextMessage } from "../utils/whatsapp";
 import { getRedisClient } from "../lib/redis";
 import { securityConfig } from "../lib/security-config";
 import { validate } from "../middlewares/validate";
@@ -67,10 +68,12 @@ const VerifyOtpBodySchema = z.object({
 
 const ResendOtpBodySchema = z.object({
   email: z.string().email(),
+  channel: z.enum(["email", "whatsapp"]).optional(),
 });
 
 const ForgotPasswordBodySchema = z.object({
   email: z.string().email(),
+  channel: z.enum(["email", "whatsapp"]).optional(),
 });
 
 const ResetPasswordBodySchema = z.object({
@@ -344,9 +347,10 @@ async function checkOtpRateLimit(
 async function issueVerificationOtp(
   req: Request,
   res: Response,
-  user: { id: string; firstName: string },
+  user: { id: string; firstName: string; mobileNumber?: string | null },
   cleanEmail: string,
   extra?: Record<string, unknown>,
+  channel: "email" | "whatsapp" = "email",
 ): Promise<void> {
   const rateLimit = await checkOtpRateLimit(cleanEmail);
   if (!rateLimit.allowed) {
@@ -369,14 +373,33 @@ async function issueVerificationOtp(
     expiresAt,
   });
 
-  const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
-  req.log.info({ userId: user.id, email: cleanEmail }, "Sent 6-digit email verification OTP");
+  let dispatchedChannel: "whatsapp" | "email" = "email";
+  let previewUrl: string | undefined;
+
+  if (channel === "whatsapp" && user.mobileNumber) {
+    const waResult = await sendOtpWhatsApp(user.mobileNumber, otpCode, "verification");
+    if (waResult.success) {
+      dispatchedChannel = "whatsapp";
+    } else {
+      // Fallback to email if WhatsApp gateway returns error
+      const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
+      previewUrl = emailResult.previewUrl;
+    }
+  } else {
+    const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
+    previewUrl = emailResult.previewUrl;
+  }
+
+  req.log.info({ userId: user.id, email: cleanEmail, channel: dispatchedChannel }, "Dispatched 6-digit verification OTP");
 
   res.status(200).json({
     requiresVerification: true,
     email: cleanEmail,
-    message: `A 6-digit verification code has been sent to ${cleanEmail}. (Valid for 10 minutes)`,
-    previewUrl: emailResult.previewUrl,
+    channel: dispatchedChannel,
+    message: dispatchedChannel === "whatsapp"
+      ? `A 6-digit verification code has been sent to your WhatsApp number (${user.mobileNumber}). (Valid for 10 minutes)`
+      : `A 6-digit verification code has been sent to ${cleanEmail}. (Valid for 10 minutes)`,
+    previewUrl,
     ...extra,
   });
 }
@@ -445,7 +468,7 @@ router.post("/register", authLimiter, validate({ body: RegisterBodySchema }), as
 
     req.log.info({ userId, cleanEmail, hasLockdownPenalty }, "Customer account created; sending verification OTP");
 
-    await issueVerificationOtp(req, res, { id: userId, firstName: firstName.trim() }, cleanEmail, {
+    await issueVerificationOtp(req, res, { id: userId, firstName: firstName.trim(), mobileNumber: mobileCheck.normalized }, cleanEmail, {
       lockdownPenaltyNotice: hasLockdownPenalty
         ? "Notice: Account re-registered within 15-day deletion window. Welcome offer codes are forfeited."
         : null,
@@ -568,7 +591,8 @@ router.post("/resend-login-otp", otpLimiter, validate({ body: ResendOtpBodySchem
       res.status(404).json({ error: "User not found." });
       return;
     }
-    await issueVerificationOtp(req, res, foundUsers[0], cleanEmail);
+    const channel = (req.body.channel === "whatsapp" ? "whatsapp" : "email") as "whatsapp" | "email";
+    await issueVerificationOtp(req, res, foundUsers[0], cleanEmail, undefined, channel);
   } catch (err: unknown) {
     req.log.error({ err }, "Resend OTP error");
     res.status(500).json({ error: "Failed to resend verification code." });
@@ -757,10 +781,26 @@ router.post("/forgot-password", recoveryLimiter, validate({ body: ForgotPassword
     const shopDomain = shopSettings?.shopDomain || "myshop.com";
     const resetUrl = `https://${shopDomain}/reset-password?token=${rawToken}&email=${encodeURIComponent(cleanEmail)}`;
 
+    const channel = req.body.channel === "whatsapp" ? "whatsapp" : "email";
+    if (channel === "whatsapp" && user.mobileNumber) {
+      const waMsg = `⚡ *${shopSettings?.shopName || "RAJ TRADERS"} - Password Reset*\n\nHello ${user.firstName},\n\nYou requested to reset your password. Tap the link below to set your new password (valid for 60 minutes):\n\n🔗 ${resetUrl}\n\nIf you did not request this, you can safely ignore this message.`;
+      await sendWhatsAppTextMessage({
+        toPhone: user.mobileNumber,
+        message: waMsg,
+      });
+      req.log.info({ mobileNumber: user.mobileNumber, expiresAt }, "Sent password recovery WhatsApp message");
+      res.status(200).json({
+        success: true,
+        channel: "whatsapp",
+        message: `Password reset link has been sent to your WhatsApp number (${user.mobileNumber}). Valid for 60 minutes.`,
+      });
+      return;
+    }
+
     const emailResult = await sendPasswordRecoveryEmail(cleanEmail, user.firstName, rawToken, resetUrl);
     req.log.info({ email: cleanEmail, expiresAt }, "Sent password recovery email");
 
-    res.status(200).json({ success: true, message: "Password recovery email has been sent. The token is valid for 60 minutes.", previewUrl: emailResult.previewUrl });
+    res.status(200).json({ success: true, channel: "email", message: "Password recovery email has been sent. The token is valid for 60 minutes.", previewUrl: emailResult.previewUrl });
   } catch (err: unknown) {
     req.log.error({ err }, "Forgot password error");
     res.status(500).json({ error: "Failed to process recovery request." });

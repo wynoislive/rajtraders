@@ -23,6 +23,7 @@ import {
   Mail,
   MapPin,
   Menu,
+  MessageSquare,
   Navigation,
   Package,
   Pencil,
@@ -1682,9 +1683,19 @@ function StoreSettings() {
     stateCode: '23',
     stateName: 'Madhya Pradesh',
     allowedPincodesJson: '["484551", "484661", "484660"]',
+    whatsappGatewayUrl: '',
+    whatsappApiKey: '',
+    whatsappSessionId: 'default',
+    whatsappSenderNumber: '',
+    isWhatsappNotificationsEnabled: false,
+    isWhatsappOtpEnabled: false,
   });
 
   const [showSecret, setShowSecret] = useState(false);
+  const [showWaApiKey, setShowWaApiKey] = useState(false);
+  const [testWaRecipient, setTestWaRecipient] = useState('');
+  const [testingWa, setTestingWa] = useState(false);
+  const [testWaResult, setTestWaResult] = useState<{ success?: boolean; error?: string; data?: any } | null>(null);
   const [testRecipient, setTestRecipient] = useState('dcwynolive@gmail.com');
   const [testingProvider, setTestingProvider] = useState<'auto' | 'hostinger_rest' | 'smtp' | 'gmail_notifications' | null>(null);
   const [testEmailResult, setTestEmailResult] = useState<{ success?: boolean; provider?: string; error?: string; hostingerError?: string } | null>(null);
@@ -1705,6 +1716,25 @@ function StoreSettings() {
       setTestEmailResult({ success: false, error: 'Network error while triggering test email.' });
     } finally {
       setTestingProvider(null);
+    }
+  };
+
+  const handleSendTestWhatsApp = async () => {
+    if (!testWaRecipient) return;
+    setTestingWa(true);
+    setTestWaResult(null);
+    try {
+      const res = await fetch(getApiUrl('/api/v1/admin/test-whatsapp'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ toPhone: testWaRecipient }),
+      });
+      const data = await res.json();
+      setTestWaResult(data);
+    } catch (e: unknown) {
+      setTestWaResult({ success: false, error: 'Network error while triggering test WhatsApp message.' });
+    } finally {
+      setTestingWa(false);
     }
   };
 
@@ -1731,6 +1761,12 @@ function StoreSettings() {
           stateCode: data.stateCode ?? '23',
           stateName: data.stateName ?? 'Madhya Pradesh',
           allowedPincodesJson: data.allowedPincodesJson ? (typeof data.allowedPincodesJson === 'string' ? data.allowedPincodesJson : JSON.stringify(data.allowedPincodesJson)) : '["484551", "484661", "484660"]',
+          whatsappGatewayUrl: data.whatsappGatewayUrl ?? '',
+          whatsappApiKey: data.whatsappApiKey ?? '',
+          whatsappSessionId: data.whatsappSessionId ?? 'default',
+          whatsappSenderNumber: data.whatsappSenderNumber ?? '',
+          isWhatsappNotificationsEnabled: data.isWhatsappNotificationsEnabled ?? false,
+          isWhatsappOtpEnabled: data.isWhatsappOtpEnabled ?? false,
         }));
       }
     } catch (e) {
@@ -2340,6 +2376,179 @@ function StoreSettings() {
                     )}
                     {testEmailResult.error && <p className="mt-1">Error: {testEmailResult.error}</p>}
                     {testEmailResult.hostingerError && <p className="mt-1">Hostinger REST Error: {testEmailResult.hostingerError}</p>}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* OpenWA WhatsApp API Gateway */}
+          <div className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
+                  <MessageSquare size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold flex items-center gap-2">
+                    OpenWA WhatsApp API Gateway
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                      Self-Hosted
+                    </span>
+                  </h3>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Connect your self-hosted OpenWA WhatsApp instance to dispatch order receipts, delivery dispatch notices, and customer OTPs.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  OpenWA Gateway Server URL
+                </label>
+                <input
+                  type="url"
+                  value={form.whatsappGatewayUrl || ''}
+                  onChange={(e) => setForm({ ...form, whatsappGatewayUrl: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono"
+                  placeholder="http://localhost:3000 or https://wa.yourdomain.com"
+                />
+                <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
+                  Base URL where OpenWA REST service is running (configured with Docker Compose).
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                    Gateway API Key (X-API-Key)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowWaApiKey(!showWaApiKey)}
+                    className="text-[10px] font-bold text-[hsl(var(--primary))] hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Eye size={12} /> {showWaApiKey ? 'Hide' : 'Reveal'}
+                  </button>
+                </div>
+                <input
+                  type={showWaApiKey ? 'text' : 'password'}
+                  value={form.whatsappApiKey || ''}
+                  onChange={(e) => setForm({ ...form, whatsappApiKey: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono"
+                  placeholder="your-secure-openwa-secret-api-key"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  Session ID
+                </label>
+                <input
+                  type="text"
+                  value={form.whatsappSessionId || 'default'}
+                  onChange={(e) => setForm({ ...form, whatsappSessionId: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono"
+                  placeholder="default"
+                />
+                <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
+                  OpenWA session identifier (usually 'default').
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  Official WhatsApp Sender Number
+                </label>
+                <input
+                  type="tel"
+                  value={form.whatsappSenderNumber || ''}
+                  onChange={(e) => setForm({ ...form, whatsappSenderNumber: e.target.value })}
+                  className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold"
+                  placeholder="+919876543210"
+                />
+                <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
+                  The WhatsApp number paired with the OpenWA gateway session.
+                </p>
+              </div>
+
+              <div className="flex flex-col justify-center space-y-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3.5">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.isWhatsappNotificationsEnabled}
+                    onChange={(e) => setForm({ ...form, isWhatsappNotificationsEnabled: e.target.checked })}
+                    className="size-4 rounded accent-emerald-600"
+                  />
+                  <div>
+                    <span className="text-xs font-bold">Enable WhatsApp Order Notifications</span>
+                    <p className="text-[10px] text-[hsl(var(--muted-foreground))]">
+                      Dispatches order receipt, rider dispatch info, and delivery status updates.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2.5 cursor-pointer pt-2 border-t border-[hsl(var(--border))]">
+                  <input
+                    type="checkbox"
+                    checked={form.isWhatsappOtpEnabled}
+                    onChange={(e) => setForm({ ...form, isWhatsappOtpEnabled: e.target.checked })}
+                    className="size-4 rounded accent-emerald-600"
+                  />
+                  <div>
+                    <span className="text-xs font-bold">Enable WhatsApp Customer Auth OTP</span>
+                    <p className="text-[10px] text-[hsl(var(--muted-foreground))]">
+                      Permits customers to choose WhatsApp for login verification and password resets.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Live WhatsApp Gateway Diagnostics */}
+            <div className="pt-4 border-t border-[hsl(var(--border))]">
+              <h4 className="text-xs font-black uppercase tracking-wider text-emerald-700 mb-2">
+                1-Click Live WhatsApp Gateway Tester
+              </h4>
+              <div className="rounded-xl bg-[hsl(var(--background))] p-4 border border-[hsl(var(--border))] space-y-3">
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Send a test message to your personal WhatsApp number to verify that OpenWA Gateway is authenticated and online.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="tel"
+                    value={testWaRecipient}
+                    onChange={(e) => setTestWaRecipient(e.target.value)}
+                    className="flex-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3.5 py-2.5 text-sm font-mono"
+                    placeholder="Enter 10-digit mobile or +91XXXXXXXXXX"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendTestWhatsApp}
+                    disabled={testingWa || !testWaRecipient}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shrink-0 cursor-pointer"
+                  >
+                    <MessageSquare size={14} className={testingWa ? 'animate-spin' : ''} />
+                    {testingWa ? 'Sending WhatsApp...' : '⚡ Send Test WhatsApp'}
+                  </button>
+                </div>
+
+                {testWaResult && (
+                  <div
+                    className={`mt-3 rounded-xl p-3.5 text-xs font-mono border ${
+                      testWaResult.success
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800'
+                        : 'bg-rose-500/10 border-rose-500/30 text-rose-700'
+                    }`}
+                  >
+                    <div className="font-bold text-sm mb-1">
+                      {testWaResult.success
+                        ? '✅ Test WhatsApp Delivered Successfully!'
+                        : '❌ WhatsApp Delivery Failed'}
+                    </div>
+                    {testWaResult.error && <p className="mt-1">Error: {testWaResult.error}</p>}
                   </div>
                 )}
               </div>

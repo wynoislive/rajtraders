@@ -242,6 +242,7 @@ export default function App() {
   const [otpRequired, setOtpRequired] = useState(false);
   const [pendingEmail, setPendingEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [otpChannel, setOtpChannel] = useState<'whatsapp' | 'email'>('whatsapp');
   const [resendCooldown, setResendCooldown] = useState(45);
 
   // Favorites & Notifications State
@@ -788,11 +789,11 @@ export default function App() {
       const res = await fetch(getApiUrl('/api/v1/auth/resend-login-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: pendingEmail }),
+        body: JSON.stringify({ email: pendingEmail, channel: otpChannel }),
       });
       const data = await res.json();
       if (res.ok) {
-        setAuthSuccess(`New OTP code sent to ${pendingEmail}`);
+        setAuthSuccess(data.message || `New OTP code dispatched via ${otpChannel === 'whatsapp' ? 'WhatsApp' : 'Email'}`);
         setResendCooldown(45);
       } else {
         setAuthError(data.error || 'Failed to resend OTP.');
@@ -814,11 +815,11 @@ export default function App() {
       const res = await fetch(getApiUrl('/api/v1/auth/forgot-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, channel: otpChannel }),
       });
       const data = await res.json();
       if (res.ok) {
-        setAuthSuccess('Password reset link and OTP token sent to your email.');
+        setAuthSuccess(data.message || (otpChannel === 'whatsapp' ? 'Password reset link sent to your WhatsApp number.' : 'Password reset link sent to your email.'));
         setPendingEmail(email);
       } else {
         setAuthError(data.error || 'Failed to request reset.');
@@ -2297,6 +2298,28 @@ export default function App() {
             {otpRequired ? (
               <form onSubmit={handleVerifyOtp} className="space-y-4">
                 <p className="text-xs text-gray-500 font-medium">A 6-digit verification code was sent to <strong className="text-[#0E3D42]">{pendingEmail}</strong></p>
+
+                {/* Delivery Channel Selector for Resend */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Resend Code via</label>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setOtpChannel('whatsapp')}
+                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${otpChannel === 'whatsapp' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                      <span>💬</span> WhatsApp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOtpChannel('email')}
+                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${otpChannel === 'email' ? 'bg-white text-[#0E3D42] shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                      <span>✉️</span> Email
+                    </button>
+                  </div>
+                </div>
+
                 <input required type="text" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="6-Digit OTP" autoComplete="one-time-code" className="w-full p-3 text-center tracking-widest text-xl font-bold rounded-xl border border-gray-300" />
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Verifying...' : 'Verify OTP'}</button>
                 <div className="flex justify-between items-center text-xs pt-1">
@@ -2306,7 +2329,7 @@ export default function App() {
                     disabled={resendCooldown > 0 || authLoading}
                     className={`font-extrabold transition-colors ${resendCooldown > 0 || authLoading ? 'text-gray-400 cursor-not-allowed' : 'text-[#0E3D42] hover:underline cursor-pointer'}`}
                   >
-                    {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : "Didn't receive code? Resend OTP"}
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : `Resend OTP via ${otpChannel === 'whatsapp' ? 'WhatsApp 💬' : 'Email ✉️'}`}
                   </button>
                   <button
                     type="button"
@@ -2334,11 +2357,33 @@ export default function App() {
             ) : authMode === 'forgot_password' ? (
               <form onSubmit={handleForgotPassword} className="space-y-4">
                 <p className="text-xs text-gray-500 font-medium leading-relaxed">
-                  Enter your account email. We will send a 60-minute password reset link and OTP recovery token directly to your inbox.
+                  Enter your account email. Choose whether you'd like your 60-minute password recovery link sent to your linked WhatsApp or inbox.
                 </p>
+
+                {/* Channel Selector */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Send Recovery Link To</label>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-xl text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setOtpChannel('whatsapp')}
+                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${otpChannel === 'whatsapp' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                      <span>💬</span> WhatsApp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOtpChannel('email')}
+                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${otpChannel === 'email' ? 'bg-white text-[#0E3D42] shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                      <span>✉️</span> Email Inbox
+                    </button>
+                  </div>
+                </div>
+
                 <input required type="email" name="email" defaultValue={pendingEmail} placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">
-                  {authLoading ? 'Sending Reset Link...' : 'Send Reset Link & OTP Token'}
+                  {authLoading ? 'Sending Reset Link...' : `Send Reset Link via ${otpChannel === 'whatsapp' ? 'WhatsApp 💬' : 'Email ✉️'}`}
                 </button>
                 <div className="flex justify-between text-xs font-bold text-[#0E3D42]/70 pt-1">
                   <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">

@@ -39,6 +39,13 @@ export const shopSettingsTable = pgTable("shop_settings", {
   // Contact Phone & WhatsApp Support (Admin Configurable)
   supportPhone: text("support_phone").default(""),
   whatsappNumber: text("whatsapp_number").default(""),
+  // OpenWA WhatsApp Gateway API Config
+  whatsappGatewayUrl: text("whatsapp_gateway_url").default(""),
+  whatsappApiKey: text("whatsapp_api_key").default(""),
+  whatsappSessionId: text("whatsapp_session_id").default("default"),
+  whatsappSenderNumber: text("whatsapp_sender_number").default(""),
+  isWhatsappNotificationsEnabled: boolean("is_whatsapp_notifications_enabled").notNull().default(false),
+  isWhatsappOtpEnabled: boolean("is_whatsapp_otp_enabled").notNull().default(false),
   // Footer, Social & Operational Settings
   socialLinkedin: text("social_linkedin").default(""),
   socialInstagram: text("social_instagram").default(""),

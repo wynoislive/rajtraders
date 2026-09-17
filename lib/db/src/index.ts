@@ -185,6 +185,12 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   hostinger_mailbox_resource_id TEXT DEFAULT '',
   support_phone TEXT DEFAULT '',
   whatsapp_number TEXT DEFAULT '',
+  whatsapp_gateway_url TEXT DEFAULT '',
+  whatsapp_api_key TEXT DEFAULT '',
+  whatsapp_session_id TEXT DEFAULT 'default',
+  whatsapp_sender_number TEXT DEFAULT '',
+  is_whatsapp_notifications_enabled BOOLEAN DEFAULT false,
+  is_whatsapp_otp_enabled BOOLEAN DEFAULT false,
   updatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -388,6 +394,12 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
   if (process.env.DELIVERY_ENABLED) updates.isDeliveryEnabled = process.env.DELIVERY_ENABLED === "true";
   if (process.env.SUPPORT_PHONE) updates.supportPhone = process.env.SUPPORT_PHONE;
   if (process.env.WHATSAPP_NUMBER) updates.whatsappNumber = process.env.WHATSAPP_NUMBER;
+  if (process.env.WHATSAPP_GATEWAY_URL) updates.whatsappGatewayUrl = process.env.WHATSAPP_GATEWAY_URL;
+  if (process.env.WHATSAPP_API_KEY) updates.whatsappApiKey = process.env.WHATSAPP_API_KEY;
+  if (process.env.WHATSAPP_SESSION_ID) updates.whatsappSessionId = process.env.WHATSAPP_SESSION_ID;
+  if (process.env.WHATSAPP_SENDER_NUMBER) updates.whatsappSenderNumber = process.env.WHATSAPP_SENDER_NUMBER;
+  if (process.env.WHATSAPP_NOTIFICATIONS_ENABLED) updates.isWhatsappNotificationsEnabled = process.env.WHATSAPP_NOTIFICATIONS_ENABLED === "true";
+  if (process.env.WHATSAPP_OTP_ENABLED) updates.isWhatsappOtpEnabled = process.env.WHATSAPP_OTP_ENABLED === "true";
 
   if (Object.keys(updates).length > 0) {
     await db

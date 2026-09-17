@@ -1,0 +1,33 @@
+# OpenWA Self-Hosted WhatsApp API Gateway for RAJ TRADERS
+# Repo: https://github.com/rmyndharis/OpenWA
+#
+# Quickstart:
+#   1. Copy docker/openwa/.env.example to docker/openwa/.env
+#   2. Set your custom WA_API_KEY
+#   3. Run: docker compose up -d
+#   4. Check logs for QR code: docker compose logs -f openwa
+#   5. Scan the QR code using WhatsApp on your store's smartphone
+#   6. Enter Gateway URL (e.g. http://<your-vps-ip>:3000) & API Key in Raj Traders Admin Web:
+#      https://sundarvan.xyz/admin -> Store Settings -> OpenWA WhatsApp API Gateway
+
+services:
+  openwa:
+    image: ghcr.io/rmyndharis/openwa:latest
+    container_name: rajtraders-openwa-gateway
+    restart: unless-stopped
+    ports:
+      - "${WA_PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - API_KEY=${WA_API_KEY:-rajtraders_secret_wa_api_key_2026}
+      - SESSION_NAME=${WA_SESSION_NAME:-default}
+      - NODE_ENV=production
+    volumes:
+      - ./sessions:/app/sessions
+      - ./auth:/app/.wwebjs_auth
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

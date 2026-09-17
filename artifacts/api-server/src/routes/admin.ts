@@ -25,6 +25,7 @@ import { getStaffFromToken } from "./staff-admin";
 import { filterOrders } from "../utils/order-filters";
 import { clearTransporterCache, sendEmail } from "../utils/mailer";
 import { generateTaxInvoicePdf } from "../utils/invoice-generator";
+import { sendWhatsAppTextMessage, sendOrderStatusWhatsApp } from "../utils/whatsapp";
 import { z } from "zod";
 
 const SECRET_MASK = "••••••••••••••••";
@@ -81,6 +82,13 @@ export const UpdateShopSettingsSchema = z.object({
   stateCode: z.string().max(10).optional(),
   stateName: z.string().max(100).optional(),
   allowedPincodesJson: z.string().optional(),
+  // OpenWA WhatsApp Gateway Settings
+  whatsappGatewayUrl: z.string().max(255).optional(),
+  whatsappApiKey: z.string().max(255).optional(),
+  whatsappSessionId: z.string().max(100).optional(),
+  whatsappSenderNumber: z.string().max(30).optional(),
+  isWhatsappNotificationsEnabled: z.boolean().optional(),
+  isWhatsappOtpEnabled: z.boolean().optional(),
 }).passthrough();
 
 function sanitizeShopSettings(settings: typeof shopSettingsTable.$inferSelect) {
@@ -91,11 +99,13 @@ function sanitizeShopSettings(settings: typeof shopSettingsTable.$inferSelect) {
     smtpPass: settings.smtpPass ? SECRET_MASK : "",
     notificationSmtpPass: settings.notificationSmtpPass ? SECRET_MASK : "",
     hostingerApiToken: settings.hostingerApiToken ? SECRET_MASK : "",
+    whatsappApiKey: settings.whatsappApiKey ? SECRET_MASK : "",
     hasRazorpaySecret: Boolean(settings.razorpayKeySecret && settings.razorpayKeySecret.trim().length > 0),
     hasR2Secret: Boolean(settings.r2SecretAccessKey && settings.r2SecretAccessKey.trim().length > 0),
     hasSmtpPass: Boolean(settings.smtpPass && settings.smtpPass.trim().length > 0),
     hasNotificationSmtpPass: Boolean(settings.notificationSmtpPass && settings.notificationSmtpPass.trim().length > 0),
     hasHostingerToken: Boolean(settings.hostingerApiToken && settings.hostingerApiToken.trim().length > 0),
+    hasWhatsappApiKey: Boolean(settings.whatsappApiKey && settings.whatsappApiKey.trim().length > 0),
   };
 }
 
@@ -668,6 +678,15 @@ router.put(
       if (supportPhone !== undefined) updateData.supportPhone = supportPhone.trim();
       if (whatsappNumber !== undefined) updateData.whatsappNumber = whatsappNumber.trim();
 
+      // OpenWA WhatsApp Gateway
+      if (req.body.whatsappGatewayUrl !== undefined) updateData.whatsappGatewayUrl = req.body.whatsappGatewayUrl.trim();
+      const resolvedWaApiKey = resolveSecretField(req.body.whatsappApiKey);
+      if (resolvedWaApiKey !== undefined) updateData.whatsappApiKey = resolvedWaApiKey;
+      if (req.body.whatsappSessionId !== undefined) updateData.whatsappSessionId = req.body.whatsappSessionId.trim() || "default";
+      if (req.body.whatsappSenderNumber !== undefined) updateData.whatsappSenderNumber = req.body.whatsappSenderNumber.trim();
+      if (typeof req.body.isWhatsappNotificationsEnabled === "boolean") updateData.isWhatsappNotificationsEnabled = req.body.isWhatsappNotificationsEnabled;
+      if (typeof req.body.isWhatsappOtpEnabled === "boolean") updateData.isWhatsappOtpEnabled = req.body.isWhatsappOtpEnabled;
+
       // Footer, Social & Operational Settings
       if (socialLinkedin !== undefined) updateData.socialLinkedin = socialLinkedin.trim();
       if (socialInstagram !== undefined) updateData.socialInstagram = socialInstagram.trim();
@@ -786,6 +805,37 @@ router.post("/v1/admin/test-email", requirePermission("settings"), async (req, r
   }
 });
 
+router.post("/v1/admin/test-whatsapp", requirePermission("settings"), async (req, res): Promise<void> => {
+  const { toPhone, customMessage } = req.body;
+  if (!toPhone || typeof toPhone !== "string") {
+    res.status(400).json({ error: "Valid recipient WhatsApp mobile number is required." });
+    return;
+  }
+
+  try {
+    const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+    const shopName = settings?.shopName || "RAJ TRADERS";
+    const testMsg = customMessage && typeof customMessage === "string" && customMessage.trim().length > 0
+      ? customMessage.trim()
+      : `⚡ *${shopName} Live Test WhatsApp*\n\nHello! This test message confirms that your *OpenWA WhatsApp Gateway* is configured and successfully dispatching messages! 🎉\n\n🕒 Timestamp: ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`;
+
+    const result = await sendWhatsAppTextMessage({
+      toPhone: toPhone.trim(),
+      message: testMsg,
+      gatewayConfig: {
+        gatewayUrl: settings?.whatsappGatewayUrl || "",
+        apiKey: settings?.whatsappApiKey || "",
+        sessionId: settings?.whatsappSessionId || "default",
+      },
+    });
+
+    res.json(result);
+  } catch (err: unknown) {
+    req.log.error({ err }, "Failed to send test WhatsApp message");
+    res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Failed to send test WhatsApp message" });
+  }
+});
+
 // ─── Admin Order Ledger (Clerk-protected via router.use(requireAdmin) above) ───
 // The operations console reads ALL customers' orders here; the customer-facing
 // /v1/checkout/orders route is scoped to the signed-in user only.
@@ -832,6 +882,10 @@ router.post("/v1/admin/orders/:id/cancel", requirePermission("orders"), async (r
       return;
     }
     await db.update(ordersTable).set({ status: "cancelled", updatedAt: new Date() }).where(eq(ordersTable.id, id));
+
+    sendOrderStatusWhatsApp(found[0], "cancelled", {}).catch((err) => {
+      req.log.warn({ err, orderId: id }, "Background WhatsApp order cancellation message failed");
+    });
 
     logAuditEvent(req, {
       action: "ORDER_CANCELLED_BY_ADMIN",
@@ -893,6 +947,15 @@ router.patch("/v1/admin/orders/:id/status", requirePermission("orders"), async (
     });
 
     const [updated] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+
+    sendOrderStatusWhatsApp(updated, status, {
+      riderName: updates.riderName || updated.riderName,
+      riderPhone: updates.riderPhone || updated.riderPhone,
+      trackingUrl: updates.trackingUrl || updated.trackingUrl,
+    }).catch((err) => {
+      req.log.warn({ err, orderId: id }, "Background WhatsApp order status message failed");
+    });
+
     res.json({ success: true, order: updated });
   } catch (err: unknown) {
     req.log.error({ err, orderId: id }, "Failed to update order status");
@@ -1021,6 +1084,10 @@ router.post("/v1/admin/orders/:id/approve-cancellation", requirePermission("orde
       resourceId: id,
       status: "SUCCESS",
       details: { refundMethod: preferredMethod, refundId, refundAmountCents: order.totalCents },
+    });
+
+    sendOrderStatusWhatsApp(order, "cancelled", {}).catch((err) => {
+      req.log.warn({ err, orderId: id }, "Background WhatsApp order cancellation approval message failed");
     });
 
     res.json({
