@@ -79,7 +79,7 @@ export const UpdateShopSettingsSchema = z.object({
   stateCode: z.string().max(10).optional(),
   stateName: z.string().max(100).optional(),
   allowedPincodesJson: z.string().optional(),
-}).strict();
+}).passthrough();
 
 function sanitizeShopSettings(settings: typeof shopSettingsTable.$inferSelect) {
   return {
@@ -699,6 +699,48 @@ router.put(
     } catch (err: unknown) {
       req.log.error({ err }, "Failed to update shop settings");
       res.status(500).json({ error: "Failed to update shop settings." });
+    }
+  }
+);
+
+router.patch(
+  "/v1/admin/shop-settings/toggle-store-status",
+  requirePermission("settings"),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { isStoreOpen } = req.body;
+      if (typeof isStoreOpen !== "boolean") {
+        res.status(400).json({ error: "isStoreOpen boolean field is required." });
+        return;
+      }
+
+      await db
+        .update(shopSettingsTable)
+        .set({
+          isStoreOpen,
+          updatedAt: new Date(),
+        })
+        .where(eq(shopSettingsTable.id, "default_shop"));
+
+      logAuditEvent(req, {
+        action: "STORE_STATUS_UPDATED",
+        resource: "shop_settings",
+        resourceId: "default_shop",
+        status: "SUCCESS",
+        details: { isStoreOpen },
+      });
+
+      const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+      res.json({
+        success: true,
+        isStoreOpen: updated.isStoreOpen,
+        message: updated.isStoreOpen
+          ? "Store is now LIVE for orders."
+          : "Store is now CLOSED. Ordering is blocked.",
+      });
+    } catch (err: unknown) {
+      req.log.error({ err }, "Failed to toggle store status");
+      res.status(500).json({ error: "Failed to update store status." });
     }
   }
 );

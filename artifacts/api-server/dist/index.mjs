@@ -277432,7 +277432,7 @@ var UpdateShopSettingsSchema = external_exports.object({
   stateCode: external_exports.string().max(10).optional(),
   stateName: external_exports.string().max(100).optional(),
   allowedPincodesJson: external_exports.string().optional()
-}).strict();
+}).passthrough();
 function sanitizeShopSettings(settings) {
   return {
     ...settings,
@@ -277988,6 +277988,39 @@ router4.put(
     } catch (err) {
       req.log.error({ err }, "Failed to update shop settings");
       res.status(500).json({ error: "Failed to update shop settings." });
+    }
+  }
+);
+router4.patch(
+  "/v1/admin/shop-settings/toggle-store-status",
+  requirePermission("settings"),
+  async (req, res) => {
+    try {
+      const { isStoreOpen } = req.body;
+      if (typeof isStoreOpen !== "boolean") {
+        res.status(400).json({ error: "isStoreOpen boolean field is required." });
+        return;
+      }
+      await db.update(shopSettingsTable).set({
+        isStoreOpen,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq(shopSettingsTable.id, "default_shop"));
+      logAuditEvent(req, {
+        action: "STORE_STATUS_UPDATED",
+        resource: "shop_settings",
+        resourceId: "default_shop",
+        status: "SUCCESS",
+        details: { isStoreOpen }
+      });
+      const updated = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+      res.json({
+        success: true,
+        isStoreOpen: updated.isStoreOpen,
+        message: updated.isStoreOpen ? "Store is now LIVE for orders." : "Store is now CLOSED. Ordering is blocked."
+      });
+    } catch (err) {
+      req.log.error({ err }, "Failed to toggle store status");
+      res.status(500).json({ error: "Failed to update store status." });
     }
   }
 );
@@ -280149,20 +280182,23 @@ router6.post("/check-pincode", async (req, res) => {
     }
   } catch {
   }
+  const isStoreOpen = settings.isStoreOpen !== false;
   if (!allowed) {
     res.status(200).json({
       allowed: false,
+      isStoreOpen,
       pincode: cleanPin,
       message: `Sorry, delivery is currently not serviceable for PIN code ${cleanPin}. We deliver exclusively to: ${allowedZones}.`
     });
     return;
   }
   res.status(200).json({
-    allowed: true,
+    allowed: isStoreOpen,
+    isStoreOpen,
     pincode: cleanPin,
     estimatedDays: "Same Day / Scheduled Slot",
     isExpressAvailable: true,
-    message: `Delivery available to PIN code ${cleanPin} via Local Fleet Dispatch.`
+    message: !isStoreOpen ? "Store is currently closed for new orders. Catalog browsing is active." : `Great news! PIN code ${cleanPin} is fully serviceable for fast delivery in ${allowedZones}.`
   });
 });
 router6.post("/create-order", async (req, res) => {
@@ -280197,6 +280233,13 @@ router6.post("/create-order", async (req, res) => {
   }
   try {
     const settings = await getShopSettings();
+    if (settings.isStoreOpen === false) {
+      res.status(400).json({
+        error: "Store is currently closed for new orders. Catalog browsing is active.",
+        isStoreOpen: false
+      });
+      return;
+    }
     const pinMatch = shippingAddress.match(/\b([1-9][0-9]{5})\b/);
     if (pinMatch) {
       const extractedPin = pinMatch[1];
@@ -280245,10 +280288,6 @@ router6.post("/create-order", async (req, res) => {
         status: existing.status,
         idempotencyKey: existing.idempotencyKey
       });
-      return;
-    }
-    if (settings.isStoreOpen === false) {
-      res.status(400).json({ error: "Store is currently closed for new orders. Please check back shortly." });
       return;
     }
     const productIds = items.map((i) => i.productId);
@@ -280425,6 +280464,14 @@ router6.post("/verify-payment", async (req, res) => {
       });
       return;
     }
+    const settings = await getShopSettings();
+    if (settings.isStoreOpen === false) {
+      res.status(400).json({
+        error: "Store is currently closed for new orders. Payment verification cannot be processed.",
+        isStoreOpen: false
+      });
+      return;
+    }
     if (razorpayOrderId !== order.razorpayOrderId) {
       req.log.error(
         { provided: razorpayOrderId, expected: order.razorpayOrderId },
@@ -280479,7 +280526,7 @@ router6.post("/verify-payment", async (req, res) => {
       }
     }
     try {
-      const settings = await getShopSettings();
+      const settings2 = await getShopSettings();
       const pdfInvoiceBuffer = await generateTaxInvoicePdf({
         orderId: order.id,
         invoiceNumber: `INV-${order.id.slice(0, 8).toUpperCase()}`,
@@ -280500,14 +280547,14 @@ router6.post("/verify-payment", async (req, res) => {
         cgstCents: order.cgstCents || 0,
         sgstCents: order.sgstCents || 0,
         igstCents: order.igstCents || 0,
-        shopName: settings.shopName || "RAJ TRADERS",
-        legalBusinessName: settings.legalBusinessName || "RAJ TRADERS",
-        gstinNumber: settings.gstinNumber || "23AAAAA0000A1Z5",
-        panNumber: settings.panNumber || "AAAAA0000A",
-        shopAddress: settings.shopAddress || "Birsingpur Pali, MP",
-        stateCode: settings.stateCode || "23",
-        stateName: settings.stateName || "Madhya Pradesh",
-        contactEmail: settings.contactEmail || settings.supportEmail || "contact@rajtraders.shop"
+        shopName: settings2.shopName || "RAJ TRADERS",
+        legalBusinessName: settings2.legalBusinessName || "RAJ TRADERS",
+        gstinNumber: settings2.gstinNumber || "23AAAAA0000A1Z5",
+        panNumber: settings2.panNumber || "AAAAA0000A",
+        shopAddress: settings2.shopAddress || "Birsingpur Pali, MP",
+        stateCode: settings2.stateCode || "23",
+        stateName: settings2.stateName || "Madhya Pradesh",
+        contactEmail: settings2.contactEmail || settings2.supportEmail || "contact@rajtraders.shop"
       });
       if (order.customerEmail) {
         await sendOrderConfirmationEmail(

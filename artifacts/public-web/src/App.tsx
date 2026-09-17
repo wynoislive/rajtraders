@@ -962,9 +962,9 @@ export default function App() {
 
         {/* Top Store Open Status Alert Banner (if closed) */}
         {!shopSettings.isStoreOpen && (
-          <div className="bg-amber-500 text-[#0E3D42] text-xs py-2 px-4 font-black flex items-center justify-center gap-2 shadow-sm">
+          <div className="bg-rose-600 text-white text-xs py-2.5 px-4 font-black flex items-center justify-center gap-2 shadow-md sticky top-0 z-50 tracking-wide">
             <AlertTriangle size={16} />
-            <span>Store is currently closed for new orders. Browsing is active.</span>
+            <span>Store is currently closed for new orders — Catalog browsing is active.</span>
           </div>
         )}
 
@@ -1553,12 +1553,22 @@ export default function App() {
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-3 pt-2">
-                    <button onClick={() => addToCart(currentProduct)} className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition flex items-center justify-center gap-2 text-sm">
-                      <ShoppingBag size={18} /> Add to Bag
-                    </button>
-                    <button onClick={() => { addToCart(currentProduct); setShowCartDrawer(true); }} className="w-full py-4 bg-[#E2A93B] text-[#0E3D42] font-extrabold rounded-2xl shadow-md hover:bg-[#E2A93B]/90 transition text-sm">
-                      Buy Now
-                    </button>
+                    {shopSettings.isStoreOpen ? (
+                      <>
+                        <button onClick={() => addToCart(currentProduct)} className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition flex items-center justify-center gap-2 text-sm">
+                          <ShoppingBag size={18} /> Add to Bag
+                        </button>
+                        <button onClick={() => { addToCart(currentProduct); setShowCartDrawer(true); }} className="w-full py-4 bg-[#E2A93B] text-[#0E3D42] font-extrabold rounded-2xl shadow-md hover:bg-[#E2A93B]/90 transition text-sm">
+                          Buy Now
+                        </button>
+                      </>
+                    ) : (
+                      <div className="col-span-2 py-3.5 px-4 bg-rose-50 border border-rose-200 rounded-2xl text-center">
+                        <span className="text-xs font-black text-rose-800 flex items-center justify-center gap-2">
+                          <AlertTriangle size={15} /> Store Offline — Catalog Browsing Only
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1691,9 +1701,15 @@ export default function App() {
                       </div>
                       <div className="p-5 pt-0 flex items-center justify-between gap-4">
                         <span className="text-xl font-black text-[#0E3D42]">{money(product.priceCents)}</span>
-                        <button onClick={() => addToCart(product)} className="px-4 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 shadow transition">
-                          Add to Bag
-                        </button>
+                        {shopSettings.isStoreOpen ? (
+                          <button onClick={() => addToCart(product)} className="px-4 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 shadow transition">
+                            Add to Bag
+                          </button>
+                        ) : (
+                          <span className="px-3 py-1.5 bg-gray-100 text-gray-500 text-[11px] font-bold rounded-xl border border-gray-200">
+                            Store Offline
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1944,7 +1960,7 @@ export default function App() {
                   disabled={isCheckingOut || !shopSettings.isStoreOpen || !isPincodeServiceable}
                   className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition disabled:bg-gray-400"
                 >
-                  {isCheckingOut ? 'Processing Order...' : !isPincodeServiceable ? `Enter Serviceable PIN (${allowedPincodes.join(', ')})` : `Pay & Complete Order · ${money(finalPayableCents)}`}
+                  {isCheckingOut ? 'Processing Order...' : !shopSettings.isStoreOpen ? '🔴 Store Offline — Checkout Disabled' : !isPincodeServiceable ? `Enter Serviceable PIN (${allowedPincodes.join(', ')})` : `Pay & Complete Order · ${money(finalPayableCents)}`}
                 </button>
               </div>
             )}

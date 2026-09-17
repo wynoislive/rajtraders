@@ -1740,6 +1740,36 @@ function StoreSettings() {
     fetchSettings();
   }, []);
 
+  const [togglingStore, setTogglingStore] = useState(false);
+
+  const handleToggleStoreStatus = async (newStatus: boolean) => {
+    setTogglingStore(true);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    setForm((prev) => ({ ...prev, isStoreOpen: newStatus }));
+
+    try {
+      const res = await fetch(getApiUrl('/api/v1/admin/shop-settings/toggle-store-status'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ isStoreOpen: newStatus }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMessage(data.message || (newStatus ? 'Store is now LIVE for orders.' : 'Store is now CLOSED. Orders are blocked.'));
+        setTimeout(() => setSuccessMessage(null), 4000);
+      } else {
+        setForm((prev) => ({ ...prev, isStoreOpen: !newStatus }));
+        setErrorMessage(data.error || 'Failed to update store status.');
+      }
+    } catch {
+      setForm((prev) => ({ ...prev, isStoreOpen: !newStatus }));
+      setErrorMessage('Network error while updating store status.');
+    } finally {
+      setTogglingStore(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -1747,11 +1777,20 @@ function StoreSettings() {
     setErrorMessage(null);
 
     try {
+      const sanitized: any = { ...form };
+      delete sanitized.id;
+      delete sanitized.updatedAt;
+      delete sanitized.hasRazorpaySecret;
+      delete sanitized.hasR2Secret;
+      delete sanitized.hasSmtpPass;
+      delete sanitized.hasNotificationSmtpPass;
+      delete sanitized.hasHostingerToken;
+
       const res = await fetch(getApiUrl('/api/v1/admin/shop-settings'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
-          ...form,
+          ...sanitized,
           latitude: Number(form.latitude),
           longitude: Number(form.longitude),
           deliveryRadiusKm: Number(form.deliveryRadiusKm),
@@ -1954,6 +1993,52 @@ function StoreSettings() {
             </div>
           </div>
 
+          {/* Realtime Store Operational Status (Instant Toggle) */}
+          <div className={`rounded-2xl border p-5 transition-all ${form.isStoreOpen ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className={`flex size-11 items-center justify-center rounded-xl text-lg shrink-0 ${form.isStoreOpen ? 'bg-emerald-500/15 text-emerald-600' : 'bg-rose-500/15 text-rose-600'}`}>
+                  {form.isStoreOpen ? '🟢' : '🔴'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-extrabold text-[hsl(var(--foreground))]">
+                      Store Status: {form.isStoreOpen ? 'Live & Accepting Orders' : 'Offline / Closed (Browsing Only)'}
+                    </h3>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${form.isStoreOpen ? 'bg-emerald-500/20 text-emerald-700' : 'bg-rose-500/20 text-rose-700'}`}>
+                      {form.isStoreOpen ? 'Store Open' : 'Orders Blocked'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                    {form.isStoreOpen
+                      ? 'Customers can browse products, add items to cart, and place online orders.'
+                      : 'Customers can only browse the catalog. All "Add to Cart" and checkout payments are strictly blocked.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={togglingStore}
+                onClick={() => handleToggleStoreStatus(!form.isStoreOpen)}
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition-all shadow-sm shrink-0 disabled:opacity-50 cursor-pointer ${
+                  form.isStoreOpen
+                    ? 'bg-rose-600 text-white hover:bg-rose-700 active:scale-95'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'
+                }`}
+              >
+                {togglingStore ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" /> Updating Status...
+                  </>
+                ) : form.isStoreOpen ? (
+                  <>🔴 Shut Down Store (Block Orders)</>
+                ) : (
+                  <>🟢 Re-Open Store (Accept Orders)</>
+                )}
+              </button>
+            </div>
+          </div>
+
           {/* Footer, Social Links & Payment Options */}
           <div className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-6 space-y-5">
             <div className="flex items-center justify-between">
@@ -1966,12 +2051,8 @@ function StoreSettings() {
               </div>
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.isStoreOpen} onChange={(e) => setForm({ ...form, isStoreOpen: e.target.checked })} className="size-4 rounded accent-[hsl(var(--primary))]" />
-                  <span className="text-xs font-bold">{form.isStoreOpen ? 'Store Open 🟢' : 'Store Closed 🔴'}</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={form.isCodEnabled} onChange={(e) => setForm({ ...form, isCodEnabled: e.target.checked })} className="size-4 rounded accent-[hsl(var(--primary))]" />
-                  <span className="text-xs font-bold">{form.isCodEnabled ? 'COD Enabled' : 'Online Only'}</span>
+                  <span className="text-xs font-bold">{form.isCodEnabled ? 'Cash on Delivery (COD) Enabled' : 'Online Payment Only'}</span>
                 </label>
               </div>
             </div>
@@ -2269,6 +2350,18 @@ function StoreSettings() {
                 <input type={showSecret ? 'text' : 'password'} value={form.razorpayKeySecret} onChange={(e) => setForm({ ...form, razorpayKeySecret: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" required />
               </div>
             </div>
+          </div>
+
+          {/* Bottom Save Bar */}
+          <div className="flex items-center justify-between rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-5 shadow-sm">
+            <div>
+              <h4 className="text-sm font-extrabold">Save Settings</h4>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Commit all location, delivery fees, payment credentials, and GSTIN changes.</p>
+            </div>
+            <Button variant="primary" onClick={handleSave} disabled={saving || loading}>
+              <Save size={16} className={saving ? 'animate-spin' : ''} />
+              {saving ? 'Saving...' : 'Save Configuration'}
+            </Button>
           </div>
         </form>
       )}

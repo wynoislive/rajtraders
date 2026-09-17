@@ -168,9 +168,11 @@ router.post("/check-pincode", async (req: Request, res: Response) => {
     }
   } catch {}
 
+  const isStoreOpen = settings.isStoreOpen !== false;
   if (!allowed) {
     res.status(200).json({
       allowed: false,
+      isStoreOpen,
       pincode: cleanPin,
       message: `Sorry, delivery is currently not serviceable for PIN code ${cleanPin}. We deliver exclusively to: ${allowedZones}.`,
     });
@@ -178,11 +180,14 @@ router.post("/check-pincode", async (req: Request, res: Response) => {
   }
 
   res.status(200).json({
-    allowed: true,
+    allowed: isStoreOpen,
+    isStoreOpen,
     pincode: cleanPin,
     estimatedDays: "Same Day / Scheduled Slot",
     isExpressAvailable: true,
-    message: `Delivery available to PIN code ${cleanPin} via Local Fleet Dispatch.`,
+    message: !isStoreOpen
+      ? "Store is currently closed for new orders. Catalog browsing is active."
+      : `Great news! PIN code ${cleanPin} is fully serviceable for fast delivery in ${allowedZones}.`,
   });
 });
 
@@ -222,6 +227,15 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
 
   try {
     const settings = await getShopSettings();
+
+    // STRICT CHECK: Store open check MUST be the very first validation
+    if (settings.isStoreOpen === false) {
+      res.status(400).json({
+        error: "Store is currently closed for new orders. Catalog browsing is active.",
+        isStoreOpen: false,
+      });
+      return;
+    }
 
     // Check PIN code serviceability from shipping address
     const pinMatch = shippingAddress.match(/\b([1-9][0-9]{5})\b/);
@@ -281,12 +295,6 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
         status: existing.status,
         idempotencyKey: existing.idempotencyKey,
       });
-      return;
-    }
-
-    // Check store availability
-    if (settings.isStoreOpen === false) {
-      res.status(400).json({ error: "Store is currently closed for new orders. Please check back shortly." });
       return;
     }
 
@@ -529,6 +537,15 @@ router.post("/verify-payment", async (req: Request<{}, {}, VerifyPaymentBody>, r
         currency: order.currency,
         status: "paid",
         message: "Payment successfully verified.",
+      });
+      return;
+    }
+
+    const settings = await getShopSettings();
+    if (settings.isStoreOpen === false) {
+      res.status(400).json({
+        error: "Store is currently closed for new orders. Payment verification cannot be processed.",
+        isStoreOpen: false,
       });
       return;
     }
