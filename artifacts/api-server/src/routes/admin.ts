@@ -59,6 +59,8 @@ export const UpdateShopSettingsSchema = z.object({
   notificationSmtpUser: z.string().max(100).optional(),
   notificationSmtpPass: z.string().max(255).optional(),
   notificationSmtpFrom: z.string().max(255).optional(),
+  supportPhone: z.string().max(30).optional(),
+  whatsappNumber: z.string().max(30).optional(),
   socialLinkedin: z.string().max(255).optional(),
   socialInstagram: z.string().max(255).optional(),
   socialFacebook: z.string().max(255).optional(),
@@ -574,7 +576,7 @@ router.get("/v1/admin/shop-settings", requirePermission("settings"), async (req,
     if (!settings) {
       const [inserted] = await db
         .insert(shopSettingsTable)
-        .values({ id: "default_shop", shopName: "RAJ TRADERS", shopDomain: "sundarvan.xyz", shopAddress: "123 Baker Street, Mumbai", latitude: 19.0760, longitude: 72.8777, deliveryRadiusKm: 15.0, isDeliveryEnabled: true })
+        .values({ id: "default_shop", shopName: "RAJ TRADERS", shopDomain: "sundarvan.xyz", shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551", latitude: 23.3646728, longitude: 81.0444592, deliveryRadiusKm: 10.0, isDeliveryEnabled: true })
         .returning();
       settings = inserted;
     }
@@ -596,6 +598,7 @@ router.put(
       r2AccountId, r2AccessKeyId, r2SecretAccessKey, r2BucketName, r2PublicUrl,
       smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom,
       supportEmail, contactEmail, ordersEmail,
+      supportPhone, whatsappNumber,
       hostingerApiToken, hostingerMailboxResourceId,
       notificationSmtpHost, notificationSmtpPort, notificationSmtpUser, notificationSmtpPass, notificationSmtpFrom,
       socialLinkedin, socialInstagram, socialFacebook, socialPinterest, socialTwitter,
@@ -658,10 +661,12 @@ router.put(
       if (resolvedNotifPass !== undefined) updateData.notificationSmtpPass = resolvedNotifPass;
       if (notificationSmtpFrom !== undefined) updateData.notificationSmtpFrom = notificationSmtpFrom.trim();
 
-      // Multi-Mailbox Config
+      // Multi-Mailbox & Contact Config
       if (supportEmail !== undefined) updateData.supportEmail = supportEmail.trim();
       if (contactEmail !== undefined) updateData.contactEmail = contactEmail.trim();
       if (ordersEmail !== undefined) updateData.ordersEmail = ordersEmail.trim();
+      if (supportPhone !== undefined) updateData.supportPhone = supportPhone.trim();
+      if (whatsappNumber !== undefined) updateData.whatsappNumber = whatsappNumber.trim();
 
       // Footer, Social & Operational Settings
       if (socialLinkedin !== undefined) updateData.socialLinkedin = socialLinkedin.trim();

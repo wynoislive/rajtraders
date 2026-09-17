@@ -26,9 +26,9 @@ async function getRazorpayCredentials(): Promise<{ keyId: string; keySecret: str
 async function getShopSettings() {
   const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
   return settings || {
-    latitude: 19.0760,
-    longitude: 72.8777,
-    deliveryRadiusKm: 15.0,
+    latitude: 23.3646728,
+    longitude: 81.0444592,
+    deliveryRadiusKm: 10.0,
     isDeliveryEnabled: true,
     razorpayKeyId: "rzp_test_sandbox123456",
     razorpayKeySecret: "sandbox_secret",
@@ -36,10 +36,10 @@ async function getShopSettings() {
     legalBusinessName: "RAJ TRADERS",
     gstinNumber: "23AAAAA0000A1Z5",
     panNumber: "AAAAA0000A",
-    shopAddress: "Birsingpur Pali, MP",
+    shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
     stateCode: "23",
     stateName: "Madhya Pradesh",
-    allowedPincodesJson: '["484661","484660"]',
+    allowedPincodesJson: '["484551","484661","484660"]',
     flatDeliveryFeeCents: 3000,
     freeDeliveryThresholdCents: 50000,
     packagingFeeCents: 1000,
@@ -76,6 +76,7 @@ interface CreateOrderBody {
   shippingAddress?: string;
   deliveryLatitude?: number;
   deliveryLongitude?: number;
+  fulfillmentType?: "delivery" | "pickup";
 }
 
 interface VerifyPaymentBody {
@@ -197,6 +198,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     idempotencyKey, items, discountCode, customerEmail,
     customerName, customerMobile, shippingAddress,
     deliveryLatitude, deliveryLongitude,
+    fulfillmentType = "delivery",
   } = req.body;
 
   if (!idempotencyKey || typeof idempotencyKey !== "string") {
@@ -209,9 +211,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     return;
   }
 
-  // Require authentication. The owner is derived ONLY from the session token —
-  // never from a client-supplied body field, which a caller could spoof to
-  // attribute orders to another account.
+  // Require authentication.
   const authHeader = req.headers.authorization;
   const resolvedUserId = await getUserIdFromToken(authHeader);
   if (!resolvedUserId) {
@@ -219,9 +219,11 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     return;
   }
 
-  // Require shipping address & validate PIN code serviceability
-  if (!shippingAddress || typeof shippingAddress !== "string" || shippingAddress.trim().length < 5) {
-    res.status(400).json({ error: "Please provide a valid shipping address." });
+  const isPickup = fulfillmentType === "pickup";
+
+  // Require shipping address for delivery
+  if (!isPickup && (!shippingAddress || typeof shippingAddress !== "string" || shippingAddress.trim().length < 5)) {
+    res.status(400).json({ error: "Please provide a valid delivery address." });
     return;
   }
 
@@ -237,28 +239,34 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
       return;
     }
 
-    // Check PIN code serviceability from shipping address
-    const pinMatch = shippingAddress.match(/\b([1-9][0-9]{5})\b/);
-    if (pinMatch) {
-      const extractedPin = pinMatch[1];
-      const isAllowed = isPincodeServiceable(extractedPin, settings.allowedPincodesJson);
-      if (!isAllowed) {
-        let allowedZones = "Birsingpur Pali (484661, 484660)";
-        try {
-          const list = JSON.parse(settings.allowedPincodesJson || "[]");
-          if (Array.isArray(list) && list.length > 0) allowedZones = list.join(", ");
-        } catch {}
-        res.status(400).json({
-          error: `Sorry, delivery is currently not serviceable for PIN code ${extractedPin}. We deliver exclusively to: ${allowedZones}.`,
-          unserviceablePincode: extractedPin,
-        });
-        return;
+    const finalShippingAddress = isPickup
+      ? `⚡ Self-Pickup at Store: ${settings.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551"}`
+      : (shippingAddress || "").trim();
+
+    // Check PIN code serviceability for delivery
+    if (!isPickup && shippingAddress) {
+      const pinMatch = shippingAddress.match(/\b([1-9][0-9]{5})\b/);
+      if (pinMatch) {
+        const extractedPin = pinMatch[1];
+        const isAllowed = isPincodeServiceable(extractedPin, settings.allowedPincodesJson);
+        if (!isAllowed) {
+          let allowedZones = "Birsingpur Pali (484551, 484661, 484660)";
+          try {
+            const list = JSON.parse(settings.allowedPincodesJson || "[]");
+            if (Array.isArray(list) && list.length > 0) allowedZones = list.join(", ");
+          } catch {}
+          res.status(400).json({
+            error: `Sorry, delivery is currently not serviceable for PIN code ${extractedPin}. We deliver exclusively to: ${allowedZones}.`,
+            unserviceablePincode: extractedPin,
+          });
+          return;
+        }
       }
     }
 
     // Delivery radius check (Haversine)
     let deliveryDistanceKm: number | null = null;
-    if (settings.isDeliveryEnabled && typeof deliveryLatitude === "number" && typeof deliveryLongitude === "number") {
+    if (!isPickup && settings.isDeliveryEnabled && typeof deliveryLatitude === "number" && typeof deliveryLongitude === "number") {
       deliveryDistanceKm = calculateHaversineDistanceKm(
         settings.latitude,
         settings.longitude,
@@ -357,7 +365,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     const freeDeliveryThresholdCents = settings.freeDeliveryThresholdCents ?? 50000;
     const packagingFeeCents = settings.packagingFeeCents ?? 1000;
 
-    const shippingFeeCents = subtotalCents >= freeDeliveryThresholdCents ? 0 : flatDeliveryFeeCents;
+    const shippingFeeCents = isPickup ? 0 : (subtotalCents >= freeDeliveryThresholdCents ? 0 : flatDeliveryFeeCents);
 
     // Calculate discount if present
     let discountCents = 0;
@@ -459,7 +467,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
       customerEmail: customerEmail || null,
       customerName: customerName || null,
       customerMobile: customerMobile || null,
-      shippingAddress: shippingAddress.trim(),
+      shippingAddress: finalShippingAddress,
       deliveryLatitude: deliveryLatitude ?? null,
       deliveryLongitude: deliveryLongitude ?? null,
       deliveryDistanceKm: deliveryDistanceKm,

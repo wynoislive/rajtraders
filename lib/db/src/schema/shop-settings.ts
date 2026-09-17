@@ -4,10 +4,10 @@ export const shopSettingsTable = pgTable("shop_settings", {
   id: text("id").primaryKey().$defaultFn(() => "default_shop"),
   shopName: text("shop_name").notNull().default("RAJ TRADERS"),
   shopDomain: text("shop_domain").notNull().default("sundarvan.xyz"),
-  shopAddress: text("shop_address").notNull().default("123 Baker Street, Mumbai"),
-  latitude: real("latitude").notNull().default(19.0760),
-  longitude: real("longitude").notNull().default(72.8777),
-  deliveryRadiusKm: real("delivery_radius_km").notNull().default(15.0),
+  shopAddress: text("shop_address").notNull().default("Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551"),
+  latitude: real("latitude").notNull().default(23.3646728),
+  longitude: real("longitude").notNull().default(81.0444592),
+  deliveryRadiusKm: real("delivery_radius_km").notNull().default(10.0),
   isDeliveryEnabled: boolean("is_delivery_enabled").notNull().default(true),
   razorpayKeyId: text("razorpay_key_id").notNull().default("rzp_test_sandbox123456"),
   razorpayKeySecret: text("razorpay_key_secret").notNull().default("sandbox_secret"),
@@ -36,6 +36,9 @@ export const shopSettingsTable = pgTable("shop_settings", {
   notificationSmtpUser: text("notification_smtp_user").default("notifications.rajtraders@gmail.com"),
   notificationSmtpPass: text("notification_smtp_pass").default(""),
   notificationSmtpFrom: text("notification_smtp_from").default("RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>"),
+  // Contact Phone & WhatsApp Support (Admin Configurable)
+  supportPhone: text("support_phone").default(""),
+  whatsappNumber: text("whatsapp_number").default(""),
   // Footer, Social & Operational Settings
   socialLinkedin: text("social_linkedin").default(""),
   socialInstagram: text("social_instagram").default(""),
@@ -56,7 +59,7 @@ export const shopSettingsTable = pgTable("shop_settings", {
   panNumber: text("pan_number").default("AAAAA0000A"),
   stateCode: text("state_code").default("23"),
   stateName: text("state_name").default("Madhya Pradesh"),
-  allowedPincodesJson: text("allowed_pincodes_json").default("[\"484661\",\"484660\"]"),
+  allowedPincodesJson: text("allowed_pincodes_json").default("[\"484551\",\"484661\",\"484660\"]"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

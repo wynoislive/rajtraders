@@ -1636,11 +1636,13 @@ function StoreSettings() {
   const [form, setForm] = useState({
     shopName: 'RAJ TRADERS',
     shopDomain: 'sundarvan.xyz',
-    shopAddress: 'Main Market, Sundarvan',
-    latitude: 19.0760,
-    longitude: 72.8777,
-    deliveryRadiusKm: 15.0,
+    shopAddress: 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
+    latitude: 23.3646728,
+    longitude: 81.0444592,
+    deliveryRadiusKm: 10.0,
     isDeliveryEnabled: true,
+    supportPhone: '',
+    whatsappNumber: '',
     razorpayKeyId: 'rzp_test_sandbox123456',
     razorpayKeySecret: 'sandbox_secret',
     r2AccountId: '',
@@ -1679,7 +1681,7 @@ function StoreSettings() {
     panNumber: 'AAAAA0000A',
     stateCode: '23',
     stateName: 'Madhya Pradesh',
-    allowedPincodesJson: '["484661", "484660"]',
+    allowedPincodesJson: '["484551", "484661", "484660"]',
   });
 
   const [showSecret, setShowSecret] = useState(false);
@@ -1717,16 +1719,18 @@ function StoreSettings() {
         setForm((prev) => ({
           ...prev,
           ...data,
-          latitude: data.latitude ?? 19.0760,
-          longitude: data.longitude ?? 72.8777,
-          deliveryRadiusKm: data.deliveryRadiusKm ?? 15.0,
+          latitude: data.latitude ?? 23.3646728,
+          longitude: data.longitude ?? 81.0444592,
+          deliveryRadiusKm: data.deliveryRadiusKm ?? 10.0,
           isDeliveryEnabled: data.isDeliveryEnabled ?? true,
+          supportPhone: data.supportPhone ?? '',
+          whatsappNumber: data.whatsappNumber ?? '',
           legalBusinessName: data.legalBusinessName ?? 'RAJ TRADERS',
           gstinNumber: data.gstinNumber ?? '23AAAAA0000A1Z5',
           panNumber: data.panNumber ?? 'AAAAA0000A',
           stateCode: data.stateCode ?? '23',
           stateName: data.stateName ?? 'Madhya Pradesh',
-          allowedPincodesJson: data.allowedPincodesJson ? (typeof data.allowedPincodesJson === 'string' ? data.allowedPincodesJson : JSON.stringify(data.allowedPincodesJson)) : '["484661", "484660"]',
+          allowedPincodesJson: data.allowedPincodesJson ? (typeof data.allowedPincodesJson === 'string' ? data.allowedPincodesJson : JSON.stringify(data.allowedPincodesJson)) : '["484551", "484661", "484660"]',
         }));
       }
     } catch (e) {
@@ -1795,6 +1799,8 @@ function StoreSettings() {
           longitude: Number(form.longitude),
           deliveryRadiusKm: Number(form.deliveryRadiusKm),
           isDeliveryEnabled: Boolean(form.isDeliveryEnabled),
+          supportPhone: form.supportPhone?.trim() || undefined,
+          whatsappNumber: form.whatsappNumber?.trim() || undefined,
           legalBusinessName: form.legalBusinessName?.trim() || undefined,
           gstinNumber: form.gstinNumber?.trim() || undefined,
           panNumber: form.panNumber?.trim() || undefined,
@@ -1870,9 +1876,17 @@ function StoreSettings() {
                 <input type="text" value={form.shopDomain} onChange={(e) => setForm({ ...form, shopDomain: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="myshop.com" required />
                 <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Used for public share URLs and password reset links (e.g. https://yourdomain.com/products/...)</p>
               </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Physical Address</label>
+              <div className="md:col-span-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Physical Offline Store Address</label>
                 <input type="text" value={form.shopAddress} onChange={(e) => setForm({ ...form, shopAddress: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold" required />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Support Phone Number (Direct Call)</label>
+                <input type="tel" value={form.supportPhone || ''} onChange={(e) => setForm({ ...form, supportPhone: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold" placeholder="+91 9876543210" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">WhatsApp Support Number (Direct Chat)</label>
+                <input type="tel" value={form.whatsappNumber || ''} onChange={(e) => setForm({ ...form, whatsappNumber: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold" placeholder="+91 9876543211" />
               </div>
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Latitude</label>
@@ -1881,6 +1895,10 @@ function StoreSettings() {
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Longitude</label>
                 <input type="number" step="any" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: parseFloat(e.target.value) || 0 })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" required />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Delivery Radius (km)</label>
+                <input type="number" step="any" value={form.deliveryRadiusKm} onChange={(e) => setForm({ ...form, deliveryRadiusKm: parseFloat(e.target.value) || 0 })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" required />
               </div>
             </div>
           </div>

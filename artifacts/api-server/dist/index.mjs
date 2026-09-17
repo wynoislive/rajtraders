@@ -250621,10 +250621,10 @@ var shopSettingsTable = pgTable("shop_settings", {
   id: text("id").primaryKey().$defaultFn(() => "default_shop"),
   shopName: text("shop_name").notNull().default("RAJ TRADERS"),
   shopDomain: text("shop_domain").notNull().default("sundarvan.xyz"),
-  shopAddress: text("shop_address").notNull().default("123 Baker Street, Mumbai"),
-  latitude: real("latitude").notNull().default(19.076),
-  longitude: real("longitude").notNull().default(72.8777),
-  deliveryRadiusKm: real("delivery_radius_km").notNull().default(15),
+  shopAddress: text("shop_address").notNull().default("Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551"),
+  latitude: real("latitude").notNull().default(23.3646728),
+  longitude: real("longitude").notNull().default(81.0444592),
+  deliveryRadiusKm: real("delivery_radius_km").notNull().default(10),
   isDeliveryEnabled: boolean("is_delivery_enabled").notNull().default(true),
   razorpayKeyId: text("razorpay_key_id").notNull().default("rzp_test_sandbox123456"),
   razorpayKeySecret: text("razorpay_key_secret").notNull().default("sandbox_secret"),
@@ -250653,6 +250653,9 @@ var shopSettingsTable = pgTable("shop_settings", {
   notificationSmtpUser: text("notification_smtp_user").default("notifications.rajtraders@gmail.com"),
   notificationSmtpPass: text("notification_smtp_pass").default(""),
   notificationSmtpFrom: text("notification_smtp_from").default("RAJ TRADERS Notifications <notifications.rajtraders@gmail.com>"),
+  // Contact Phone & WhatsApp Support (Admin Configurable)
+  supportPhone: text("support_phone").default(""),
+  whatsappNumber: text("whatsapp_number").default(""),
   // Footer, Social & Operational Settings
   socialLinkedin: text("social_linkedin").default(""),
   socialInstagram: text("social_instagram").default(""),
@@ -250676,7 +250679,7 @@ var shopSettingsTable = pgTable("shop_settings", {
   panNumber: text("pan_number").default("AAAAA0000A"),
   stateCode: text("state_code").default("23"),
   stateName: text("state_name").default("Madhya Pradesh"),
-  allowedPincodesJson: text("allowed_pincodes_json").default('["484661","484660"]'),
+  allowedPincodesJson: text("allowed_pincodes_json").default('["484551","484661","484660"]'),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -251028,10 +251031,10 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   id TEXT PRIMARY KEY,
   shop_name TEXT NOT NULL DEFAULT 'RAJ TRADERS',
   shop_domain TEXT NOT NULL DEFAULT 'sundarvan.xyz',
-  shop_address TEXT NOT NULL DEFAULT '123 Baker Street, Mumbai',
-  latitude REAL NOT NULL DEFAULT 19.0760,
-  longitude REAL NOT NULL DEFAULT 72.8777,
-  delivery_radius_km REAL NOT NULL DEFAULT 15.0,
+  shop_address TEXT NOT NULL DEFAULT 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
+  latitude REAL NOT NULL DEFAULT 23.3646728,
+  longitude REAL NOT NULL DEFAULT 81.0444592,
+  delivery_radius_km REAL NOT NULL DEFAULT 10.0,
   is_delivery_enabled BOOLEAN NOT NULL DEFAULT true,
   razorpay_key_id TEXT NOT NULL DEFAULT 'rzp_test_sandbox123456',
   razorpay_key_secret TEXT NOT NULL DEFAULT 'sandbox_secret',
@@ -251047,11 +251050,13 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   smtp_from TEXT DEFAULT 'RAJ TRADERS <notifications.rajtraders@gmail.com>',
   hostinger_api_token TEXT DEFAULT '',
   hostinger_mailbox_resource_id TEXT DEFAULT '',
+  support_phone TEXT DEFAULT '',
+  whatsapp_number TEXT DEFAULT '',
   updatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 INSERT INTO shop_settings (id, shop_name, shop_domain, shop_address, latitude, longitude, delivery_radius_km, is_delivery_enabled, razorpay_key_id, razorpay_key_secret, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
-VALUES ('default_shop', 'RAJ TRADERS', 'sundarvan.xyz', '123 Baker Street, Mumbai', 19.0760, 72.8777, 15.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'RAJ TRADERS <notifications.rajtraders@gmail.com>')
+VALUES ('default_shop', 'RAJ TRADERS', 'sundarvan.xyz', 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551', 23.3646728, 81.0444592, 10.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'RAJ TRADERS <notifications.rajtraders@gmail.com>')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Default MAIN_ADMIN user
@@ -251240,6 +251245,8 @@ async function syncEnvToShopSettings(db2) {
   if (process.env.SHOP_LONGITUDE) updates.longitude = parseFloat(process.env.SHOP_LONGITUDE);
   if (process.env.DELIVERY_RADIUS_KM) updates.deliveryRadiusKm = parseFloat(process.env.DELIVERY_RADIUS_KM);
   if (process.env.DELIVERY_ENABLED) updates.isDeliveryEnabled = process.env.DELIVERY_ENABLED === "true";
+  if (process.env.SUPPORT_PHONE) updates.supportPhone = process.env.SUPPORT_PHONE;
+  if (process.env.WHATSAPP_NUMBER) updates.whatsappNumber = process.env.WHATSAPP_NUMBER;
   if (Object.keys(updates).length > 0) {
     await db2.update(shopSettingsTable).set(updates).where(eq(shopSettingsTable.id, "default_shop"));
   }
@@ -251567,9 +251574,14 @@ router2.get("/v1/storefront/settings", async (_req, res) => {
     res.json({
       shopName: settings?.shopName || "RAJ TRADERS",
       shopDomain: settings?.shopDomain || "sundarvan.xyz",
-      shopAddress: settings?.shopAddress || "123 Baker Street, Mumbai",
+      shopAddress: settings?.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
+      latitude: settings?.latitude ?? 23.3646728,
+      longitude: settings?.longitude ?? 81.0444592,
+      deliveryRadiusKm: settings?.deliveryRadiusKm ?? 10,
       supportEmail: settings?.supportEmail || "support@sundarvan.xyz",
       contactEmail: settings?.contactEmail || "contact@sundarvan.xyz",
+      supportPhone: settings?.supportPhone || "",
+      whatsappNumber: settings?.whatsappNumber || "",
       socialLinkedin: settings?.socialLinkedin || "",
       socialInstagram: settings?.socialInstagram || "",
       socialFacebook: settings?.socialFacebook || "",
@@ -251582,15 +251594,26 @@ router2.get("/v1/storefront/settings", async (_req, res) => {
       isCodEnabled: settings?.isCodEnabled ?? false,
       flatDeliveryFeeCents: settings?.flatDeliveryFeeCents ?? 3e3,
       freeDeliveryThresholdCents: settings?.freeDeliveryThresholdCents ?? 5e4,
-      packagingFeeCents: settings?.packagingFeeCents ?? 1e3
+      packagingFeeCents: settings?.packagingFeeCents ?? 1e3,
+      legalBusinessName: settings?.legalBusinessName || "RAJ TRADERS",
+      gstinNumber: settings?.gstinNumber || "23AAAAA0000A1Z5",
+      panNumber: settings?.panNumber || "AAAAA0000A",
+      stateCode: settings?.stateCode || "23",
+      stateName: settings?.stateName || "Madhya Pradesh",
+      allowedPincodesJson: settings?.allowedPincodesJson || '["484551","484661","484660"]'
     });
   } catch (err) {
     res.json({
       shopName: "RAJ TRADERS",
       shopDomain: "sundarvan.xyz",
-      shopAddress: "Birsingpur Pali",
+      shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
+      latitude: 23.3646728,
+      longitude: 81.0444592,
+      deliveryRadiusKm: 10,
       supportEmail: "support@sundarvan.xyz",
       contactEmail: "contact@sundarvan.xyz",
+      supportPhone: "",
+      whatsappNumber: "",
       socialLinkedin: "",
       socialInstagram: "",
       socialFacebook: "",
@@ -251603,7 +251626,13 @@ router2.get("/v1/storefront/settings", async (_req, res) => {
       isCodEnabled: false,
       flatDeliveryFeeCents: 3e3,
       freeDeliveryThresholdCents: 5e4,
-      packagingFeeCents: 1e3
+      packagingFeeCents: 1e3,
+      legalBusinessName: "RAJ TRADERS",
+      gstinNumber: "23AAAAA0000A1Z5",
+      panNumber: "AAAAA0000A",
+      stateCode: "23",
+      stateName: "Madhya Pradesh",
+      allowedPincodesJson: '["484551","484661","484660"]'
     });
   }
 });
@@ -277450,6 +277479,8 @@ var UpdateShopSettingsSchema = external_exports.object({
   notificationSmtpUser: external_exports.string().max(100).optional(),
   notificationSmtpPass: external_exports.string().max(255).optional(),
   notificationSmtpFrom: external_exports.string().max(255).optional(),
+  supportPhone: external_exports.string().max(30).optional(),
+  whatsappNumber: external_exports.string().max(30).optional(),
   socialLinkedin: external_exports.string().max(255).optional(),
   socialInstagram: external_exports.string().max(255).optional(),
   socialFacebook: external_exports.string().max(255).optional(),
@@ -277887,7 +277918,7 @@ router4.get("/v1/admin/shop-settings", requirePermission("settings"), async (req
   try {
     let settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     if (!settings) {
-      const [inserted] = await db.insert(shopSettingsTable).values({ id: "default_shop", shopName: "RAJ TRADERS", shopDomain: "sundarvan.xyz", shopAddress: "123 Baker Street, Mumbai", latitude: 19.076, longitude: 72.8777, deliveryRadiusKm: 15, isDeliveryEnabled: true }).returning();
+      const [inserted] = await db.insert(shopSettingsTable).values({ id: "default_shop", shopName: "RAJ TRADERS", shopDomain: "sundarvan.xyz", shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551", latitude: 23.3646728, longitude: 81.0444592, deliveryRadiusKm: 10, isDeliveryEnabled: true }).returning();
       settings = inserted;
     }
     res.json(sanitizeShopSettings(settings));
@@ -277924,6 +277955,8 @@ router4.put(
       supportEmail,
       contactEmail,
       ordersEmail,
+      supportPhone,
+      whatsappNumber,
       hostingerApiToken,
       hostingerMailboxResourceId,
       notificationSmtpHost,
@@ -277995,6 +278028,8 @@ router4.put(
       if (supportEmail !== void 0) updateData.supportEmail = supportEmail.trim();
       if (contactEmail !== void 0) updateData.contactEmail = contactEmail.trim();
       if (ordersEmail !== void 0) updateData.ordersEmail = ordersEmail.trim();
+      if (supportPhone !== void 0) updateData.supportPhone = supportPhone.trim();
+      if (whatsappNumber !== void 0) updateData.whatsappNumber = whatsappNumber.trim();
       if (socialLinkedin !== void 0) updateData.socialLinkedin = socialLinkedin.trim();
       if (socialInstagram !== void 0) updateData.socialInstagram = socialInstagram.trim();
       if (socialFacebook !== void 0) updateData.socialFacebook = socialFacebook.trim();
@@ -280348,9 +280383,9 @@ async function getRazorpayCredentials() {
 async function getShopSettings() {
   const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
   return settings || {
-    latitude: 19.076,
-    longitude: 72.8777,
-    deliveryRadiusKm: 15,
+    latitude: 23.3646728,
+    longitude: 81.0444592,
+    deliveryRadiusKm: 10,
     isDeliveryEnabled: true,
     razorpayKeyId: "rzp_test_sandbox123456",
     razorpayKeySecret: "sandbox_secret",
@@ -280358,10 +280393,10 @@ async function getShopSettings() {
     legalBusinessName: "RAJ TRADERS",
     gstinNumber: "23AAAAA0000A1Z5",
     panNumber: "AAAAA0000A",
-    shopAddress: "Birsingpur Pali, MP",
+    shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
     stateCode: "23",
     stateName: "Madhya Pradesh",
-    allowedPincodesJson: '["484661","484660"]',
+    allowedPincodesJson: '["484551","484661","484660"]',
     flatDeliveryFeeCents: 3e3,
     freeDeliveryThresholdCents: 5e4,
     packagingFeeCents: 1e3,
@@ -280476,7 +280511,8 @@ router6.post("/create-order", async (req, res) => {
     customerMobile,
     shippingAddress,
     deliveryLatitude,
-    deliveryLongitude
+    deliveryLongitude,
+    fulfillmentType = "delivery"
   } = req.body;
   if (!idempotencyKey || typeof idempotencyKey !== "string") {
     res.status(400).json({ error: "Missing or invalid idempotencyKey." });
@@ -280492,8 +280528,9 @@ router6.post("/create-order", async (req, res) => {
     res.status(401).json({ error: "Please log in or register before placing an order." });
     return;
   }
-  if (!shippingAddress || typeof shippingAddress !== "string" || shippingAddress.trim().length < 5) {
-    res.status(400).json({ error: "Please provide a valid shipping address." });
+  const isPickup = fulfillmentType === "pickup";
+  if (!isPickup && (!shippingAddress || typeof shippingAddress !== "string" || shippingAddress.trim().length < 5)) {
+    res.status(400).json({ error: "Please provide a valid delivery address." });
     return;
   }
   try {
@@ -280505,26 +280542,29 @@ router6.post("/create-order", async (req, res) => {
       });
       return;
     }
-    const pinMatch = shippingAddress.match(/\b([1-9][0-9]{5})\b/);
-    if (pinMatch) {
-      const extractedPin = pinMatch[1];
-      const isAllowed = isPincodeServiceable(extractedPin, settings.allowedPincodesJson);
-      if (!isAllowed) {
-        let allowedZones = "Birsingpur Pali (484661, 484660)";
-        try {
-          const list = JSON.parse(settings.allowedPincodesJson || "[]");
-          if (Array.isArray(list) && list.length > 0) allowedZones = list.join(", ");
-        } catch {
+    const finalShippingAddress = isPickup ? `\u26A1 Self-Pickup at Store: ${settings.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551"}` : (shippingAddress || "").trim();
+    if (!isPickup && shippingAddress) {
+      const pinMatch = shippingAddress.match(/\b([1-9][0-9]{5})\b/);
+      if (pinMatch) {
+        const extractedPin = pinMatch[1];
+        const isAllowed = isPincodeServiceable(extractedPin, settings.allowedPincodesJson);
+        if (!isAllowed) {
+          let allowedZones = "Birsingpur Pali (484551, 484661, 484660)";
+          try {
+            const list = JSON.parse(settings.allowedPincodesJson || "[]");
+            if (Array.isArray(list) && list.length > 0) allowedZones = list.join(", ");
+          } catch {
+          }
+          res.status(400).json({
+            error: `Sorry, delivery is currently not serviceable for PIN code ${extractedPin}. We deliver exclusively to: ${allowedZones}.`,
+            unserviceablePincode: extractedPin
+          });
+          return;
         }
-        res.status(400).json({
-          error: `Sorry, delivery is currently not serviceable for PIN code ${extractedPin}. We deliver exclusively to: ${allowedZones}.`,
-          unserviceablePincode: extractedPin
-        });
-        return;
       }
     }
     let deliveryDistanceKm = null;
-    if (settings.isDeliveryEnabled && typeof deliveryLatitude === "number" && typeof deliveryLongitude === "number") {
+    if (!isPickup && settings.isDeliveryEnabled && typeof deliveryLatitude === "number" && typeof deliveryLongitude === "number") {
       deliveryDistanceKm = calculateHaversineDistanceKm(
         settings.latitude,
         settings.longitude,
@@ -280593,7 +280633,7 @@ router6.post("/create-order", async (req, res) => {
     const flatDeliveryFeeCents = settings.flatDeliveryFeeCents ?? 3e3;
     const freeDeliveryThresholdCents = settings.freeDeliveryThresholdCents ?? 5e4;
     const packagingFeeCents = settings.packagingFeeCents ?? 1e3;
-    const shippingFeeCents = subtotalCents >= freeDeliveryThresholdCents ? 0 : flatDeliveryFeeCents;
+    const shippingFeeCents = isPickup ? 0 : subtotalCents >= freeDeliveryThresholdCents ? 0 : flatDeliveryFeeCents;
     let discountCents = 0;
     let appliedDiscountId = null;
     if (discountCode && typeof discountCode === "string") {
@@ -280666,7 +280706,7 @@ router6.post("/create-order", async (req, res) => {
       customerEmail: customerEmail || null,
       customerName: customerName || null,
       customerMobile: customerMobile || null,
-      shippingAddress: shippingAddress.trim(),
+      shippingAddress: finalShippingAddress,
       deliveryLatitude: deliveryLatitude ?? null,
       deliveryLongitude: deliveryLongitude ?? null,
       deliveryDistanceKm,

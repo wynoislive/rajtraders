@@ -45,7 +45,9 @@ import {
   Download,
   AlertCircle,
   Building2,
-  ExternalLink
+  ExternalLink,
+  MessageCircle,
+  Mail,
 } from 'lucide-react';
 
 export type StorefrontProduct = Product & {
@@ -87,7 +89,13 @@ export default function App() {
     panNumber: 'AAAAA0000A',
     stateCode: '23',
     stateName: 'Madhya Pradesh',
-    allowedPincodesJson: '["484661", "484660"]',
+    shopAddress: 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
+    latitude: 23.3646728,
+    longitude: 81.0444592,
+    deliveryRadiusKm: 10.0,
+    supportPhone: '',
+    whatsappNumber: '',
+    allowedPincodesJson: '["484551", "484661", "484660"]',
     availableInLocation: 'BIRSINGPUR PALI',
     aboutUsText: 'Premium cakes, party decorations & artisanal local delights.',
     isStoreOpen: true,
@@ -111,9 +119,11 @@ export default function App() {
   }, []);
 
   // Store & Location State
-  const [pincode, setPincode] = useState('484661');
+  const [pincode, setPincode] = useState('484551');
   const [city, setCity] = useState('Birsingpur Pali, MP');
-  const [deliveryPincode, setDeliveryPincode] = useState('484661');
+  const [deliveryPincode, setDeliveryPincode] = useState('484551');
+  const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery');
+  const [isStoreLocationModalOpen, setIsStoreLocationModalOpen] = useState(false);
   const [cancellationModalOrder, setCancellationModalOrder] = useState<any | null>(null);
   const [cancellationReason, setCancellationReason] = useState('');
   const [preferredRefundMethod, setPreferredRefundMethod] = useState<'store_credit' | 'original_source'>('store_credit');
@@ -129,9 +139,9 @@ export default function App() {
       if (Array.isArray(shopSettings.allowedPincodesJson)) {
         return shopSettings.allowedPincodesJson;
       }
-      return ['484661', '484660'];
+      return ['484551', '484661', '484660'];
     } catch {
-      return ['484661', '484660'];
+      return ['484551', '484661', '484660'];
     }
   }, [shopSettings.allowedPincodesJson]);
 
@@ -885,17 +895,23 @@ export default function App() {
       showToast('Store is currently closed for new orders.', 'error');
       return;
     }
-    if (!isPincodeServiceable) {
-      showToast(`Delivery PIN ${deliveryPincode} is not serviceable. We only deliver to: ${allowedPincodes.join(', ')}`, 'error');
-      return;
-    }
-    if (!shippingAddress || shippingAddress.length < 5) {
-      showToast('Please enter a valid shipping address.', 'error');
-      return;
+    if (fulfillmentType === 'delivery') {
+      if (!isPincodeServiceable) {
+        showToast(`Delivery PIN ${deliveryPincode} is not serviceable. We only deliver to: ${allowedPincodes.join(', ')}`, 'error');
+        return;
+      }
+      if (!shippingAddress || shippingAddress.length < 5) {
+        showToast('Please enter a valid shipping address.', 'error');
+        return;
+      }
     }
     setIsCheckingOut(true);
     try {
       const items = cart.map((i) => ({ productId: i.product.id, quantity: i.quantity }));
+      const orderShippingAddress = fulfillmentType === 'pickup'
+        ? `⚡ Self-Pickup at Store: ${shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}`
+        : `${shippingAddress} (PIN: ${deliveryPincode})`;
+
       const res = await fetch(getApiUrl('/api/v1/checkout/create-order'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -906,8 +922,9 @@ export default function App() {
           customerEmail: user.email,
           customerName: `${user.firstName} ${user.lastName}`,
           customerMobile: user.mobileNumber,
-          shippingAddress: `${shippingAddress} (PIN: ${deliveryPincode})`,
-          pincode: deliveryPincode,
+          shippingAddress: orderShippingAddress,
+          pincode: fulfillmentType === 'pickup' ? '484551' : deliveryPincode,
+          fulfillmentType,
         }),
       });
 
@@ -957,8 +974,8 @@ export default function App() {
   // Cart Calculations & Reverse Tax Breakdown
   const cartTotalCents = cart.reduce((acc, i) => acc + i.product.priceCents * i.quantity, 0);
   const packagingFeeCents = shopSettings.packagingFeeCents || 1000;
-  const isFreeDelivery = cartTotalCents >= (shopSettings.freeDeliveryThresholdCents || 50000);
-  const deliveryFeeCents = isFreeDelivery ? 0 : (shopSettings.flatDeliveryFeeCents || 3000);
+  const isFreeDelivery = fulfillmentType === 'pickup' || cartTotalCents >= (shopSettings.freeDeliveryThresholdCents || 50000);
+  const deliveryFeeCents = fulfillmentType === 'pickup' ? 0 : (isFreeDelivery ? 0 : (shopSettings.flatDeliveryFeeCents || 3000));
   const discountCents = discountResult?.valid ? discountResult.discountCents : 0;
   const finalPayableCents = Math.max(100, cartTotalCents + packagingFeeCents + deliveryFeeCents - discountCents);
 
@@ -1026,11 +1043,22 @@ export default function App() {
         )}
 
         {/* Amazon-style Location Top Bar */}
-        <div className="bg-[#0E3D42] text-white text-xs py-2.5 px-4 flex items-center justify-between shadow-sm cursor-pointer hover:bg-[#0E3D42]/95 transition" onClick={() => setShowPincodeModal(true)}>
-          <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
-            <MapPin size={15} className="text-[#E2A93B]" />
-            <span className="font-semibold">Deliver to <span className="underline decoration-[#E2A93B] font-bold">{city} {pincode}</span></span>
-            <span className="text-[#E2A93B] text-[10px]">▼</span>
+        <div className="bg-[#0E3D42] text-white text-xs py-2 px-4 shadow-sm">
+          <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
+            <div className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition" onClick={() => setShowPincodeModal(true)}>
+              <MapPin size={15} className="text-[#E2A93B]" />
+              <span className="font-semibold">Deliver to <span className="underline decoration-[#E2A93B] font-bold">{city} {pincode}</span></span>
+              <span className="text-[#E2A93B] text-[10px]">▼</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsStoreLocationModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-bold text-[#E2A93B] hover:text-white transition"
+            >
+              <Store size={14} />
+              <span className="hidden sm:inline">Visit Offline Store (Pali)</span>
+              <span className="sm:hidden">Store Location</span>
+            </button>
           </div>
         </div>
 
@@ -1812,25 +1840,80 @@ export default function App() {
             </ul>
           </div>
 
-          {/* Contact Us */}
+          {/* Contact Us & Offline Store Info */}
           <div className="space-y-3">
-            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Contact Us</h3>
+            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Offline Store & Contact</h3>
             <ul className="text-xs text-white/80 space-y-2 font-medium">
-              <li><a href={`mailto:${shopSettings.supportEmail}`} className="hover:underline">Help & Support</a></li>
-              <li><span>Email: {shopSettings.supportEmail}</span></li>
-              <li><span>Address: {shopSettings.shopAddress || 'Main Market, Pali'}</span></li>
+              <li className="flex items-start gap-1.5">
+                <MapPin size={15} className="text-[#E2A93B] shrink-0 mt-0.5" />
+                <span>{shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</span>
+              </li>
+              <li className="flex items-center gap-1.5 text-white/90">
+                <Clock size={14} className="text-[#E2A93B]" />
+                <span>Store Hours: <strong>7:00 AM – 10:00 PM</strong> (Everyday)</span>
+              </li>
+              <li><span>Email: <a href={`mailto:${shopSettings.supportEmail}`} className="hover:underline text-white font-semibold">{shopSettings.supportEmail}</a></span></li>
+              {shopSettings.supportPhone && (
+                <li className="flex items-center gap-1.5">
+                  <Phone size={14} className="text-[#E2A93B]" />
+                  <span>Call: <a href={`tel:${shopSettings.supportPhone.replace(/\s+/g, '')}`} className="hover:underline font-bold text-white">{shopSettings.supportPhone}</a></span>
+                </li>
+              )}
             </ul>
+
+            <div className="pt-1 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setIsStoreLocationModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-[#E2A93B] font-bold text-xs rounded-xl transition border border-white/15"
+              >
+                <Store size={14} /> View Store Map
+              </button>
+              <a
+                href="https://www.google.com/maps/search/?api=1&query=23.364672784840362,81.04445920990453"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E2A93B] hover:bg-[#E2A93B]/90 text-[#0E3D42] font-black text-xs rounded-xl transition shadow-sm"
+              >
+                <Navigation size={13} /> Get Directions
+              </a>
+              {shopSettings.whatsappNumber && (
+                <a
+                  href={`https://wa.me/${shopSettings.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent('Hello Raj Traders!')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition"
+                >
+                  <MessageCircle size={14} /> WhatsApp
+                </a>
+              )}
+            </div>
           </div>
 
-          {/* Available In Location & Social */}
+          {/* Serviceable Area & Interactive Google Maps Embed */}
           <div className="space-y-3">
-            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Serviceable Area</h3>
-            <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/10 p-3 rounded-xl border border-white/10">
+            <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Store Location Map</h3>
+            <div className="flex items-center gap-2 text-xs font-bold text-white bg-white/10 p-2.5 rounded-xl border border-white/10">
               <MapPin size={16} className="text-[#E2A93B]" />
-              <span>{shopSettings.availableInLocation || 'BIRSINGPUR PALI'} ({allowedPincodes.join(', ')})</span>
+              <span>{shopSettings.availableInLocation || 'BIRSINGPUR PALI'} (PIN: {allowedPincodes.join(', ')})</span>
             </div>
 
-            <div className="pt-2 flex items-center gap-3">
+            {/* Embedded Google Maps iframe */}
+            <div className="overflow-hidden rounded-xl border border-white/20 shadow-md">
+              <iframe
+                title="Raj Traders Store Location Map"
+                src="https://maps.google.com/maps?q=23.364672784840362,81.04445920990453&hl=en&z=17&output=embed"
+                width="100%"
+                height="130"
+                style={{ border: 0 }}
+                allowFullScreen={false}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="w-full h-32 rounded-xl"
+              />
+            </div>
+
+            <div className="pt-1 flex items-center gap-3">
               {shopSettings.socialLinkedin && <a href={shopSettings.socialLinkedin} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Linkedin size={18} /></a>}
               {shopSettings.socialInstagram && <a href={shopSettings.socialInstagram} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Instagram size={18} /></a>}
               {shopSettings.socialFacebook && <a href={shopSettings.socialFacebook} target="_blank" rel="noreferrer" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition"><Facebook size={18} /></a>}
@@ -1955,57 +2038,94 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Pincode & Shipping Address Input with Live Serviceability Check */}
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-extrabold text-[#0E3D42]">Delivery PIN Code</label>
-                        <span className="text-[10px] text-gray-500 font-semibold">Serviceable: {allowedPincodes.join(', ')}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <input
-                          type="text"
-                          maxLength={6}
-                          value={deliveryPincode}
-                          onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, ''))}
-                          placeholder="484661"
-                          className="w-28 p-2.5 text-xs font-mono font-bold rounded-xl border border-gray-300"
-                        />
-                        <div className="flex-1">
-                          {deliveryPincode.length === 6 ? (
-                            isPincodeServiceable ? (
-                              <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                                <CheckCircle2 size={14} /> Serviceable (Pali Local Fleet)
-                              </span>
-                            ) : (
-                              <span className="text-xs font-bold text-red-600 flex items-center gap-1">
-                                <AlertCircle size={14} /> PIN Not Serviceable
-                              </span>
-                            )
-                          ) : (
-                            <span className="text-[11px] text-gray-400">Enter 6-digit delivery PIN</span>
-                          )}
-                        </div>
-                      </div>
-                      {!isPincodeServiceable && deliveryPincode.length === 6 && (
-                        <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-[11px] text-red-700 font-semibold flex items-start gap-2">
-                          <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                          <span>Delivery is exclusively available in Pali PINs ({allowedPincodes.join(', ')}). Orders outside this local zone cannot be fulfilled.</span>
-                        </div>
-                      )}
+                  {/* Fulfillment Method: Home Delivery vs Self-Pickup at Store */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-extrabold text-[#0E3D42]">Fulfillment Method</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFulfillmentType('delivery')}
+                        className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition ${fulfillmentType === 'delivery' ? 'bg-[#0E3D42] text-white border-[#0E3D42] shadow-md' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'}`}
+                      >
+                        <span className="flex items-center gap-1.5"><Truck size={15} /> Home Delivery</span>
+                        <span className="text-[10px] opacity-80">{isFreeDelivery ? 'FREE' : '₹30 Flat'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFulfillmentType('pickup')}
+                        className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition ${fulfillmentType === 'pickup' ? 'bg-[#0E3D42] text-white border-[#0E3D42] shadow-md' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'}`}
+                      >
+                        <span className="flex items-center gap-1.5"><Store size={15} /> Store Self-Pickup</span>
+                        <span className="text-[10px] text-emerald-600 bg-emerald-100 font-extrabold px-1.5 py-0.5 rounded">FREE</span>
+                      </button>
                     </div>
 
-                    <div>
-                      <label className="text-xs font-extrabold text-[#0E3D42]">Delivery Address & Landmark</label>
-                      <textarea
-                        rows={2}
-                        value={shippingAddress}
-                        onChange={(e) => setShippingAddress(e.target.value)}
-                        className="w-full mt-1 p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
-                        placeholder="House/Shop no., Landmark, Ward name, Pali, MP"
-                      />
-                    </div>
+                    {fulfillmentType === 'pickup' && (
+                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1.5">
+                        <div className="font-extrabold flex items-center gap-1.5 text-amber-950">
+                          <span>⚡ Ready for Pickup in 15–30 mins (Express Pickup)</span>
+                        </div>
+                        <p className="text-[11px] text-amber-800 font-medium">
+                          Collect at: <strong>{shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551'}</strong>
+                        </p>
+                        <p className="text-[10px] text-amber-700 font-semibold">Store Hours: 7:00 AM – 10:00 PM (Everyday) · Zero delivery fee</p>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Pincode & Shipping Address Input (shown for Home Delivery) */}
+                  {fulfillmentType === 'delivery' && (
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-extrabold text-[#0E3D42]">Delivery PIN Code</label>
+                          <span className="text-[10px] text-gray-500 font-semibold">Serviceable: {allowedPincodes.join(', ')}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input
+                            type="text"
+                            maxLength={6}
+                            value={deliveryPincode}
+                            onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, ''))}
+                            placeholder="484551"
+                            className="w-28 p-2.5 text-xs font-mono font-bold rounded-xl border border-gray-300"
+                          />
+                          <div className="flex-1">
+                            {deliveryPincode.length === 6 ? (
+                              isPincodeServiceable ? (
+                                <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                                  <CheckCircle2 size={14} /> Serviceable (Pali Local Fleet)
+                                </span>
+                              ) : (
+                                <span className="text-xs font-bold text-red-600 flex items-center gap-1">
+                                  <AlertCircle size={14} /> PIN Not Serviceable
+                                </span>
+                              )
+                            ) : (
+                              <span className="text-[11px] text-gray-400">Enter 6-digit delivery PIN</span>
+                            )}
+                          </div>
+                        </div>
+                        {!isPincodeServiceable && deliveryPincode.length === 6 && (
+                          <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-[11px] text-red-700 font-semibold flex items-start gap-2">
+                            <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                            <span>Delivery is exclusively available in Pali PINs ({allowedPincodes.join(', ')}). Orders outside this local zone cannot be fulfilled.</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-extrabold text-[#0E3D42]">Delivery Address & Landmark</label>
+                        <textarea
+                          rows={2}
+                          value={shippingAddress}
+                          onChange={(e) => setShippingAddress(e.target.value)}
+                          className="w-full mt-1 p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
+                          placeholder="House/Shop no., Landmark, Ward name, Pali, MP"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2014,10 +2134,10 @@ export default function App() {
               <div className="border-t pt-4 space-y-4">
                 <button
                   onClick={handleCheckout}
-                  disabled={isCheckingOut || !shopSettings.isStoreOpen || !isPincodeServiceable}
+                  disabled={isCheckingOut || !shopSettings.isStoreOpen || (fulfillmentType === 'delivery' && !isPincodeServiceable)}
                   className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition disabled:bg-gray-400"
                 >
-                  {isCheckingOut ? 'Processing Order...' : !shopSettings.isStoreOpen ? '🔴 Store Offline — Checkout Disabled' : !isPincodeServiceable ? `Enter Serviceable PIN (${allowedPincodes.join(', ')})` : `Pay & Complete Order · ${money(finalPayableCents)}`}
+                  {isCheckingOut ? 'Processing Order...' : !shopSettings.isStoreOpen ? '🔴 Store Offline — Checkout Disabled' : (fulfillmentType === 'delivery' && !isPincodeServiceable) ? `Enter Serviceable PIN (${allowedPincodes.join(', ')})` : `Pay & Complete Order · ${money(finalPayableCents)}`}
                 </button>
               </div>
             )}
@@ -2339,16 +2459,112 @@ export default function App() {
               value={pincode}
               onChange={(e) => setPincode(e.target.value)}
               className="w-full text-center tracking-widest font-black text-xl p-3 border rounded-xl border-gray-300"
-              placeholder="482004"
+              placeholder="484551"
             />
-            <div className="flex gap-2">
-              {['482004', '400001', '110001', '560001'].map((pin) => (
-                <button key={pin} onClick={() => { setPincode(pin); handleCheckPincode(pin); }} className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-[11px] font-bold rounded-lg">{pin}</button>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {allowedPincodes.map((pin) => (
+                <button key={pin} onClick={() => { setPincode(pin); handleCheckPincode(pin); }} className="px-3 py-1.5 bg-[#0E3D42]/10 hover:bg-[#0E3D42] hover:text-white text-[#0E3D42] text-xs font-bold rounded-xl transition">{pin}</button>
               ))}
             </div>
             <button onClick={() => { handleCheckPincode(pincode); setShowPincodeModal(false); }} className="w-full py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow">
               Save & Apply Location
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Offline Store Location & Interactive Google Maps Modal */}
+      {isStoreLocationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <Store className="text-[#0E3D42]" size={22} />
+                <div>
+                  <h3 className="font-black text-[#0E3D42] text-base">Visit Our Offline Store</h3>
+                  <p className="text-[11px] text-gray-500 font-medium">Birsinghpur Pali, Umaria District, MP</p>
+                </div>
+              </div>
+              <button onClick={() => setIsStoreLocationModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-4 bg-[#F7F2EA] rounded-2xl space-y-2 border border-[#0E3D42]/10">
+                <div className="text-xs font-bold text-[#0E3D42] flex items-start gap-2">
+                  <MapPin size={16} className="text-[#E2A93B] shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-extrabold">{shopSettings.shopName || 'RAJ TRADERS'}</span>
+                    <p className="font-medium text-gray-700 mt-0.5">{shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</p>
+                    <p className="text-[11px] font-mono text-gray-500 mt-1">Plus Code: 927V+PM Pali Birsinghpur, MP</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200 text-xs">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-500 block">⏰ Operating Hours</span>
+                    <span className="font-extrabold text-[#0E3D42]">7:00 AM – 10:00 PM</span>
+                    <span className="text-[10px] text-gray-500 block">Open Everyday</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-500 block">⚡ Self-Pickup Timeline</span>
+                    <span className="font-extrabold text-emerald-700">Ready in 15–30 mins</span>
+                    <span className="text-[10px] text-gray-500 block">Express Order Collection</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Responsive Google Maps Embed */}
+              <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-inner">
+                <iframe
+                  title="Raj Traders Store Location Map"
+                  src="https://maps.google.com/maps?q=23.364672784840362,81.04445920990453&hl=en&z=17&output=embed"
+                  width="100%"
+                  height="240"
+                  style={{ border: 0 }}
+                  allowFullScreen={false}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="w-full h-60"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <a
+                  href="https://www.google.com/maps/search/?api=1&query=23.364672784840362,81.04445920990453"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-3 px-4 rounded-xl bg-[#0E3D42] hover:bg-[#0E3D42]/90 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition"
+                >
+                  <Navigation size={16} className="text-[#E2A93B]" /> Get Directions (Google Maps)
+                </a>
+
+                {shopSettings.whatsappNumber ? (
+                  <a
+                    href={`https://wa.me/${shopSettings.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent('Hello Raj Traders, I am visiting your store at Thana Rd, beside Nagar Palika!')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition"
+                  >
+                    <MessageCircle size={16} /> WhatsApp Us
+                  </a>
+                ) : shopSettings.supportPhone ? (
+                  <a
+                    href={`tel:${shopSettings.supportPhone.replace(/\s+/g, '')}`}
+                    className="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition"
+                  >
+                    <Phone size={16} /> Call Store
+                  </a>
+                ) : (
+                  <a
+                    href={`mailto:${shopSettings.supportEmail || 'support@sundarvan.xyz'}`}
+                    className="py-3 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 text-[#0E3D42] font-extrabold text-xs flex items-center justify-center gap-2 transition"
+                  >
+                    <Mail size={16} /> Contact Support
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

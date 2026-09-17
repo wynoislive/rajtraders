@@ -164,10 +164,10 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   id TEXT PRIMARY KEY,
   shop_name TEXT NOT NULL DEFAULT 'RAJ TRADERS',
   shop_domain TEXT NOT NULL DEFAULT 'sundarvan.xyz',
-  shop_address TEXT NOT NULL DEFAULT '123 Baker Street, Mumbai',
-  latitude REAL NOT NULL DEFAULT 19.0760,
-  longitude REAL NOT NULL DEFAULT 72.8777,
-  delivery_radius_km REAL NOT NULL DEFAULT 15.0,
+  shop_address TEXT NOT NULL DEFAULT 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
+  latitude REAL NOT NULL DEFAULT 23.3646728,
+  longitude REAL NOT NULL DEFAULT 81.0444592,
+  delivery_radius_km REAL NOT NULL DEFAULT 10.0,
   is_delivery_enabled BOOLEAN NOT NULL DEFAULT true,
   razorpay_key_id TEXT NOT NULL DEFAULT 'rzp_test_sandbox123456',
   razorpay_key_secret TEXT NOT NULL DEFAULT 'sandbox_secret',
@@ -183,11 +183,13 @@ CREATE TABLE IF NOT EXISTS shop_settings (
   smtp_from TEXT DEFAULT 'RAJ TRADERS <notifications.rajtraders@gmail.com>',
   hostinger_api_token TEXT DEFAULT '',
   hostinger_mailbox_resource_id TEXT DEFAULT '',
+  support_phone TEXT DEFAULT '',
+  whatsapp_number TEXT DEFAULT '',
   updatedAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 INSERT INTO shop_settings (id, shop_name, shop_domain, shop_address, latitude, longitude, delivery_radius_km, is_delivery_enabled, razorpay_key_id, razorpay_key_secret, smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from)
-VALUES ('default_shop', 'RAJ TRADERS', 'sundarvan.xyz', '123 Baker Street, Mumbai', 19.0760, 72.8777, 15.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'RAJ TRADERS <notifications.rajtraders@gmail.com>')
+VALUES ('default_shop', 'RAJ TRADERS', 'sundarvan.xyz', 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551', 23.3646728, 81.0444592, 10.0, true, 'rzp_test_sandbox123456', 'sandbox_secret', 'smtp.gmail.com', 465, 'notifications.rajtraders@gmail.com', 'NOTIFICATIONS@RAJ', 'RAJ TRADERS <notifications.rajtraders@gmail.com>')
 ON CONFLICT (id) DO NOTHING;
 
 -- Seed Default MAIN_ADMIN user
@@ -384,6 +386,8 @@ async function syncEnvToShopSettings(db: any): Promise<void> {
   if (process.env.SHOP_LONGITUDE) updates.longitude = parseFloat(process.env.SHOP_LONGITUDE);
   if (process.env.DELIVERY_RADIUS_KM) updates.deliveryRadiusKm = parseFloat(process.env.DELIVERY_RADIUS_KM);
   if (process.env.DELIVERY_ENABLED) updates.isDeliveryEnabled = process.env.DELIVERY_ENABLED === "true";
+  if (process.env.SUPPORT_PHONE) updates.supportPhone = process.env.SUPPORT_PHONE;
+  if (process.env.WHATSAPP_NUMBER) updates.whatsappNumber = process.env.WHATSAPP_NUMBER;
 
   if (Object.keys(updates).length > 0) {
     await db
