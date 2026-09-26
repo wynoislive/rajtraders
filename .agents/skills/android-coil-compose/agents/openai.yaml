@@ -1,0 +1,4 @@
+interface:
+  display_name: "Android Coil Compose"
+  short_description: "Use Coil in Jetpack Compose with AsyncImage, painter variants, sizing, and accessible image loading patterns."
+  default_prompt: "Use $android-coil-compose when the request is about Use Coil in Jetpack Compose with AsyncImage, painter variants, sizing, and accessible image loading patterns.."

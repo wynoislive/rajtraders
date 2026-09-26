@@ -20,7 +20,8 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.14",
     "vite": "^7.3.2",
-    "wouter": "^3.3.5"
+    "wouter": "^3.3.5",
+    "@workspace/api-client-react": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.3.3",

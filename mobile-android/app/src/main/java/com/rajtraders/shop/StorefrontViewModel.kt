@@ -14,6 +14,7 @@ import com.rajtraders.shop.data.ShopInfoResponse
 import com.rajtraders.shop.data.StorefrontRepository
 import com.rajtraders.shop.data.StorefrontSummary
 import com.rajtraders.shop.data.UserProfile
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +27,8 @@ data class CartLine(val product: Product, val quantity: Int)
 
 data class StorefrontUiState(
     val isLoading: Boolean = true,
+    val isSyncing: Boolean = false,
+    val currency: String = "INR",
     val products: List<Product> = emptyList(),
     val summary: StorefrontSummary? = null,
     val shopName: String = "RAJ TRADERS",
@@ -112,6 +115,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     private var activeIdempotencyKey: String = UUID.randomUUID().toString()
     private var lastCheckoutClickTime: Long = 0L
     private val checkoutCooldownWindowMs: Long = 2500L
+    private var searchJob: Job? = null
 
     init {
         refresh()
@@ -120,20 +124,40 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            val hasExisting = _uiState.value.products.isNotEmpty()
+            _uiState.update { it.copy(isLoading = !hasExisting, isSyncing = hasExisting, error = null) }
             runCatching {
                 repository.products(_uiState.value.search, _uiState.value.selectedCategory) to repository.summary()
             }.onSuccess { (products, summary) ->
-                _uiState.update { it.copy(isLoading = false, products = products, summary = summary, shopName = summary.shopName) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isSyncing = false,
+                        products = products,
+                        summary = summary,
+                        shopName = summary.shopName,
+                        currency = summary.currency
+                    )
+                }
             }.onFailure { error ->
-                _uiState.update { it.copy(isLoading = false, error = error.message ?: "Could not load the shop.") }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isSyncing = false,
+                        error = if (hasExisting) null else (error.message ?: "Could not load the shop.")
+                    )
+                }
             }
         }
     }
 
     fun search(value: String) {
         _uiState.update { it.copy(search = value) }
-        refresh()
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(300)
+            refresh()
+        }
     }
 
     fun selectCategory(value: String?) {
@@ -590,7 +614,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                     shippingAddress = _uiState.value.shippingAddress,
                     deliveryLatitude = _uiState.value.deliveryLatitude,
                     deliveryLongitude = _uiState.value.deliveryLongitude,
-                    pincode = _uiState.value.pincode,
+                    pincode = _uiState.value.selectedPincode,
                 )
 
                 val mockPaymentId = "pay_rzp_${System.currentTimeMillis()}"

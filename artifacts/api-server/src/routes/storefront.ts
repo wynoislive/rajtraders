@@ -129,12 +129,16 @@ router.get("/v1/storefront/summary", async (_req, res): Promise<void> => {
     const [policy] = await db.select().from(registrationPoliciesTable).where(eq(registrationPoliciesTable.active, true));
     const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
     const shopName = settings?.shopName || "RAJ TRADERS";
+    const currency = settings?.currency || "INR";
+    const razorpayKeyId = process.env.RAZORPAY_KEY_ID || null;
     res.json(
       GetStorefrontSummaryResponse.parse({
         shopName,
         featuredCount: products.filter((product: any) => product.featured).length,
         categories: [...new Set(products.map((product: any) => product.category))],
         firstOrderOffer: policy?.offerCode ?? "WELCOME10",
+        currency,
+        razorpayKeyId,
         updatedAt: new Date().toISOString(),
       }),
     );
@@ -144,6 +148,8 @@ router.get("/v1/storefront/summary", async (_req, res): Promise<void> => {
       featuredCount: 2,
       categories: ["Apparel", "Home"],
       firstOrderOffer: "WELCOME10",
+      currency: "INR",
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID || null,
       updatedAt: new Date().toISOString(),
     });
   }
@@ -155,15 +161,15 @@ router.get("/v1/storefront/settings", async (_req, res): Promise<void> => {
     res.json({
       shopName: settings?.shopName || "RAJ TRADERS",
       shopDomain: settings?.shopDomain || "sundarvan.xyz",
-      shopAddress: settings?.shopAddress || "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
-      latitude: settings?.latitude ?? 23.3643019,
-      longitude: settings?.longitude ?? 81.0441434,
+      shopAddress: settings?.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
+      latitude: settings?.latitude ?? 23.3644551,
+      longitude: settings?.longitude ?? 81.0442634,
       deliveryRadiusKm: settings?.deliveryRadiusKm ?? 10.0,
       supportEmail: settings?.supportEmail || "support@sundarvan.xyz",
       contactEmail: settings?.contactEmail || "contact@sundarvan.xyz",
       supportPhone: settings?.supportPhone || "",
       whatsappNumber: settings?.whatsappNumber || "",
-      googleMapsUrl: settings?.googleMapsUrl || "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt",
+      googleMapsUrl: settings?.googleMapsUrl || "https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv",
       socialLinkedin: settings?.socialLinkedin || "",
       socialInstagram: settings?.socialInstagram || "",
       socialFacebook: settings?.socialFacebook || "",
@@ -183,20 +189,26 @@ router.get("/v1/storefront/settings", async (_req, res): Promise<void> => {
       stateCode: settings?.stateCode || "23",
       stateName: settings?.stateName || "Madhya Pradesh",
       allowedPincodesJson: settings?.allowedPincodesJson || '["484551","484661","484660"]',
+      currency: settings?.currency || "INR",
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID || null,
+      fssaiRegistration: "FSSAI Lic. No. 21423010000000",
+      grievanceOfficerName: "Grievance Officer, Raj Traders",
+      grievanceOfficerEmail: "support@sundarvan.xyz",
+      grievanceOfficerAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
     });
   } catch (err) {
     res.json({
       shopName: "RAJ TRADERS",
       shopDomain: "sundarvan.xyz",
-      shopAddress: "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
-      latitude: 23.3643019,
-      longitude: 81.0441434,
+      shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
+      latitude: 23.3644551,
+      longitude: 81.0442634,
       deliveryRadiusKm: 10.0,
       supportEmail: "support@sundarvan.xyz",
       contactEmail: "contact@sundarvan.xyz",
       supportPhone: "",
       whatsappNumber: "",
-      googleMapsUrl: "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt",
+      googleMapsUrl: "https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv",
       socialLinkedin: "",
       socialInstagram: "",
       socialFacebook: "",
@@ -216,6 +228,12 @@ router.get("/v1/storefront/settings", async (_req, res): Promise<void> => {
       stateCode: "23",
       stateName: "Madhya Pradesh",
       allowedPincodesJson: '["484551","484661","484660"]',
+      currency: "INR",
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID || null,
+      fssaiRegistration: "FSSAI Lic. No. 21423010000000",
+      grievanceOfficerName: "Grievance Officer, Raj Traders",
+      grievanceOfficerEmail: "support@sundarvan.xyz",
+      grievanceOfficerAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
     });
   }
 });
@@ -265,6 +283,38 @@ router.post("/v1/registrations/claim", async (req, res): Promise<void> => {
   );
 });
 
+// Public endpoint: list active, non-expired coupons for customer browsing
+router.get("/v1/discounts/active", async (_req, res): Promise<void> => {
+  try {
+    let allDiscounts = await db.select().from(discountsTable);
+    if (allDiscounts.length === 0) {
+      await seedStoreData();
+      allDiscounts = await db.select().from(discountsTable);
+    }
+    const now = Date.now();
+    const activeCoupons = allDiscounts.filter((d: any) => {
+      if (!d.active) return false;
+      const startsAtMs = d.startsAt ? new Date(d.startsAt).getTime() : 0;
+      const expiresAtMs = d.expiresAt ? new Date(d.expiresAt).getTime() : null;
+      if (startsAtMs > now) return false;
+      if (expiresAtMs && expiresAtMs < now) return false;
+      if (d.usageLimit && d.usageCount >= d.usageLimit) return false;
+      return true;
+    });
+
+    res.json(activeCoupons.map((d: any) => ({
+      code: d.code,
+      type: d.type,
+      value: d.value,
+      minimumSubtotalCents: d.minimumSubtotalCents,
+      firstOrderOnly: d.firstOrderOnly,
+      expiresAt: asIso(d.expiresAt),
+    })));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch coupons." });
+  }
+});
+
 router.post("/v1/discounts/validate", async (req, res): Promise<void> => {
   const parsed = ValidateDiscountBody.safeParse(req.body);
   if (!parsed.success) {
@@ -311,6 +361,26 @@ router.get("/sitemap.xml", async (_req, res): Promise<void> => {
   <url>
     <loc>${baseUrl}/account</loc>
     <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/privacy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/terms</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/refund</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/cookies</loc>
+    <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   ${categories.map((cat: any) => `

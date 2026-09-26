@@ -13,9 +13,15 @@
     "jsx": "react-jsx",
     "strict": false,
     "baseUrl": ".",
+    "types": ["node", "vite/client"],
     "paths": {
       "@/*": ["src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../../lib/api-client-react"
+    }
+  ]
 }

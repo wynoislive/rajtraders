@@ -11,5 +11,8 @@ export interface StorefrontSummary {
   featuredCount: number;
   categories: string[];
   firstOrderOffer: string;
+  currency?: string;
+  /** @nullable */
+  razorpayKeyId?: string | null;
   updatedAt: string;
 }

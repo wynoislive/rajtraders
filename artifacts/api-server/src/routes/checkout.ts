@@ -27,8 +27,8 @@ async function getRazorpayCredentials(): Promise<{ keyId: string; keySecret: str
 async function getShopSettings() {
   const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
   return settings || {
-    latitude: 23.3643019,
-    longitude: 81.0441434,
+    latitude: 23.3644551,
+    longitude: 81.0442634,
     deliveryRadiusKm: 10.0,
     isDeliveryEnabled: true,
     razorpayKeyId: "rzp_test_sandbox123456",
@@ -37,8 +37,8 @@ async function getShopSettings() {
     legalBusinessName: "RAJ TRADERS",
     gstinNumber: "23AAAAA0000A1Z5",
     panNumber: "AAAAA0000A",
-    shopAddress: "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
-    googleMapsUrl: "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt",
+    shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551",
+    googleMapsUrl: "https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv",
     stateCode: "23",
     stateName: "Madhya Pradesh",
     allowedPincodesJson: '["484551","484661","484660"]',
@@ -242,7 +242,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     }
 
     const finalShippingAddress = isPickup
-      ? `⚡ Self-Pickup at RT Super Bazar (RAJ TRADERS): ${settings.shopAddress || "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551"}`
+      ? `⚡ Self-Pickup at Raj Traders: ${settings.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551"}`
       : (shippingAddress || "").trim();
 
     // Check PIN code serviceability for delivery
@@ -649,7 +649,7 @@ router.post("/verify-payment", async (req: Request<{}, {}, VerifyPaymentBody>, r
         customerEmail: order.customerEmail || "",
         customerMobile: order.customerMobile || undefined,
         shippingAddress: order.shippingAddress || "",
-        items: JSON.parse(order.itemsJson),
+        items: order.itemsJson || [],
         subtotalCents: order.subtotalCents,
         discountCents: order.discountCents,
         shippingFeeCents: order.shippingFeeCents || 0,
@@ -749,14 +749,14 @@ router.get("/orders/:id/invoice", async (req: Request, res: Response) => {
     const pdfBuffer = await generateTaxInvoicePdf({
       orderId: order.id,
       invoiceNumber: `INV-${order.id.slice(0, 8).toUpperCase()}`,
-      invoiceDate: order.createdAt,
+      invoiceDate: new Date(order.createdAt || Date.now()),
       paymentId: order.razorpayPaymentId || undefined,
       paymentMethod: order.razorpayPaymentId ? "Online (Razorpay)" : "Pending",
       customerName: order.customerName || "Valued Customer",
       customerEmail: order.customerEmail || "",
       customerMobile: order.customerMobile || undefined,
       shippingAddress: order.shippingAddress || "",
-      items: JSON.parse(order.itemsJson),
+      items: order.itemsJson || [],
       subtotalCents: order.subtotalCents,
       discountCents: order.discountCents,
       shippingFeeCents: order.shippingFeeCents || 0,

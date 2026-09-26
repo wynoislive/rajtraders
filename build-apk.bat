@@ -1,11 +1,10 @@
 @echo off
-set "JAVA_HOME=C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot"
+set "JAVA_HOME=%USERPROFILE%\.gradle\jdks\eclipse_adoptium-17-amd64-windows.2"
 set "ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk"
-set "GRADLE_BAT=%USERPROFILE%\.gradle-dist\gradle-8.11.1\bin\gradle.bat"
 
 echo Building Android APK...
 cd /d "%~dp0mobile-android"
-call "%GRADLE_BAT%" :app:assembleDebug
+call gradlew.bat :app:assembleDebug
 
 if %ERRORLEVEL% equ 0 (
     echo.

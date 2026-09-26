@@ -11,14 +11,14 @@ export interface InvoiceItem {
 export interface InvoiceData {
   orderId: string;
   invoiceNumber: string;
-  invoiceDate: Date;
+  invoiceDate: Date | string;
   paymentId?: string;
   paymentMethod: string;
   customerName: string;
   customerEmail: string;
   customerMobile?: string;
   shippingAddress: string;
-  items: InvoiceItem[];
+  items: InvoiceItem[] | string;
   subtotalCents: number;
   discountCents: number;
   shippingFeeCents: number;
@@ -39,8 +39,8 @@ export interface InvoiceData {
   contactEmail?: string;
 }
 
-function formatINR(cents: number): string {
-  return "₹" + (cents / 100).toFixed(2);
+function formatINR(cents?: number | null): string {
+  return "Rs. " + (((cents ?? 0)) / 100).toFixed(2);
 }
 
 /**
@@ -53,8 +53,8 @@ export function generateTaxInvoicePdf(data: InvoiceData): Promise<Buffer> {
         size: "A4",
         margin: 40,
         info: {
-          Title: `Tax Invoice - ${data.invoiceNumber}`,
-          Author: data.shopName,
+          Title: `Tax Invoice - ${data.invoiceNumber || data.orderId}`,
+          Author: data.shopName || "RAJ TRADERS",
           Subject: `Order Tax Invoice ${data.orderId}`,
         },
       });
@@ -74,10 +74,10 @@ export function generateTaxInvoicePdf(data: InvoiceData): Promise<Buffer> {
       doc.rect(40, 40, 515, 60).fill(lightBg);
       doc.rect(40, 40, 515, 60).stroke(borderColor);
 
-      doc.fillColor(primaryColor).fontSize(16).font("Helvetica-Bold").text(data.shopName.toUpperCase(), 55, 52);
+      doc.fillColor(primaryColor).fontSize(16).font("Helvetica-Bold").text((data.shopName || "RAJ TRADERS").toUpperCase(), 55, 52);
       doc.fontSize(8).font("Helvetica").fillColor(secondaryColor);
       doc.text(data.legalBusinessName ? `(${data.legalBusinessName})` : "", 55, 72);
-      doc.text(`${data.shopAddress} | State: ${data.stateName} (${data.stateCode})`, 55, 83);
+      doc.text(`${data.shopAddress || "Birsingpur Pali, MP"} | State: ${data.stateName || "Madhya Pradesh"} (${data.stateCode || "23"})`, 55, 83);
 
       doc.fontSize(14).font("Helvetica-Bold").fillColor(accentColor).text("TAX INVOICE", 400, 52, { align: "right" });
       doc.fontSize(8).font("Helvetica").fillColor(secondaryColor);
@@ -85,6 +85,12 @@ export function generateTaxInvoicePdf(data: InvoiceData): Promise<Buffer> {
       doc.text(`PAN: ${data.panNumber || "N/A"}`, 400, 83, { align: "right" });
 
       doc.moveDown(2);
+
+      // Safe date formatting
+      const dateObj = data.invoiceDate instanceof Date ? data.invoiceDate : new Date(data.invoiceDate || Date.now());
+      const formattedDate = !isNaN(dateObj.getTime())
+        ? dateObj.toLocaleDateString("en-IN", { dateStyle: "medium" })
+        : new Date().toLocaleDateString("en-IN", { dateStyle: "medium" });
 
       // --- Invoice & Customer Metadata Box ---
       let y = 115;
@@ -102,10 +108,10 @@ export function generateTaxInvoicePdf(data: InvoiceData): Promise<Buffer> {
       // Right Box: Invoice Meta
       doc.fillColor(primaryColor).fontSize(9).font("Helvetica-Bold").text("INVOICE DETAILS:", 315, y + 8);
       doc.fontSize(8).font("Helvetica").fillColor(secondaryColor);
-      doc.text(`Invoice No: ${data.invoiceNumber}`, 315, y + 23);
-      doc.text(`Invoice Date: ${data.invoiceDate.toLocaleDateString("en-IN", { dateStyle: "medium" })}`, 315, y + 35);
+      doc.text(`Invoice No: ${data.invoiceNumber || `INV-${data.orderId.slice(0, 8).toUpperCase()}`}`, 315, y + 23);
+      doc.text(`Invoice Date: ${formattedDate}`, 315, y + 35);
       doc.text(`Order ID: #${data.orderId.slice(0, 8).toUpperCase()}`, 315, y + 47);
-      doc.text(`Payment: ${data.paymentMethod} ${data.paymentId ? `(${data.paymentId.slice(0, 14)}...)` : ""}`, 315, y + 59);
+      doc.text(`Payment: ${data.paymentMethod || "Online"} ${data.paymentId ? `(${data.paymentId.slice(0, 14)}...)` : ""}`, 315, y + 59);
 
       // --- Items Table Header ---
       y = 215;
@@ -137,25 +143,46 @@ export function generateTaxInvoicePdf(data: InvoiceData): Promise<Buffer> {
       y += 20;
       doc.font("Helvetica").fontSize(8);
 
-      data.items.forEach((item, index) => {
-        const itemGstRate = item.gstRatePercentage || 5;
-        const totalItemGross = item.priceCents * item.quantity;
-        const itemTaxable = Math.round(totalItemGross / (1 + itemGstRate / 100));
-        const itemGst = totalItemGross - itemTaxable;
+      let safeItems: InvoiceItem[] = [];
+      if (Array.isArray(data.items)) {
+        safeItems = data.items;
+      } else if (typeof data.items === "string") {
+        try {
+          safeItems = JSON.parse(data.items);
+        } catch {
+          safeItems = [];
+        }
+      }
 
+      if (safeItems.length === 0) {
         doc.rect(40, y, 515, 22).stroke(borderColor);
-        doc.fillColor(primaryColor);
-        doc.text(String(index + 1), col.sn, y + 7);
-        doc.text(item.name.slice(0, 30), col.desc, y + 7);
-        doc.text(item.hsnCode || "1905", col.hsn, y + 7);
-        doc.text(String(item.quantity), col.qty, y + 7);
-        doc.text(formatINR(item.priceCents), col.rate, y + 7);
-        doc.text(formatINR(itemTaxable), col.taxable, y + 7);
-        doc.text(`${itemGstRate}% (${formatINR(itemGst)})`, col.gst, y + 7);
-        doc.text(formatINR(totalItemGross), col.total, y + 7);
-
+        doc.fillColor(secondaryColor);
+        doc.text("Store Item(s)", col.desc, y + 7);
+        doc.text(formatINR(data.totalCents), col.total, y + 7);
         y += 22;
-      });
+      } else {
+        safeItems.forEach((item, index) => {
+          const itemGstRate = item.gstRatePercentage || 5;
+          const itemPrice = typeof item.priceCents === "number" ? item.priceCents : 0;
+          const itemQty = Number(item.quantity) || 1;
+          const totalItemGross = itemPrice * itemQty;
+          const itemTaxable = Math.round(totalItemGross / (1 + itemGstRate / 100));
+          const itemGst = totalItemGross - itemTaxable;
+
+          doc.rect(40, y, 515, 22).stroke(borderColor);
+          doc.fillColor(primaryColor);
+          doc.text(String(index + 1), col.sn, y + 7);
+          doc.text(String(item.name || "Item").slice(0, 30), col.desc, y + 7);
+          doc.text(item.hsnCode || "1905", col.hsn, y + 7);
+          doc.text(String(itemQty), col.qty, y + 7);
+          doc.text(formatINR(itemPrice), col.rate, y + 7);
+          doc.text(formatINR(itemTaxable), col.taxable, y + 7);
+          doc.text(`${itemGstRate}% (${formatINR(itemGst)})`, col.gst, y + 7);
+          doc.text(formatINR(totalItemGross), col.total, y + 7);
+
+          y += 22;
+        });
+      }
 
       // --- Tax Summary & Grand Total Block ---
       y += 10;

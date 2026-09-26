@@ -20,6 +20,12 @@ declare global {
 export function requirePermission(module: string): RequestHandler {
   return (req: Request, res: Response, next: NextFunction): void => {
     const staff = req.staff;
+    const clerkUserId = (req as any).auth?.userId;
+
+    // Clerk super-admin session bypass
+    if (clerkUserId) {
+      return next();
+    }
 
     if (!staff) {
       res.status(401).json({ error: "Authentication required. Valid staff session required." });

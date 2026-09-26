@@ -13,6 +13,8 @@ data class Product(
     val featured: Boolean,
     val inventory: Int,
     val prepTimeMinutes: Int = 30,
+    val isVeg: Boolean = true,
+    val isBestseller: Boolean = false,
     val createdAt: String,
     val updatedAt: String,
 )
@@ -22,6 +24,8 @@ data class StorefrontSummary(
     val featuredCount: Int,
     val categories: List<String>,
     val firstOrderOffer: String,
+    val currency: String = "INR",
+    val razorpayKeyId: String? = null,
     val updatedAt: String,
 )
 

@@ -5,8 +5,8 @@ export const shopSettingsTable = pgTable("shop_settings", {
   shopName: text("shop_name").notNull().default("RAJ TRADERS"),
   shopDomain: text("shop_domain").notNull().default("sundarvan.xyz"),
   shopAddress: text("shop_address").notNull().default("Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551"),
-  latitude: real("latitude").notNull().default(23.3646728),
-  longitude: real("longitude").notNull().default(81.0444592),
+  latitude: real("latitude").notNull().default(23.3644551),
+  longitude: real("longitude").notNull().default(81.0442634),
   deliveryRadiusKm: real("delivery_radius_km").notNull().default(10.0),
   isDeliveryEnabled: boolean("is_delivery_enabled").notNull().default(true),
   razorpayKeyId: text("razorpay_key_id").notNull().default("rzp_test_sandbox123456"),
@@ -39,7 +39,7 @@ export const shopSettingsTable = pgTable("shop_settings", {
   // Contact Phone & WhatsApp Support (Admin Configurable)
   supportPhone: text("support_phone").default(""),
   whatsappNumber: text("whatsapp_number").default(""),
-  googleMapsUrl: text("google_maps_url").default("https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"),
+  googleMapsUrl: text("google_maps_url").default("https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv"),
   // OpenWA WhatsApp Gateway API Config
   whatsappGatewayUrl: text("whatsapp_gateway_url").default(""),
   whatsappApiKey: text("whatsapp_api_key").default(""),

@@ -42,6 +42,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -77,9 +78,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.LocalTextStyle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.style.TextDecoration
 import coil.compose.AsyncImage
 import com.rajtraders.shop.data.Product
 import java.text.NumberFormat
+import java.util.Currency
 import java.util.Locale
 
 private val RajTeal = Color(0xFF0E3D42)
@@ -1119,6 +1124,13 @@ private fun CatalogScreen(state: StorefrontUiState, padding: PaddingValues, view
             }
             Spacer(Modifier.height(12.dp))
         }
+        if (state.isSyncing) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = RajTeal,
+                trackColor = Color.Transparent
+            )
+        }
         when {
             state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = RajTeal) }
             state.error != null && state.products.isEmpty() -> ErrorState(state.error, viewModel::refresh)
@@ -1142,6 +1154,7 @@ private fun CatalogScreen(state: StorefrontUiState, padding: PaddingValues, view
 
 @Composable
 private fun ProductCard(product: Product, onAdd: () -> Unit, onShare: () -> Unit) {
+    val isAvailable = product.inventory > 0
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
         Column {
             Box(
@@ -1165,6 +1178,44 @@ private fun ProductCard(product: Product, onAdd: () -> Unit, onShare: () -> Unit
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
+                // Out of stock overlay
+                if (!isAvailable) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.Black.copy(alpha = 0.8f)
+                        ) {
+                            Text(
+                                "OUT OF STOCK",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+                // Bestseller badge
+                if (product.isBestseller) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        color = RajSaffron,
+                    ) {
+                        Text(
+                            "★ BESTSELLER",
+                            color = Color(0xFF332000),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
                 // Preparation Time Pill
                 Surface(
                     modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
@@ -1192,11 +1243,51 @@ private fun ProductCard(product: Product, onAdd: () -> Unit, onShare: () -> Unit
             }
 
             Column(modifier = Modifier.padding(12.dp)) {
-                Text(product.category.uppercase(), style = MaterialTheme.typography.labelSmall, color = RajTeal)
-                Text(product.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(money(product.priceCents), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (product.isVeg) {
+                        Box(
+                            modifier = Modifier
+                                .size(13.dp)
+                                .border(1.5.dp, Color(0xFF0F8A43), RoundedCornerShape(3.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(5.5.dp)
+                                    .background(Color(0xFF0F8A43), CircleShape)
+                            )
+                        }
+                    }
+                    Text(product.category.uppercase(), style = MaterialTheme.typography.labelSmall, color = RajTeal, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(product.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(money(product.priceCents), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = RajTeal)
+                    if (product.compareAtPriceCents != null && product.compareAtPriceCents > product.priceCents) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            money(product.compareAtPriceCents),
+                            style = MaterialTheme.typography.bodySmall.copy(textDecoration = TextDecoration.LineThrough),
+                            color = Color.Gray
+                        )
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = onAdd, modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 2.dp)) { Text("Add") }
+                Button(
+                    onClick = onAdd,
+                    enabled = isAvailable,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 2.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RajTeal,
+                        disabledContainerColor = Color(0xFFD6D0C5),
+                        disabledContentColor = Color(0xFF7A756D)
+                    )
+                ) {
+                    Text(if (isAvailable) "Add" else "Sold Out")
+                }
             }
         }
     }
@@ -1713,5 +1804,16 @@ private fun ErrorState(message: String, retry: () -> Unit) {
     }
 }
 
-private fun money(cents: Int): String =
-    NumberFormat.getCurrencyInstance(Locale.US).format(cents / 100.0)
+private fun money(cents: Int, currencyCode: String = "INR"): String {
+    return try {
+        if (currencyCode.equals("INR", ignoreCase = true)) {
+            "₹" + String.format(Locale.getDefault(), "%,d", cents / 100)
+        } else {
+            val format = NumberFormat.getCurrencyInstance(Locale.getDefault())
+            format.currency = Currency.getInstance(currencyCode)
+            format.format(cents / 100.0)
+        }
+    } catch (_: Exception) {
+        "₹${cents / 100}"
+    }
+}

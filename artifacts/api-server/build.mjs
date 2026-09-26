@@ -23,6 +23,8 @@ async function buildAll() {
     sourcemap: "linked",
     external: [
       "*.node",
+      "pdfkit",
+      "pdfkit/*",
       "@electric-sql/pglite",
       "@electric-sql/pglite/*",
       "pg",

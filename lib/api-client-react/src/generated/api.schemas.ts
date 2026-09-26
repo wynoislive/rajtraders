@@ -36,13 +36,10 @@ export interface Product {
   featured: boolean;
   /** @minimum 0 */
   inventory: number;
+  /** @minimum 1 */
   prepTimeMinutes?: number;
-  isBestseller?: boolean;
   isVeg?: boolean;
-  gstRatePercentage?: number;
-  hsnCode?: string | null;
-  approvalStatus?: string;
-  deletedAt?: string | null;
+  isBestseller?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,11 +69,10 @@ export interface ProductInput {
   featured?: boolean;
   /** @minimum 0 */
   inventory: number;
+  /** @minimum 1 */
   prepTimeMinutes?: number;
-  isBestseller?: boolean;
   isVeg?: boolean;
-  gstRatePercentage?: number;
-  hsnCode?: string | null;
+  isBestseller?: boolean;
 }
 
 export type ProductUpdateStatus = typeof ProductUpdateStatus[keyof typeof ProductUpdateStatus];
@@ -105,12 +101,10 @@ export interface ProductUpdate {
   featured?: boolean;
   /** @minimum 0 */
   inventory?: number;
+  /** @minimum 1 */
   prepTimeMinutes?: number;
-  isBestseller?: boolean;
   isVeg?: boolean;
-  gstRatePercentage?: number;
-  hsnCode?: string | null;
-  approvalStatus?: string;
+  isBestseller?: boolean;
 }
 
 export type DiscountType = typeof DiscountType[keyof typeof DiscountType];
@@ -227,6 +221,9 @@ export interface StorefrontSummary {
   featuredCount: number;
   categories: string[];
   firstOrderOffer: string;
+  currency?: string;
+  /** @nullable */
+  razorpayKeyId?: string | null;
   updatedAt: string;
 }
 

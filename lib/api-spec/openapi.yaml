@@ -978,6 +978,9 @@ components:
         status: { type: string, enum: [active, draft, archived] }
         featured: { type: boolean }
         inventory: { type: number, minimum: 0 }
+        prepTimeMinutes: { type: number, minimum: 1, default: 30 }
+        isVeg: { type: boolean, default: true }
+        isBestseller: { type: boolean, default: false }
         createdAt: { type: string }
         updatedAt: { type: string }
     ProductInput:
@@ -993,6 +996,9 @@ components:
         status: { type: string, enum: [active, draft] }
         featured: { type: boolean }
         inventory: { type: number, minimum: 0 }
+        prepTimeMinutes: { type: number, minimum: 1, default: 30 }
+        isVeg: { type: boolean, default: true }
+        isBestseller: { type: boolean, default: false }
     ProductUpdate:
       type: object
       properties:
@@ -1005,6 +1011,9 @@ components:
         status: { type: string, enum: [active, draft, archived] }
         featured: { type: boolean }
         inventory: { type: number, minimum: 0 }
+        prepTimeMinutes: { type: number, minimum: 1 }
+        isVeg: { type: boolean }
+        isBestseller: { type: boolean }
     Discount:
       type: object
       required: [id, code, type, value, minimumSubtotalCents, usageLimit, usageCount, startsAt, expiresAt, active, firstOrderOnly]
@@ -1087,6 +1096,8 @@ components:
           type: array
           items: { type: string }
         firstOrderOffer: { type: string }
+        currency: { type: string, default: "INR" }
+        razorpayKeyId: { type: ["string", "null"] }
         updatedAt: { type: string }
     AdminSummary:
       type: object

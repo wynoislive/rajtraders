@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { useLocation, Link } from 'wouter';
 import type { Product } from '@workspace/api-client-react';
 import { SeoHead } from './components/SeoHead';
+import { LegalPage, type PolicyType } from './pages/LegalPage';
+import { CookieBanner } from './components/CookieBanner';
 import {
   ShoppingBag,
   MapPin,
@@ -65,7 +67,7 @@ export interface OrderItem {
 
 
 function getApiUrl(path: string): string {
-  const apiTarget = (import.meta.env as any).VITE_API_TARGET || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? 'https://api.sundarvan.xyz' : '');
+  const apiTarget = (import.meta as any).env?.VITE_API_TARGET || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? 'https://api.sundarvan.xyz' : '');
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return apiTarget ? `${apiTarget.replace(/\/+$/, '')}${cleanPath}` : cleanPath;
 }
@@ -80,6 +82,8 @@ export default function App() {
     const match = location.match(/^\/products\/([^/]+)/);
     return match ? { slug: match[1] } : null;
   }, [location]);
+  const isCartPage = location === '/cart';
+  const isCheckoutPage = location === '/checkout';
 
   // Storefront Public Settings
   const [shopSettings, setShopSettings] = useState<any>({
@@ -89,13 +93,13 @@ export default function App() {
     panNumber: 'AAAAA0000A',
     stateCode: '23',
     stateName: 'Madhya Pradesh',
-    shopAddress: 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
-    latitude: 23.3643019,
-    longitude: 81.0441434,
+    shopAddress: 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551',
+    latitude: 23.3644551,
+    longitude: 81.0442634,
     deliveryRadiusKm: 10.0,
     supportPhone: '',
     whatsappNumber: '',
-    googleMapsUrl: 'https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt',
+    googleMapsUrl: 'https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv',
     allowedPincodesJson: '["484551", "484661", "484660"]',
     availableInLocation: 'BIRSINGPUR PALI',
     aboutUsText: 'Premium cakes, party decorations & artisanal local delights.',
@@ -129,7 +133,7 @@ export default function App() {
   const [cancellationReason, setCancellationReason] = useState('');
   const [preferredRefundMethod, setPreferredRefundMethod] = useState<'store_credit' | 'original_source'>('store_credit');
   const [isCancelling, setIsCancelling] = useState(false);
-  const [activeLegalModal, setActiveLegalModal] = useState<'privacy' | 'terms' | 'refund' | 'shipping' | null>(null);
+  const [activeLegalModal, setActiveLegalModal] = useState<'privacy' | 'terms' | 'refund' | 'shipping' | 'cookies' | null>(null);
   const [guestCartMerged, setGuestCartMerged] = useState(false);
 
   const allowedPincodes: string[] = useMemo(() => {
@@ -170,8 +174,9 @@ export default function App() {
   const [cart, setCart] = useState<Array<{ product: StorefrontProduct; quantity: number }>>(() => {
     try { return JSON.parse(localStorage.getItem('raj_cart') || '[]'); } catch { return []; }
   });
-  const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [showCouponsDrawer, setShowCouponsDrawer] = useState(false);
+  const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
+  const [couponsLoading, setCouponsLoading] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot_password' | 'reset_password'>('login');
   const [resetToken, setResetToken] = useState('');
@@ -485,6 +490,7 @@ export default function App() {
   const [discountCode, setDiscountCode] = useState('');
   const [discountResult, setDiscountResult] = useState<any>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkoutConsent, setCheckoutConsent] = useState(true);
   const [receipt, setReceipt] = useState<any>(null);
 
   // Account Portal Active Tab
@@ -497,7 +503,7 @@ export default function App() {
   const [products, setProducts] = useState<StorefrontProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(true);
 
-  const fallbackCelebrationProducts = useMemo(() => [
+  const fallbackCelebrationProducts: StorefrontProduct[] = useMemo(() => [
     {
       id: "prod_cake_belgian_choco",
       name: "Belgian Chocolate Truffle Cake (1kg)",
@@ -507,12 +513,14 @@ export default function App() {
       compareAtPriceCents: 149900,
       category: "Bakery",
       imageUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=800&q=80",
-      status: "active",
+      status: "active" as const,
       featured: true,
       inventory: 25,
       prepTimeMinutes: 45,
       isBestseller: true,
       isVeg: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
     },
     {
       id: "prod_cake_strawberry_bliss",
@@ -523,12 +531,14 @@ export default function App() {
       compareAtPriceCents: 129900,
       category: "Bakery",
       imageUrl: "https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=800&q=80",
-      status: "active",
+      status: "active" as const,
       featured: true,
       inventory: 18,
       prepTimeMinutes: 30,
       isBestseller: true,
       isVeg: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
     },
     {
       id: "prod_party_balloon_arch",
@@ -539,12 +549,14 @@ export default function App() {
       compareAtPriceCents: 79900,
       category: "Home",
       imageUrl: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=800&q=80",
-      status: "active",
+      status: "active" as const,
       featured: true,
       inventory: 50,
       prepTimeMinutes: 15,
       isBestseller: true,
       isVeg: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
     },
   ], []);
 
@@ -649,8 +661,23 @@ export default function App() {
       }
       return [...prev, { product, quantity: 1 }];
     });
-    setShowCartDrawer(true);
     showToast(`Added ${product.name} to bag!`, 'success');
+  };
+
+  // Fetch available coupons
+  const fetchCoupons = async () => {
+    setCouponsLoading(true);
+    try {
+      const res = await fetch(getApiUrl('/api/v1/discounts/active'));
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableCoupons(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      setAvailableCoupons([]);
+    } finally {
+      setCouponsLoading(false);
+    }
   };
 
   const toggleFavorite = async (product: StorefrontProduct) => {
@@ -911,8 +938,8 @@ export default function App() {
     try {
       const items = cart.map((i) => ({ productId: i.product.id, quantity: i.quantity }));
       const orderShippingAddress = fulfillmentType === 'pickup'
-        ? `⚡ Self-Pickup at RT Super Bazar (RAJ TRADERS): ${shopSettings.shopAddress || 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}`
-        : `${deliveryHouseNumber ? `${deliveryHouseNumber}, ` : ''}${deliveryStreetAddress.trim()}, Pali, MP - ${deliveryPincode.trim()}`;
+        ? `⚡ Self-Pickup at Raj Traders: ${shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}`
+        : `${shippingAddress.trim()}, PIN: ${deliveryPincode.trim()}`;
 
       const res = await fetch(getApiUrl('/api/v1/checkout/create-order'), {
         method: 'POST',
@@ -955,7 +982,7 @@ export default function App() {
         const receiptData = await verifyRes.json();
         setReceipt(receiptData);
         setCart([]);
-        setShowCartDrawer(false);
+        setLocation('/');
         showToast('Order placed successfully! Tax invoice sent to your email.', 'success');
         if (token) {
           fetch(getApiUrl('/api/v1/auth/orders'), { headers: { Authorization: `Bearer ${token}` } })
@@ -986,6 +1013,15 @@ export default function App() {
   const gstTotalCents = cartTotalCents - taxableTotalCents;
   const cgstCents = Math.round(gstTotalCents / 2);
   const sgstCents = gstTotalCents - cgstCents;
+  // Canonical Legal & Compliance Routes (/privacy, /terms, /refund, /cookies)
+  if (['/privacy', '/terms', '/refund', '/cookies'].includes(location)) {
+    return (
+      <div className="min-h-screen bg-[#F7F2EA] text-[#0E3D42] font-sans flex flex-col justify-between">
+        <LegalPage type={location.slice(1) as PolicyType} shopSettings={shopSettings} />
+        <CookieBanner />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F7F2EA] text-[#0E3D42] font-sans flex flex-col justify-between">
@@ -1012,6 +1048,20 @@ export default function App() {
             { name: currentProduct.category, item: `https://${shopSettings.shopDomain || 'sundarvan.xyz'}/?category=${encodeURIComponent(currentProduct.category)}` },
             { name: currentProduct.name, item: `https://${shopSettings.shopDomain || 'sundarvan.xyz'}/products/${currentProduct.slug}` }
           ]}
+        />
+      ) : isCartPage ? (
+        <SeoHead
+          title="Your Bag — RAJ TRADERS"
+          description="Review your bag, apply exclusive discount coupons, and proceed to checkout with fast delivery."
+          url={`https://${shopSettings.shopDomain || 'sundarvan.xyz'}/cart`}
+          noIndex={true}
+        />
+      ) : isCheckoutPage ? (
+        <SeoHead
+          title="Secure Checkout — RAJ TRADERS"
+          description="Complete your order securely with Razorpay, express delivery, or 15-minute store pickup."
+          url={`https://${shopSettings.shopDomain || 'sundarvan.xyz'}/checkout`}
+          noIndex={true}
         />
       ) : location === '/account' ? (
         <SeoHead
@@ -1058,8 +1108,8 @@ export default function App() {
               className="flex items-center gap-1.5 text-xs font-bold text-[#E2A93B] hover:text-white transition"
             >
               <Store size={14} />
-              <span className="hidden sm:inline">RT Super Bazar (Pali Offline Store)</span>
-              <span className="sm:hidden">RT Super Bazar</span>
+              <span className="hidden sm:inline">Raj Traders (Pali Offline Store)</span>
+              <span className="sm:hidden">Raj Traders</span>
             </button>
           </div>
         </div>
@@ -1133,7 +1183,11 @@ export default function App() {
             {/* Header Right Actions */}
             <div className="flex items-center gap-3">
               {/* Notification Bell */}
-              <button onClick={() => setShowNotificationsModal(true)} className="relative p-2.5 rounded-xl bg-[#0E3D42]/5 hover:bg-[#0E3D42]/10 transition text-[#0E3D42]">
+              <button
+                onClick={() => setShowNotificationsModal(true)}
+                aria-label="View notifications"
+                className="relative p-2.5 rounded-xl bg-[#0E3D42]/5 hover:bg-[#0E3D42]/10 transition text-[#0E3D42]"
+              >
                 <Bell size={18} />
                 {unreadNotificationsCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-black size-4 rounded-full flex items-center justify-center">
@@ -1156,22 +1210,360 @@ export default function App() {
                 </button>
               )}
 
+              {/* Offers / Coupons Button */}
+              <button
+                onClick={() => { fetchCoupons(); setShowCouponsDrawer(true); }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#0E3D42] text-xs font-black transition shadow-sm"
+                title="View Available Coupons & Offers"
+              >
+                <Tag size={15} className="text-amber-600" />
+                <span className="hidden sm:inline">Offers</span>
+              </button>
+
               {/* Cart Bag Icon */}
-              <button onClick={() => setShowCartDrawer(true)} className="relative p-2.5 rounded-xl bg-[#0E3D42] text-white hover:bg-[#0E3D42]/90 transition shadow-sm">
+              <Link
+                href="/cart"
+                aria-label="View shopping bag"
+                className="relative p-2.5 rounded-xl bg-[#0E3D42] text-white hover:bg-[#0E3D42]/90 transition shadow-sm"
+              >
                 <ShoppingBag size={18} />
                 {cart.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[#E2A93B] text-[#0E3D42] text-[10px] font-black size-5 rounded-full flex items-center justify-center shadow">
                     {cart.reduce((a, b) => a + b.quantity, 0)}
                   </span>
                 )}
-              </button>
+              </Link>
             </div>
           </div>
         </header>
 
         {/* Main Content Router */}
         <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
-          {location === '/account' ? (
+          {isCartPage ? (
+            /* ═══════════════════ FULL-PAGE CART (/cart) ═══════════════════ */
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <Link href="/" className="p-2 rounded-xl hover:bg-gray-100 transition"><ArrowLeft size={20} className="text-[#0E3D42]" /></Link>
+                <h1 className="text-2xl font-black text-[#0E3D42]">Your Bag ({cart.reduce((a, b) => a + b.quantity, 0)})</h1>
+              </div>
+
+              {cart.length === 0 ? (
+                <div className="text-center py-20 space-y-4 bg-white rounded-3xl border border-[#0E3D42]/10 shadow-lg">
+                  <ShoppingBag size={64} className="mx-auto text-gray-200" />
+                  <p className="text-lg font-bold text-gray-400">Your bag is empty.</p>
+                  <p className="text-xs text-gray-400 font-medium">Explore our curated collection and add items to your bag.</p>
+                  <Link href="/" className="inline-block mt-2 px-6 py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-2xl shadow-md hover:bg-[#0E3D42]/90 transition">
+                    Browse Products
+                  </Link>
+                </div>
+              ) : (
+                <div className="grid lg:grid-cols-3 gap-6">
+                  {/* Cart Items */}
+                  <div className="lg:col-span-2 space-y-4">
+                    {cart.map(({ product, quantity }) => (
+                      <div key={product.id} className="bg-white p-5 rounded-2xl border border-[#0E3D42]/10 shadow-sm flex items-center gap-5">
+                        <Link href={`/products/${product.slug}`}>
+                          <img src={product.imageUrl} alt={product.name} className="size-20 sm:size-24 rounded-xl object-cover border border-gray-100" />
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <Link href={`/products/${product.slug}`} className="font-bold text-sm text-[#0E3D42] hover:underline block truncate">{product.name}</Link>
+                          <p className="text-xs text-gray-500 font-medium mt-0.5">{product.category}</p>
+                          <div className="flex items-center gap-3 mt-2">
+                            <span className="text-sm font-black text-[#0E3D42]">{money(product.priceCents)}</span>
+                            {product.compareAtPriceCents && product.compareAtPriceCents > product.priceCents && (
+                              <span className="text-xs text-gray-400 line-through">{money(product.compareAtPriceCents)}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-3">
+                          <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-1">
+                            <button onClick={() => setCart((prev) => prev.map((i) => i.product.id === product.id ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))} className="size-8 rounded-lg bg-white border border-gray-200 font-bold text-sm hover:bg-gray-100 transition">−</button>
+                            <span className="text-sm font-black w-6 text-center">{quantity}</span>
+                            <button onClick={() => setCart((prev) => prev.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i))} className="size-8 rounded-lg bg-white border border-gray-200 font-bold text-sm hover:bg-gray-100 transition">+</button>
+                          </div>
+                          <button onClick={() => setCart((prev) => prev.filter((i) => i.product.id !== product.id))} className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 transition">
+                            <Trash2 size={12} /> Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Order Summary Sidebar */}
+                  <div className="space-y-4">
+                    <div className="bg-white p-6 rounded-2xl border border-[#0E3D42]/10 shadow-lg space-y-4 sticky top-24">
+                      <h3 className="text-lg font-black text-[#0E3D42]">Order Summary</h3>
+
+                      <div className="space-y-2 text-xs font-bold">
+                        <div className="flex justify-between text-[#0E3D42]">
+                          <span>Items Subtotal (MRP Incl.)</span>
+                          <span>{money(cartTotalCents)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px] text-gray-500 pl-2">
+                          <span>└ Taxable Value</span>
+                          <span>{money(taxableTotalCents)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px] text-gray-500 pl-2">
+                          <span>└ CGST (2.5%)</span>
+                          <span>{money(cgstCents)}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px] text-gray-500 pl-2">
+                          <span>└ SGST (2.5%)</span>
+                          <span>{money(sgstCents)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-gray-200 pt-2 text-[#0E3D42]">
+                          <span>Packaging Fee</span>
+                          <span>{money(packagingFeeCents)}</span>
+                        </div>
+                        <div className="flex justify-between text-[#0E3D42]">
+                          <span>Delivery Fee</span>
+                          <span className={isFreeDelivery ? 'text-emerald-700' : ''}>{isFreeDelivery ? 'FREE' : money(deliveryFeeCents)}</span>
+                        </div>
+                        {discountResult?.valid && (
+                          <div className="flex justify-between text-emerald-700">
+                            <span>Discount ({discountResult.code})</span>
+                            <span>-{money(discountCents)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-base font-black border-t border-gray-200 pt-3 text-[#0E3D42]">
+                          <span>Total</span>
+                          <span>{money(finalPayableCents)}</span>
+                        </div>
+                      </div>
+
+                      {/* Discount Code */}
+                      <div className="space-y-2 pt-2 border-t border-gray-100">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-extrabold text-[#0E3D42]">Discount Code</label>
+                          <button onClick={() => { fetchCoupons(); setShowCouponsDrawer(true); }} className="text-xs font-bold text-[#E2A93B] hover:underline flex items-center gap-1">
+                            <Tag size={12} /> View Coupons
+                          </button>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={discountCode}
+                            onChange={(e) => setDiscountCode(e.target.value)}
+                            placeholder="WELCOME10"
+                            className="flex-1 p-2.5 text-xs font-semibold rounded-xl border border-gray-300 uppercase"
+                          />
+                          <button onClick={handleApplyDiscount} className="px-4 py-2 bg-[#0E3D42] text-white text-xs font-bold rounded-xl">Apply</button>
+                        </div>
+                      </div>
+
+                      {!isFreeDelivery && cartTotalCents < (shopSettings.freeDeliveryThresholdCents || 50000) && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-semibold">
+                          <Sparkles size={12} className="inline mr-1" />
+                          Add {money((shopSettings.freeDeliveryThresholdCents || 50000) - cartTotalCents)} more for FREE delivery!
+                        </div>
+                      )}
+
+                      <Link
+                        href="/checkout"
+                        className={`block w-full py-4 text-center text-white font-extrabold rounded-2xl shadow-lg transition text-sm ${shopSettings.isStoreOpen ? 'bg-[#0E3D42] hover:bg-[#0E3D42]/95' : 'bg-gray-400 pointer-events-none'}`}
+                      >
+                        {shopSettings.isStoreOpen ? `Proceed to Checkout · ${money(finalPayableCents)}` : '🔴 Store Offline'}
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+          ) : isCheckoutPage ? (
+            /* ═══════════════════ FULL-PAGE CHECKOUT (/checkout) ═══════════════════ */
+            cart.length === 0 ? (
+              <div className="text-center py-20 space-y-4 bg-white rounded-3xl border border-[#0E3D42]/10 shadow-lg max-w-lg mx-auto">
+                <ShoppingBag size={64} className="mx-auto text-gray-200" />
+                <p className="text-lg font-bold text-gray-400">Your bag is empty.</p>
+                <Link href="/" className="inline-block mt-2 px-6 py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-2xl shadow-md hover:bg-[#0E3D42]/90 transition">
+                  Browse Products
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <Link href="/cart" className="p-2 rounded-xl hover:bg-gray-100 transition"><ArrowLeft size={20} className="text-[#0E3D42]" /></Link>
+                  <h1 className="text-2xl font-black text-[#0E3D42]">Checkout</h1>
+                </div>
+
+                <div className="grid lg:grid-cols-3 gap-6">
+                  {/* Checkout Form */}
+                  <div className="lg:col-span-2 space-y-5">
+                    {/* Fulfillment Method */}
+                    <div className="bg-white p-6 rounded-2xl border border-[#0E3D42]/10 shadow-sm space-y-4">
+                      <h3 className="text-sm font-black text-[#0E3D42] flex items-center gap-2"><Truck size={16} /> Fulfillment Method</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setFulfillmentType('delivery')}
+                          className={`p-4 rounded-xl border text-xs font-bold flex flex-col items-center gap-1.5 transition ${fulfillmentType === 'delivery' ? 'bg-[#0E3D42] text-white border-[#0E3D42] shadow-md' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'}`}
+                        >
+                          <span className="flex items-center gap-1.5"><Truck size={16} /> Home Delivery</span>
+                          <span className="text-[10px] opacity-80">{isFreeDelivery ? 'FREE' : '₹30 Flat'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFulfillmentType('pickup')}
+                          className={`p-4 rounded-xl border text-xs font-bold flex flex-col items-center gap-1.5 transition ${fulfillmentType === 'pickup' ? 'bg-[#0E3D42] text-white border-[#0E3D42] shadow-md' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'}`}
+                        >
+                          <span className="flex items-center gap-1.5"><Store size={16} /> Store Self-Pickup</span>
+                          <span className="text-[10px] text-emerald-600 bg-emerald-100 font-extrabold px-1.5 py-0.5 rounded">FREE</span>
+                        </button>
+                      </div>
+
+                      {fulfillmentType === 'pickup' && (
+                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1.5">
+                          <div className="font-extrabold flex items-center justify-between text-amber-950">
+                            <span>⚡ Ready for Pickup in 15–30 mins</span>
+                            <span className="bg-amber-200/80 px-2 py-0.5 rounded-full text-[10px] font-black uppercase">Raj Traders</span>
+                          </div>
+                          <p className="text-[11px] text-amber-800 font-medium">
+                            Collect at: <strong>{shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</strong>
+                          </p>
+                          <div className="flex items-center justify-between pt-1 border-t border-amber-200/60 text-[10px]">
+                            <span className="text-amber-700 font-semibold">Hours: 7:00 AM – 10:00 PM (Everyday)</span>
+                            <a href={shopSettings.googleMapsUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-[#0E3D42] font-black underline flex items-center gap-0.5">
+                              <Navigation size={10} /> View on Map
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Delivery Address (shown for Home Delivery) */}
+                    {fulfillmentType === 'delivery' && (
+                      <div className="bg-white p-6 rounded-2xl border border-[#0E3D42]/10 shadow-sm space-y-4">
+                        <h3 className="text-sm font-black text-[#0E3D42] flex items-center gap-2"><MapPin size={16} /> Delivery Address</h3>
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="text-xs font-extrabold text-[#0E3D42]">PIN Code</label>
+                            <span className="text-[10px] text-gray-500 font-semibold">Serviceable: {allowedPincodes.join(', ')}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              maxLength={6}
+                              value={deliveryPincode}
+                              onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, ''))}
+                              placeholder="484551"
+                              className="w-28 p-2.5 text-xs font-mono font-bold rounded-xl border border-gray-300"
+                            />
+                            <div className="flex-1">
+                              {deliveryPincode.length === 6 ? (
+                                isPincodeServiceable ? (
+                                  <span className="text-xs font-bold text-emerald-700 flex items-center gap-1"><CheckCircle2 size={14} /> Serviceable</span>
+                                ) : (
+                                  <span className="text-xs font-bold text-red-600 flex items-center gap-1"><AlertCircle size={14} /> Not Serviceable</span>
+                                )
+                              ) : (
+                                <span className="text-[11px] text-gray-400">Enter 6-digit PIN</span>
+                              )}
+                            </div>
+                          </div>
+                          {!isPincodeServiceable && deliveryPincode.length === 6 && (
+                            <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-[11px] text-red-700 font-semibold flex items-start gap-2">
+                              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                              <span>Delivery only available in Pali PINs ({allowedPincodes.join(', ')}).</span>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <label className="text-xs font-extrabold text-[#0E3D42]">Full Address & Landmark</label>
+                          <textarea
+                            rows={3}
+                            value={shippingAddress}
+                            onChange={(e) => setShippingAddress(e.target.value)}
+                            className="w-full mt-1 p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
+                            placeholder="House/Shop no., Landmark, Ward name, Pali, MP"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Method */}
+                    {shopSettings.isCodEnabled && (
+                      <div className="bg-white p-6 rounded-2xl border border-[#0E3D42]/10 shadow-sm space-y-4">
+                        <h3 className="text-sm font-black text-[#0E3D42] flex items-center gap-2"><CreditCard size={16} /> Payment Method</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            onClick={() => setPaymentMethod('online')}
+                            className={`p-3 rounded-xl border text-xs font-bold ${paymentMethod === 'online' ? 'bg-[#0E3D42] text-white border-[#0E3D42]' : 'bg-white border-gray-200 text-gray-700'}`}
+                          >
+                            Online Payment
+                          </button>
+                          <button
+                            onClick={() => setPaymentMethod('cod')}
+                            className={`p-3 rounded-xl border text-xs font-bold ${paymentMethod === 'cod' ? 'bg-[#0E3D42] text-white border-[#0E3D42]' : 'bg-white border-gray-200 text-gray-700'}`}
+                          >
+                            Cash on Delivery
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Checkout Summary Sidebar */}
+                  <div className="space-y-4">
+                    <div className="bg-white p-6 rounded-2xl border border-[#0E3D42]/10 shadow-lg space-y-4 sticky top-24">
+                      <h3 className="text-lg font-black text-[#0E3D42]">Order Summary</h3>
+
+                      {/* Compact items */}
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {cart.map(({ product, quantity }) => (
+                          <div key={product.id} className="flex items-center gap-2 text-xs">
+                            <img src={product.imageUrl} alt={product.name} className="size-10 rounded-lg object-cover" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-[#0E3D42] truncate">{product.name}</p>
+                              <p className="text-gray-500">×{quantity}</p>
+                            </div>
+                            <span className="font-black text-[#0E3D42]">{money(product.priceCents * quantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-2 text-xs font-bold border-t border-gray-100 pt-3">
+                        <div className="flex justify-between text-[#0E3D42]"><span>Subtotal</span><span>{money(cartTotalCents)}</span></div>
+                        <div className="flex justify-between text-[#0E3D42]"><span>Packaging</span><span>{money(packagingFeeCents)}</span></div>
+                        <div className="flex justify-between text-[#0E3D42]"><span>Delivery</span><span className={isFreeDelivery ? 'text-emerald-700' : ''}>{isFreeDelivery ? 'FREE' : money(deliveryFeeCents)}</span></div>
+                        {discountResult?.valid && (
+                          <div className="flex justify-between text-emerald-700"><span>Discount</span><span>-{money(discountCents)}</span></div>
+                        )}
+                      </div>
+
+                      <label className="flex items-start gap-2 text-[11px] text-gray-700 font-semibold cursor-pointer select-none pt-1">
+                        <input
+                          type="checkbox"
+                          checked={checkoutConsent}
+                          onChange={(e) => setCheckoutConsent(e.target.checked)}
+                          className="mt-0.5 rounded text-[#0E3D42] focus:ring-[#0E3D42]"
+                        />
+                        <span>
+                          I agree to the{' '}
+                          <button type="button" onClick={() => setActiveLegalModal('terms')} className="text-[#0E3D42] underline font-bold">Terms</button>,{' '}
+                          <button type="button" onClick={() => setActiveLegalModal('privacy')} className="text-[#0E3D42] underline font-bold">Privacy</button> &{' '}
+                          <button type="button" onClick={() => setActiveLegalModal('refund')} className="text-[#0E3D42] underline font-bold">Refund Policy</button>.
+                        </span>
+                      </label>
+
+                      <button
+                        onClick={handleCheckout}
+                        disabled={isCheckingOut || !checkoutConsent || !shopSettings.isStoreOpen || (fulfillmentType === 'delivery' && !isPincodeServiceable)}
+                        className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition disabled:bg-gray-400 text-sm"
+                      >
+                        {isCheckingOut ? 'Processing Order...' : !checkoutConsent ? 'Accept Terms to Proceed' : !shopSettings.isStoreOpen ? '🔴 Store Offline' : (fulfillmentType === 'delivery' && !isPincodeServiceable) ? `Enter Serviceable PIN` : `Pay & Complete · ${money(finalPayableCents)}`}
+                      </button>
+
+                      <div className="flex items-center justify-center gap-1.5 text-[10px] text-gray-400 font-semibold">
+                        <Lock size={10} /> Secure checkout powered by Razorpay
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+
+          ) : location === '/account' ? (
             !user || !token ? (
               <div className="max-w-md mx-auto my-12 bg-white p-8 rounded-3xl border border-[#0E3D42]/10 shadow-xl text-center space-y-5">
                 <div className="size-16 mx-auto rounded-2xl bg-[#0E3D42]/10 text-[#0E3D42] flex items-center justify-center">
@@ -1500,7 +1892,7 @@ export default function App() {
                           } else {
                             setChangePassNotice({ type: 'success', message: 'Password changed successfully!' });
                             showToast('Password changed successfully!', 'success');
-                            e.target.reset();
+                            (e.target as HTMLFormElement)?.reset?.();
                           }
                         } catch {
                           setChangePassNotice({ type: 'error', message: 'Network error. Please try again.' });
@@ -1645,9 +2037,9 @@ export default function App() {
                         <button onClick={() => addToCart(currentProduct)} className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition flex items-center justify-center gap-2 text-sm">
                           <ShoppingBag size={18} /> Add to Bag
                         </button>
-                        <button onClick={() => { addToCart(currentProduct); setShowCartDrawer(true); }} className="w-full py-4 bg-[#E2A93B] text-[#0E3D42] font-extrabold rounded-2xl shadow-md hover:bg-[#E2A93B]/90 transition text-sm">
+                        <Link href="/cart" onClick={() => addToCart(currentProduct)} className="w-full py-4 bg-[#E2A93B] text-[#0E3D42] font-extrabold rounded-2xl shadow-md hover:bg-[#E2A93B]/90 transition text-sm text-center">
                           Buy Now
-                        </button>
+                        </Link>
                       </>
                     ) : (
                       <div className="col-span-2 py-3.5 px-4 bg-rose-50 border border-rose-200 rounded-2xl text-center">
@@ -1666,6 +2058,29 @@ export default function App() {
               <div className="text-center max-w-2xl mx-auto space-y-2">
                 <h1 className="text-4xl font-black tracking-tight text-[#0E3D42]">Made for the Everyday</h1>
                 <p className="text-sm font-medium text-[#0E3D42]/70">Small-batch artisanal cakes, organic bakes, apparel & specialty store items.</p>
+              </div>
+
+              {/* Homepage Coupons & Offers Interactive Banner */}
+              <div className="bg-gradient-to-r from-[#0E3D42] via-[#134950] to-[#0E3D42] rounded-3xl p-5 sm:p-6 text-white shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4 border border-[#E2A93B]/20">
+                <div className="flex items-center gap-4">
+                  <div className="size-12 rounded-2xl bg-[#E2A93B]/20 border border-[#E2A93B]/30 flex items-center justify-center text-[#E2A93B] shrink-0 shadow-inner">
+                    <Tag size={24} />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#E2A93B] text-[#0E3D42] font-black text-[10px] uppercase tracking-wider">Deals & Offers</span>
+                      <span className="text-xs text-amber-200 font-bold">Store Coupons Available</span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-black mt-1">Save on Every Order with Exclusive Coupons!</h3>
+                    <p className="text-xs text-gray-200 font-medium">Click to view active discount codes and apply instant savings to your bag.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { fetchCoupons(); setShowCouponsDrawer(true); }}
+                  className="w-full sm:w-auto px-6 py-3 bg-[#E2A93B] text-[#0E3D42] font-black text-xs rounded-2xl shadow hover:bg-[#d69829] transition flex items-center justify-center gap-2 whitespace-nowrap active:scale-95 shrink-0"
+                >
+                  <Tag size={15} /> View Coupons & Offers
+                </button>
               </div>
 
               {/* Advanced Controls Filter & Sort Bar */}
@@ -1835,10 +2250,12 @@ export default function App() {
           <div className="space-y-3">
             <h3 className="text-sm font-black uppercase tracking-wider text-[#E2A93B]">Legal & Policies</h3>
             <ul className="text-xs text-white/80 space-y-2 font-medium">
-              <li><button onClick={() => setActiveLegalModal('privacy')} className="hover:underline text-left">Privacy Policy</button></li>
-              <li><button onClick={() => setActiveLegalModal('terms')} className="hover:underline text-left">Terms & Conditions</button></li>
-              <li><button onClick={() => setActiveLegalModal('refund')} className="hover:underline text-left">Refund & Cancellation</button></li>
-              <li><button onClick={() => setActiveLegalModal('shipping')} className="hover:underline text-left">Shipping & Delivery</button></li>
+              <li><Link href="/privacy" className="hover:underline text-left inline-block">Privacy Policy</Link></li>
+              <li><Link href="/terms" className="hover:underline text-left inline-block">Terms & Conditions</Link></li>
+              <li><Link href="/refund" className="hover:underline text-left inline-block">Refund & Cancellation</Link></li>
+              <li><Link href="/cookies" className="hover:underline text-left inline-block">Cookie Policy</Link></li>
+              <li><button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-cookie-settings'))} className="hover:underline text-left text-[#E2A93B] font-bold">Manage Cookie Preferences</button></li>
+              <li><button type="button" onClick={() => setActiveLegalModal('shipping')} className="hover:underline text-left">Shipping & Delivery</button></li>
             </ul>
           </div>
 
@@ -1848,7 +2265,7 @@ export default function App() {
             <ul className="text-xs text-white/80 space-y-2 font-medium">
               <li className="flex items-start gap-1.5">
                 <MapPin size={15} className="text-[#E2A93B] shrink-0 mt-0.5" />
-                <span>{shopSettings.shopAddress || 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</span>
+                <span>{shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</span>
               </li>
               <li className="flex items-center gap-1.5 text-white/90">
                 <Clock size={14} className="text-[#E2A93B]" />
@@ -1869,10 +2286,10 @@ export default function App() {
                 onClick={() => setIsStoreLocationModalOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-[#E2A93B] font-bold text-xs rounded-xl transition border border-white/15"
               >
-                <Store size={14} /> RT Super Bazar Map
+                <Store size={14} /> Raj Traders Map
               </button>
               <a
-                href={shopSettings.googleMapsUrl || "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"}
+                href={shopSettings.googleMapsUrl || "https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E2A93B] hover:bg-[#E2A93B]/90 text-[#0E3D42] font-black text-xs rounded-xl transition shadow-sm"
@@ -1903,8 +2320,8 @@ export default function App() {
             {/* Embedded Google Maps iframe */}
             <div className="overflow-hidden rounded-xl border border-white/20 shadow-md">
               <iframe
-                title="RT Super Bazar Store Location Map"
-                src="https://maps.google.com/maps?q=RT+Super+Bazar,+Thana+Rd,+beside+NAGAR+PALIKA,+BIRSINGPUR,+Pali+Birsinghpur,+Madhya+Pradesh+484551&ll=23.3643019,81.0441434&hl=en&z=19&output=embed"
+                title="Raj Traders Store Location Map"
+                src="https://maps.google.com/maps?q=Raj+Traders,+Thana+Rd,+beside+NAGAR+PALIKA,+BIRSINGPUR,+Pali+Birsinghpur,+Madhya+Pradesh+484551&ll=23.3644551,81.0442634&hl=en&z=19&output=embed"
                 width="100%"
                 height="130"
                 style={{ border: 0 }}
@@ -1929,229 +2346,60 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Cart & Checkout Drawer */}
-      {showCartDrawer && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white h-full shadow-2xl p-6 flex flex-col justify-between overflow-y-auto">
-            <div className="space-y-6">
-              <div className="flex items-center justify-between border-b pb-4">
-                <h2 className="text-xl font-black text-[#0E3D42]">Your Bag ({cart.length})</h2>
-                <button onClick={() => setShowCartDrawer(false)} className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
-              </div>
-
-              {cart.length === 0 ? (
-                <div className="text-center py-12 space-y-3">
-                  <ShoppingBag size={48} className="mx-auto text-gray-300" />
-                  <p className="text-sm font-bold text-gray-500">Your bag is empty.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {cart.map(({ product, quantity }) => (
-                    <div key={product.id} className="flex items-center justify-between border-b pb-4 gap-4">
-                      <img src={product.imageUrl} alt={product.name} className="size-16 rounded-xl object-cover" />
-                      <div className="flex-1">
-                        <div className="font-bold text-sm text-[#0E3D42]">{product.name}</div>
-                        <div className="text-xs text-[#0E3D42]/70">{money(product.priceCents * quantity)}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setCart((prev) => prev.map((i) => i.product.id === product.id ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i))} className="size-7 rounded-lg bg-gray-100 font-bold">-</button>
-                        <span className="text-xs font-bold">{quantity}</span>
-                        <button onClick={() => setCart((prev) => prev.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i))} className="size-7 rounded-lg bg-gray-100 font-bold">+</button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Fee & Reverse GST Breakdown */}
-                  <div className="bg-[#F7F2EA] p-4 rounded-2xl space-y-2 text-xs font-bold border border-[#0E3D42]/10">
-                    <div className="flex justify-between text-[#0E3D42]">
-                      <span>Items Subtotal (MRP Incl.):</span>
-                      <span>{money(cartTotalCents)}</span>
-                    </div>
-                    <div className="flex justify-between text-[11px] text-gray-500 pl-2">
-                      <span>└ Taxable Value:</span>
-                      <span>{money(taxableTotalCents)}</span>
-                    </div>
-                    <div className="flex justify-between text-[11px] text-gray-500 pl-2">
-                      <span>└ CGST (2.5%):</span>
-                      <span>{money(cgstCents)}</span>
-                    </div>
-                    <div className="flex justify-between text-[11px] text-gray-500 pl-2">
-                      <span>└ SGST (2.5%):</span>
-                      <span>{money(sgstCents)}</span>
-                    </div>
-                    <div className="flex justify-between border-t border-gray-200 pt-2 text-[#0E3D42]">
-                      <span>Packaging Fee:</span>
-                      <span>{money(packagingFeeCents)}</span>
-                    </div>
-                    <div className="flex justify-between text-[#0E3D42]">
-                      <span>Delivery Fee:</span>
-                      <span className={isFreeDelivery ? 'text-emerald-700' : ''}>{isFreeDelivery ? 'FREE' : money(deliveryFeeCents)}</span>
-                    </div>
-                    {discountResult?.valid && (
-                      <div className="flex justify-between text-emerald-700">
-                        <span>Discount ({discountResult.code}):</span>
-                        <span>-{money(discountCents)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm font-black border-t pt-2 text-[#0E3D42]">
-                      <span>Final Total:</span>
-                      <span>{money(finalPayableCents)}</span>
-                    </div>
-                  </div>
-
-                  {/* Discount Code Input */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-extrabold text-[#0E3D42]">Discount Code</label>
-                      <button onClick={() => setShowCouponsDrawer(!showCouponsDrawer)} className="text-xs font-bold text-[#E2A93B] hover:underline flex items-center gap-1">
-                        <Tag size={12} /> View Coupons
-                      </button>
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={discountCode}
-                        onChange={(e) => setDiscountCode(e.target.value)}
-                        placeholder="WELCOME10"
-                        className="flex-1 p-2.5 text-xs font-semibold rounded-xl border border-gray-300 uppercase"
-                      />
-                      <button onClick={handleApplyDiscount} className="px-4 py-2 bg-[#0E3D42] text-white text-xs font-bold rounded-xl">Apply</button>
-                    </div>
-                  </div>
-
-                  {/* Payment Method Selector if COD Enabled */}
-                  {shopSettings.isCodEnabled && (
-                    <div className="space-y-2">
-                      <label className="text-xs font-extrabold text-[#0E3D42]">Payment Method</label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => setPaymentMethod('online')}
-                          className={`p-2.5 rounded-xl border text-xs font-bold ${paymentMethod === 'online' ? 'bg-[#0E3D42] text-white border-[#0E3D42]' : 'bg-white border-gray-200 text-gray-700'}`}
-                        >
-                          Online Payment
-                        </button>
-                        <button
-                          onClick={() => setPaymentMethod('cod')}
-                          className={`p-2.5 rounded-xl border text-xs font-bold ${paymentMethod === 'cod' ? 'bg-[#0E3D42] text-white border-[#0E3D42]' : 'bg-white border-gray-200 text-gray-700'}`}
-                        >
-                          Cash on Delivery
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Fulfillment Method: Home Delivery vs Self-Pickup at Store */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-extrabold text-[#0E3D42]">Fulfillment Method</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setFulfillmentType('delivery')}
-                        className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition ${fulfillmentType === 'delivery' ? 'bg-[#0E3D42] text-white border-[#0E3D42] shadow-md' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'}`}
-                      >
-                        <span className="flex items-center gap-1.5"><Truck size={15} /> Home Delivery</span>
-                        <span className="text-[10px] opacity-80">{isFreeDelivery ? 'FREE' : '₹30 Flat'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFulfillmentType('pickup')}
-                        className={`p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition ${fulfillmentType === 'pickup' ? 'bg-[#0E3D42] text-white border-[#0E3D42] shadow-md' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'}`}
-                      >
-                        <span className="flex items-center gap-1.5"><Store size={15} /> Store Self-Pickup</span>
-                        <span className="text-[10px] text-emerald-600 bg-emerald-100 font-extrabold px-1.5 py-0.5 rounded">FREE</span>
-                      </button>
-                    </div>
-
-                    {fulfillmentType === 'pickup' && (
-                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1.5">
-                        <div className="font-extrabold flex items-center justify-between text-amber-950">
-                          <span>⚡ Ready for Pickup in 15–30 mins (Express Pickup)</span>
-                          <span className="bg-amber-200/80 px-2 py-0.5 rounded-full text-[10px] font-black uppercase">RT Super Bazar</span>
-                        </div>
-                        <p className="text-[11px] text-amber-800 font-medium">
-                          Collect at: <strong>{shopSettings.shopAddress || 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551'}</strong>
-                        </p>
-                        <div className="flex items-center justify-between pt-1 border-t border-amber-200/60 text-[10px]">
-                          <span className="text-amber-700 font-semibold">Hours: 7:00 AM – 10:00 PM (Everyday)</span>
-                          <a
-                            href={shopSettings.googleMapsUrl || 'https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[#0E3D42] font-black underline flex items-center gap-0.5"
-                          >
-                            <Navigation size={10} /> View on Map
-                          </a>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Pincode & Shipping Address Input (shown for Home Delivery) */}
-                  {fulfillmentType === 'delivery' && (
-                    <div className="space-y-3">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-extrabold text-[#0E3D42]">Delivery PIN Code</label>
-                          <span className="text-[10px] text-gray-500 font-semibold">Serviceable: {allowedPincodes.join(', ')}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <input
-                            type="text"
-                            maxLength={6}
-                            value={deliveryPincode}
-                            onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, ''))}
-                            placeholder="484551"
-                            className="w-28 p-2.5 text-xs font-mono font-bold rounded-xl border border-gray-300"
-                          />
-                          <div className="flex-1">
-                            {deliveryPincode.length === 6 ? (
-                              isPincodeServiceable ? (
-                                <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                                  <CheckCircle2 size={14} /> Serviceable (Pali Local Fleet)
-                                </span>
-                              ) : (
-                                <span className="text-xs font-bold text-red-600 flex items-center gap-1">
-                                  <AlertCircle size={14} /> PIN Not Serviceable
-                                </span>
-                              )
-                            ) : (
-                              <span className="text-[11px] text-gray-400">Enter 6-digit delivery PIN</span>
-                            )}
-                          </div>
-                        </div>
-                        {!isPincodeServiceable && deliveryPincode.length === 6 && (
-                          <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-[11px] text-red-700 font-semibold flex items-start gap-2">
-                            <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                            <span>Delivery is exclusively available in Pali PINs ({allowedPincodes.join(', ')}). Orders outside this local zone cannot be fulfilled.</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-extrabold text-[#0E3D42]">Delivery Address & Landmark</label>
-                        <textarea
-                          rows={2}
-                          value={shippingAddress}
-                          onChange={(e) => setShippingAddress(e.target.value)}
-                          className="w-full mt-1 p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
-                          placeholder="House/Shop no., Landmark, Ward name, Pali, MP"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+      {/* Available Coupons Modal */}
+      {showCouponsDrawer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-lg font-black text-[#0E3D42] flex items-center gap-2"><Tag size={18} /> Available Coupons</h3>
+              <button onClick={() => setShowCouponsDrawer(false)} aria-label="Close coupons drawer" className="p-2 rounded-lg hover:bg-gray-100"><X size={18} /></button>
             </div>
 
-            {cart.length > 0 && (
-              <div className="border-t pt-4 space-y-4">
-                <button
-                  onClick={handleCheckout}
-                  disabled={isCheckingOut || !shopSettings.isStoreOpen || (fulfillmentType === 'delivery' && !isPincodeServiceable)}
-                  className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition disabled:bg-gray-400"
-                >
-                  {isCheckingOut ? 'Processing Order...' : !shopSettings.isStoreOpen ? '🔴 Store Offline — Checkout Disabled' : (fulfillmentType === 'delivery' && !isPincodeServiceable) ? `Enter Serviceable PIN (${allowedPincodes.join(', ')})` : `Pay & Complete Order · ${money(finalPayableCents)}`}
-                </button>
+            {couponsLoading ? (
+              <div className="text-center py-8">
+                <RefreshCw size={24} className="mx-auto text-gray-300 animate-spin" />
+                <p className="text-xs text-gray-400 mt-2 font-medium">Loading coupons...</p>
+              </div>
+            ) : availableCoupons.length === 0 ? (
+              <div className="text-center py-8 space-y-2">
+                <Tag size={32} className="mx-auto text-gray-200" />
+                <p className="text-sm font-bold text-gray-400">No active coupons right now.</p>
+                <p className="text-xs text-gray-400">Check back later for exclusive deals!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {availableCoupons.map((coupon: any) => (
+                  <div key={coupon.code} className="p-4 rounded-2xl border border-[#0E3D42]/10 bg-[#F7F2EA] space-y-2 hover:border-[#E2A93B]/50 transition">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-black text-[#0E3D42] tracking-wider bg-white px-3 py-1 rounded-lg border border-dashed border-[#0E3D42]/30">{coupon.code}</span>
+                      <button
+                        onClick={() => {
+                          setDiscountCode(coupon.code);
+                          setShowCouponsDrawer(false);
+                          handleApplyDiscount();
+                          showToast(`Coupon ${coupon.code} copied!`, 'info');
+                        }}
+                        className="px-3 py-1.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 transition"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                    <div className="text-xs font-semibold text-[#0E3D42]/70 space-y-0.5">
+                      <p>
+                        {coupon.type === 'percentage'
+                          ? `${coupon.value}% OFF`
+                          : `Flat ${money(coupon.value * 100)} OFF`}
+                        {coupon.minimumSubtotalCents > 0 && ` on orders above ${money(coupon.minimumSubtotalCents)}`}
+                      </p>
+                      {coupon.firstOrderOnly && (
+                        <p className="text-[10px] text-amber-700 font-bold">🌟 First order only</p>
+                      )}
+                      {coupon.expiresAt && (
+                        <p className="text-[10px] text-gray-500">Expires: {new Date(coupon.expiresAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -2164,7 +2412,7 @@ export default function App() {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5">
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="text-lg font-black text-[#0E3D42]">Request Order Cancellation</h3>
-              <button onClick={() => setCancellationModalOrder(null)} className="p-2 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+              <button onClick={() => setCancellationModalOrder(null)} aria-label="Close cancellation modal" className="p-2 rounded-lg hover:bg-gray-100"><X size={18} /></button>
             </div>
 
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-semibold space-y-1">
@@ -2238,16 +2486,17 @@ export default function App() {
                   {activeLegalModal === 'terms' && 'Terms & Conditions'}
                   {activeLegalModal === 'refund' && 'Cancellation, Return & Refund Policy'}
                   {activeLegalModal === 'shipping' && 'Shipping & Local Fleet Delivery Policy'}
+                  {activeLegalModal === 'cookies' && 'Cookie Policy'}
                 </h3>
               </div>
-              <button onClick={() => setActiveLegalModal(null)} className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+              <button onClick={() => setActiveLegalModal(null)} aria-label="Close policy modal" className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
             </div>
 
             <div className="text-xs text-gray-700 space-y-4 leading-relaxed font-medium">
               {activeLegalModal === 'privacy' && (
                 <>
                   <p><strong>1. Introduction:</strong> {shopSettings.legalBusinessName || 'RAJ TRADERS'} ("We", "Our", "Store") values your personal privacy. We do not sell, rent, or lease your personal information to third parties.</p>
-                  <p><strong>2. Information We Collect:</strong> We collect customer names, phone numbers, delivery addresses, and order histories strictly for fulfilling bakery orders and generating GST-compliant tax invoices.</p>
+                  <p><strong>2. Information We Collect:</strong> We collect customer names, phone numbers, delivery addresses, and order histories strictly for fulfilling bakery orders and generating GST-compliant tax invoices under the Digital Personal Data Protection (DPDP) Act, 2023.</p>
                   <p><strong>3. Payment Data Security:</strong> All digital transactions are processed through RBI-authorized payment aggregators (Razorpay). We never store raw debit/credit card credentials, CVVs, or bank PINs on our servers.</p>
                   <p><strong>4. Local Fleet Coordinates:</strong> Delivery rider GPS tracking data is used strictly for routing active orders in Birsingpur Pali and is purged following successful delivery.</p>
                 </>
@@ -2277,10 +2526,26 @@ export default function App() {
                   <p><strong>3. Delivery Fee:</strong> Orders exceeding {money(shopSettings.freeDeliveryThresholdCents || 50000)} qualify for Free Delivery. Below this threshold, a flat delivery fee of {money(shopSettings.flatDeliveryFeeCents || 3000)} applies.</p>
                 </>
               )}
+
+              {activeLegalModal === 'cookies' && (
+                <>
+                  <p><strong>1. Cookie Usage:</strong> Raj Traders uses essential cookies for shopping bag persistence, security tokens, and local cache. We do not use third-party behavioral ad trackers.</p>
+                  <p><strong>2. Granular Controls:</strong> You can manage or revoke preferences at any time using the "Manage Cookie Preferences" option in the store footer.</p>
+                </>
+              )}
             </div>
 
-            <div className="pt-3 border-t text-right">
-              <button onClick={() => setActiveLegalModal(null)} className="px-5 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl">
+            <div className="pt-3 border-t flex items-center justify-between">
+              {activeLegalModal && activeLegalModal !== 'shipping' && (
+                <Link
+                  href={`/${activeLegalModal}`}
+                  onClick={() => setActiveLegalModal(null)}
+                  className="text-xs font-bold text-[#0E3D42] underline hover:text-[#0E3D42]/80 flex items-center gap-1"
+                >
+                  <ExternalLink size={14} /> View Full Policy Document
+                </Link>
+              )}
+              <button onClick={() => setActiveLegalModal(null)} aria-label="Close policy" className="ml-auto px-5 py-2.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl">
                 Close Policy
               </button>
             </div>
@@ -2301,7 +2566,7 @@ export default function App() {
                 )}
                 <h2 className="text-xl font-black text-[#0E3D42]">{otpRequired ? 'Email Verification' : authMode === 'login' ? 'Sign In' : authMode === 'register' ? 'Create Account' : authMode === 'forgot_password' ? 'Forgot Password' : 'Reset Password'}</h2>
               </div>
-              <button onClick={() => { setShowAuthModal(false); setOtpRequired(false); setAuthError(null); setAuthSuccess(null); }} className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
+              <button onClick={() => { setShowAuthModal(false); setOtpRequired(false); setAuthError(null); setAuthSuccess(null); }} aria-label="Close authentication modal" className="p-2 rounded-lg hover:bg-gray-100"><X size={20} /></button>
             </div>
 
             {authError && <div className="p-3 bg-red-100 text-red-700 text-xs font-bold rounded-xl border border-red-200">{authError}</div>}
@@ -2467,6 +2732,12 @@ export default function App() {
                 <input required type="email" name="email" placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                 <input required type="password" name="password" placeholder="Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                 <input required type="password" name="confirmPassword" placeholder="Confirm Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+
+                <label className="flex items-start gap-2.5 text-xs text-gray-700 font-semibold cursor-pointer select-none pt-1">
+                  <input required type="checkbox" name="agreeTerms" className="mt-0.5 rounded text-[#0E3D42] focus:ring-[#0E3D42]" />
+                  <span>I agree to the <button type="button" onClick={() => setActiveLegalModal('terms')} className="text-[#0E3D42] underline font-extrabold hover:text-[#0E3D42]/80">Terms & Conditions</button> and <button type="button" onClick={() => setActiveLegalModal('privacy')} className="text-[#0E3D42] underline font-extrabold hover:text-[#0E3D42]/80">Privacy Policy</button>.</span>
+                </label>
+
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Registering...' : 'Register Account'}</button>
                 <div className="text-center text-xs font-bold text-[#0E3D42]/70">
                   Already have an account? <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">Sign In</button>
@@ -2483,7 +2754,7 @@ export default function App() {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="font-extrabold text-[#0E3D42] text-base flex items-center gap-2"><Bell size={18} /> Notifications</h3>
-              <button onClick={() => setShowNotificationsModal(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+              <button onClick={() => setShowNotificationsModal(false)} aria-label="Close notifications modal" className="p-1 rounded-lg hover:bg-gray-100"><X size={18} /></button>
             </div>
             {notifications.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-6">No new notifications.</p>
@@ -2507,7 +2778,7 @@ export default function App() {
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="font-extrabold text-[#0E3D42] text-base flex items-center gap-2"><MapPin size={18} /> Select Delivery Location</h3>
-              <button onClick={() => setShowPincodeModal(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+              <button onClick={() => setShowPincodeModal(false)} aria-label="Close delivery pincode modal" className="p-1 rounded-lg hover:bg-gray-100"><X size={18} /></button>
             </div>
             <p className="text-xs text-gray-500 font-medium">Enter an Indian 6-digit PIN code to check deliverability and express timelines.</p>
             <input
@@ -2542,7 +2813,7 @@ export default function App() {
                   <p className="text-[11px] text-gray-500 font-medium">Birsinghpur Pali, Umaria District, MP</p>
                 </div>
               </div>
-              <button onClick={() => setIsStoreLocationModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"><X size={20} /></button>
+              <button onClick={() => setIsStoreLocationModalOpen(false)} aria-label="Close store location modal" className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"><X size={20} /></button>
             </div>
 
             <div className="space-y-3">
@@ -2550,9 +2821,9 @@ export default function App() {
                 <div className="text-xs font-bold text-[#0E3D42] flex items-start gap-2">
                   <MapPin size={16} className="text-[#E2A93B] shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-extrabold text-sm">RT Super Bazar (Raj Traders)</span>
-                    <p className="font-medium text-gray-700 mt-0.5">{shopSettings.shopAddress || 'RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</p>
-                    <p className="text-[11px] font-mono text-gray-500 mt-1">Plus Code: 927V+PM Pali Birsinghpur, MP · GPS: 23.3643° N, 81.0441° E</p>
+                    <span className="font-extrabold text-sm">Raj Traders</span>
+                    <p className="font-medium text-gray-700 mt-0.5">{shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}</p>
+                    <p className="text-[11px] font-mono text-gray-500 mt-1">Plus Code: 927V+PM Pali Birsinghpur, MP · GPS: 23.3645° N, 81.0443° E</p>
                   </div>
                 </div>
 
@@ -2573,8 +2844,8 @@ export default function App() {
               {/* Responsive Google Maps Embed */}
               <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-inner">
                 <iframe
-                  title="RT Super Bazar Store Location Map"
-                  src="https://maps.google.com/maps?q=RT+Super+Bazar,+Thana+Rd,+beside+NAGAR+PALIKA,+BIRSINGPUR,+Pali+Birsinghpur,+Madhya+Pradesh+484551&ll=23.3643019,81.0441434&hl=en&z=19&output=embed"
+                  title="Raj Traders Store Location Map"
+                  src="https://maps.google.com/maps?q=Raj+Traders,+Thana+Rd,+beside+NAGAR+PALIKA,+BIRSINGPUR,+Pali+Birsinghpur,+Madhya+Pradesh+484551&ll=23.3644551,81.0442634&hl=en&z=19&output=embed"
                   width="100%"
                   height="240"
                   style={{ border: 0 }}
@@ -2588,12 +2859,12 @@ export default function App() {
               {/* Action Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <a
-                  href={shopSettings.googleMapsUrl || "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"}
+                  href={shopSettings.googleMapsUrl || "https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv"}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-3 px-4 rounded-xl bg-[#0E3D42] hover:bg-[#0E3D42]/90 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-sm transition"
                 >
-                  <Navigation size={16} className="text-[#E2A93B]" /> Open in Google Maps (RT Super Bazar)
+                  <Navigation size={16} className="text-[#E2A93B]" /> Open in Google Maps (Raj Traders)
                 </a>
 
                 {shopSettings.whatsappNumber ? (
@@ -2626,6 +2897,30 @@ export default function App() {
         </div>
       )}
 
+      {/* Floating Bottom Bag Bar (Swiggy / Blinkit style) */}
+      {!isCartPage && !isCheckoutPage && cart.length > 0 && (
+        <div className="fixed bottom-4 left-4 right-4 z-40 max-w-lg mx-auto sm:hidden animate-fade-in">
+          <Link
+            href="/cart"
+            className="flex items-center justify-between p-3.5 bg-[#0E3D42] text-white rounded-2xl shadow-2xl border border-white/20 active:scale-[0.98] transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-xl bg-white/20 flex items-center justify-center font-black text-xs">
+                {cart.reduce((a, b) => a + b.quantity, 0)}
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-black">{money(cartTotalCents)}</p>
+                <p className="text-[10px] text-gray-300">Plus taxes & charges</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 font-black text-xs text-[#E2A93B]">
+              <span>View Bag</span>
+              <ChevronRight size={16} />
+            </div>
+          </Link>
+        </div>
+      )}
+
       {/* Order Confirmation Receipt Modal */}
       {receipt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -2638,9 +2933,17 @@ export default function App() {
               <div>Payment Ref: {receipt.razorpayPaymentId}</div>
               <div className="font-bold text-emerald-700">Amount Paid: {money(receipt.amountCents)}</div>
             </div>
-            <button onClick={() => setReceipt(null)} className="w-full py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow">
-              Continue Shopping
-            </button>
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => handleDownloadInvoice(receipt.orderId)}
+                className="w-full py-3 bg-[#E2A93B] text-[#0E3D42] font-black text-xs rounded-xl shadow hover:bg-[#d69829] transition flex items-center justify-center gap-2"
+              >
+                <Download size={15} /> Download Tax Invoice (PDF)
+              </button>
+              <button onClick={() => setReceipt(null)} className="w-full py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow hover:bg-[#0E3D42]/90 transition">
+                Continue Shopping
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2651,10 +2954,13 @@ export default function App() {
           <div className={`p-4 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs font-bold border transition-all ${toast.type === 'success' ? 'bg-[#0E3D42] text-white border-emerald-500/50' : toast.type === 'error' ? 'bg-red-900 text-white border-red-500/50' : 'bg-[#0E3D42] text-white border-[#E2A93B]/50'}`}>
             <CheckCircle2 size={18} className={toast.type === 'success' ? 'text-emerald-400' : 'text-[#E2A93B]'} />
             <span className="flex-1">{toast.message}</span>
-            <button onClick={() => setToast(null)} className="p-1 hover:bg-white/20 rounded-md transition"><X size={14} /></button>
+            <button onClick={() => setToast(null)} aria-label="Dismiss toast notification" className="p-1 hover:bg-white/20 rounded-md transition"><X size={14} /></button>
           </div>
         </div>
       )}
+
+      {/* 3-Tier Cookie & Privacy Consent Banner */}
+      <CookieBanner />
     </div>
   );
 }

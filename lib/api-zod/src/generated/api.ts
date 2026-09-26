@@ -31,7 +31,10 @@ export const listProductsResponseCompareAtPriceCentsMin = 0;
 
 export const listProductsResponseInventoryMin = 0;
 
+export const listProductsResponsePrepTimeMinutesDefault = 30;
 
+export const listProductsResponseIsVegDefault = true;
+export const listProductsResponseIsBestsellerDefault = false;
 
 export const ListProductsResponseItem = zod.object({
   "id": zod.string(),
@@ -45,16 +48,12 @@ export const ListProductsResponseItem = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(listProductsResponseInventoryMin),
-  "prepTimeMinutes": zod.number().optional(),
-  "isBestseller": zod.boolean().optional(),
-  "isVeg": zod.boolean().optional(),
-  "gstRatePercentage": zod.number().optional(),
-  "hsnCode": zod.string().nullish(),
-  "approvalStatus": zod.string().optional(),
-  "deletedAt": zod.string().nullish(),
+  "prepTimeMinutes": zod.number().min(1).default(listProductsResponsePrepTimeMinutesDefault),
+  "isVeg": zod.boolean().default(listProductsResponseIsVegDefault),
+  "isBestseller": zod.boolean().default(listProductsResponseIsBestsellerDefault),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-}).passthrough()
+})
 export const ListProductsResponse = zod.array(ListProductsResponseItem)
 
 
@@ -71,7 +70,10 @@ export const getProductResponseCompareAtPriceCentsMin = 0;
 
 export const getProductResponseInventoryMin = 0;
 
+export const getProductResponsePrepTimeMinutesDefault = 30;
 
+export const getProductResponseIsVegDefault = true;
+export const getProductResponseIsBestsellerDefault = false;
 
 export const GetProductResponse = zod.object({
   "id": zod.string(),
@@ -85,27 +87,27 @@ export const GetProductResponse = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(getProductResponseInventoryMin),
-  "prepTimeMinutes": zod.number().optional(),
-  "isBestseller": zod.boolean().optional(),
-  "isVeg": zod.boolean().optional(),
-  "gstRatePercentage": zod.number().optional(),
-  "hsnCode": zod.string().nullish(),
-  "approvalStatus": zod.string().optional(),
-  "deletedAt": zod.string().nullish(),
+  "prepTimeMinutes": zod.number().min(1).default(getProductResponsePrepTimeMinutesDefault),
+  "isVeg": zod.boolean().default(getProductResponseIsVegDefault),
+  "isBestseller": zod.boolean().default(getProductResponseIsBestsellerDefault),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-}).passthrough()
+})
 
 
 /**
  * Returns lightweight aggregate data for a polished home screen.
  * @summary Get storefront summary
  */
+export const getStorefrontSummaryResponseCurrencyDefault = `INR`;
+
 export const GetStorefrontSummaryResponse = zod.object({
   "shopName": zod.string(),
   "featuredCount": zod.number(),
   "categories": zod.array(zod.string()),
   "firstOrderOffer": zod.string(),
+  "currency": zod.string().default(getStorefrontSummaryResponseCurrencyDefault),
+  "razorpayKeyId": zod.string().nullish(),
   "updatedAt": zod.string()
 })
 
@@ -198,7 +200,10 @@ export const listAdminProductsResponseCompareAtPriceCentsMin = 0;
 
 export const listAdminProductsResponseInventoryMin = 0;
 
+export const listAdminProductsResponsePrepTimeMinutesDefault = 30;
 
+export const listAdminProductsResponseIsVegDefault = true;
+export const listAdminProductsResponseIsBestsellerDefault = false;
 
 export const ListAdminProductsResponseItem = zod.object({
   "id": zod.string(),
@@ -212,16 +217,12 @@ export const ListAdminProductsResponseItem = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(listAdminProductsResponseInventoryMin),
-  "prepTimeMinutes": zod.number().optional(),
-  "isBestseller": zod.boolean().optional(),
-  "isVeg": zod.boolean().optional(),
-  "gstRatePercentage": zod.number().optional(),
-  "hsnCode": zod.string().nullish(),
-  "approvalStatus": zod.string().optional(),
-  "deletedAt": zod.string().nullish(),
+  "prepTimeMinutes": zod.number().min(1).default(listAdminProductsResponsePrepTimeMinutesDefault),
+  "isVeg": zod.boolean().default(listAdminProductsResponseIsVegDefault),
+  "isBestseller": zod.boolean().default(listAdminProductsResponseIsBestsellerDefault),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-}).passthrough()
+})
 export const ListAdminProductsResponse = zod.array(ListAdminProductsResponseItem)
 
 
@@ -235,7 +236,10 @@ export const createProductBodyCompareAtPriceCentsMin = 0;
 
 export const createProductBodyInventoryMin = 0;
 
+export const createProductBodyPrepTimeMinutesDefault = 30;
 
+export const createProductBodyIsVegDefault = true;
+export const createProductBodyIsBestsellerDefault = false;
 
 export const CreateProductBody = zod.object({
   "name": zod.string().min(1),
@@ -247,12 +251,10 @@ export const CreateProductBody = zod.object({
   "status": zod.enum(['active', 'draft']).optional(),
   "featured": zod.boolean().optional(),
   "inventory": zod.number().min(createProductBodyInventoryMin),
-  "prepTimeMinutes": zod.number().optional(),
-  "isBestseller": zod.boolean().optional(),
-  "isVeg": zod.boolean().optional(),
-  "gstRatePercentage": zod.number().optional(),
-  "hsnCode": zod.string().nullish(),
-}).passthrough()
+  "prepTimeMinutes": zod.number().min(1).default(createProductBodyPrepTimeMinutesDefault),
+  "isVeg": zod.boolean().default(createProductBodyIsVegDefault),
+  "isBestseller": zod.boolean().default(createProductBodyIsBestsellerDefault)
+})
 
 export const createProductResponsePriceCentsMin = 0;
 
@@ -260,7 +262,10 @@ export const createProductResponseCompareAtPriceCentsMin = 0;
 
 export const createProductResponseInventoryMin = 0;
 
+export const createProductResponsePrepTimeMinutesDefault = 30;
 
+export const createProductResponseIsVegDefault = true;
+export const createProductResponseIsBestsellerDefault = false;
 
 export const CreateProductResponse = zod.object({
   "id": zod.string(),
@@ -274,16 +279,12 @@ export const CreateProductResponse = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(createProductResponseInventoryMin),
-  "prepTimeMinutes": zod.number().optional(),
-  "isBestseller": zod.boolean().optional(),
-  "isVeg": zod.boolean().optional(),
-  "gstRatePercentage": zod.number().optional(),
-  "hsnCode": zod.string().nullish(),
-  "approvalStatus": zod.string().optional(),
-  "deletedAt": zod.string().nullish(),
+  "prepTimeMinutes": zod.number().min(1).default(createProductResponsePrepTimeMinutesDefault),
+  "isVeg": zod.boolean().default(createProductResponseIsVegDefault),
+  "isBestseller": zod.boolean().default(createProductResponseIsBestsellerDefault),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-}).passthrough()
+})
 
 
 /**
@@ -302,6 +303,7 @@ export const updateProductBodyInventoryMin = 0;
 
 
 
+
 export const UpdateProductBody = zod.object({
   "name": zod.string().min(1).optional(),
   "description": zod.string().optional(),
@@ -312,12 +314,10 @@ export const UpdateProductBody = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']).optional(),
   "featured": zod.boolean().optional(),
   "inventory": zod.number().min(updateProductBodyInventoryMin).optional(),
-  "prepTimeMinutes": zod.number().optional(),
-  "isBestseller": zod.boolean().optional(),
+  "prepTimeMinutes": zod.number().min(1).optional(),
   "isVeg": zod.boolean().optional(),
-  "gstRatePercentage": zod.number().optional(),
-  "hsnCode": zod.string().nullish(),
-}).passthrough()
+  "isBestseller": zod.boolean().optional()
+})
 
 export const updateProductResponsePriceCentsMin = 0;
 
@@ -325,7 +325,10 @@ export const updateProductResponseCompareAtPriceCentsMin = 0;
 
 export const updateProductResponseInventoryMin = 0;
 
+export const updateProductResponsePrepTimeMinutesDefault = 30;
 
+export const updateProductResponseIsVegDefault = true;
+export const updateProductResponseIsBestsellerDefault = false;
 
 export const UpdateProductResponse = zod.object({
   "id": zod.string(),
@@ -339,16 +342,12 @@ export const UpdateProductResponse = zod.object({
   "status": zod.enum(['active', 'draft', 'archived']),
   "featured": zod.boolean(),
   "inventory": zod.number().min(updateProductResponseInventoryMin),
-  "prepTimeMinutes": zod.number().optional(),
-  "isBestseller": zod.boolean().optional(),
-  "isVeg": zod.boolean().optional(),
-  "gstRatePercentage": zod.number().optional(),
-  "hsnCode": zod.string().nullish(),
-  "approvalStatus": zod.string().optional(),
-  "deletedAt": zod.string().nullish(),
+  "prepTimeMinutes": zod.number().min(1).default(updateProductResponsePrepTimeMinutesDefault),
+  "isVeg": zod.boolean().default(updateProductResponseIsVegDefault),
+  "isBestseller": zod.boolean().default(updateProductResponseIsBestsellerDefault),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
-}).passthrough()
+})
 
 
 /**

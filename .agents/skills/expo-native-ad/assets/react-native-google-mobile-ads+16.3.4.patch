@@ -1,0 +1,141 @@
+diff --git a/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsNativeModule.kt b/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsNativeModule.kt
+index 6e70fdd..3606f77 100644
+--- a/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsNativeModule.kt
++++ b/node_modules/react-native-google-mobile-ads/android/src/main/java/io/invertase/googlemobileads/ReactNativeGoogleMobileAdsNativeModule.kt
+@@ -25,6 +25,7 @@ import com.facebook.react.bridge.ReadableMap
+ import com.facebook.react.module.annotations.ReactModule
+ import com.google.android.gms.ads.AdListener
+ import com.google.android.gms.ads.AdLoader
++import com.google.android.gms.ads.LoadAdError
+ import com.google.android.gms.ads.MediaAspectRatio
+ import com.google.android.gms.ads.VideoController.VideoLifecycleCallbacks
+ import com.google.android.gms.ads.VideoOptions
+@@ -42,41 +43,51 @@ class ReactNativeGoogleMobileAdsNativeModule(
+   @ReactMethod
+   override fun load(adUnitId: String, requestOptions: ReadableMap, promise: Promise) {
+     val holder = NativeAdHolder(adUnitId, requestOptions)
+-    holder.loadAd { nativeAd ->
+-      val responseId = nativeAd.responseInfo?.responseId ?: return@loadAd
+-      adHolders[responseId] = holder
+-
+-      val data = Arguments.createMap()
+-      data.putString("responseId", responseId)
+-      data.putString("advertiser", nativeAd.advertiser)
+-      data.putString("body", nativeAd.body)
+-      data.putString("callToAction", nativeAd.callToAction)
+-      data.putString("headline", nativeAd.headline)
+-      data.putString("price", nativeAd.price)
+-      data.putString("store", nativeAd.store)
+-      nativeAd.starRating?.let {
+-        data.putDouble("starRating", it)
+-      } ?: run {
+-        data.putNull("starRating")
+-      }
+-      nativeAd.icon?.let {
+-        val icon = Arguments.createMap()
+-        icon.putDouble("scale", it.scale)
+-        icon.putString("url", it.uri.toString())
+-        data.putMap("icon", icon)
+-      } ?: run {
+-        data.putNull("icon")
+-      }
+-      val mediaContent = Arguments.createMap()
+-      nativeAd.mediaContent?.let {
+-        mediaContent.putDouble("aspectRatio", it.aspectRatio.toDouble())
+-        mediaContent.putBoolean("hasVideoContent", it.hasVideoContent())
+-        mediaContent.putDouble("duration", it.duration.toDouble())
+-        data.putMap("mediaContent", mediaContent)
+-      }
++    holder.loadAd(
++      { nativeAd ->
++        val responseId = nativeAd.responseInfo?.responseId
++        if (responseId == null) {
++          nativeAd.destroy()
++          promise.reject("ERROR_LOAD_NO_RESPONSE_ID", "Failed to get a valid response ID from the loaded ad.")
++          return@loadAd
++        }
++        adHolders[responseId] = holder
++
++        val data = Arguments.createMap()
++        data.putString("responseId", responseId)
++        data.putString("advertiser", nativeAd.advertiser)
++        data.putString("body", nativeAd.body)
++        data.putString("callToAction", nativeAd.callToAction)
++        data.putString("headline", nativeAd.headline)
++        data.putString("price", nativeAd.price)
++        data.putString("store", nativeAd.store)
++        nativeAd.starRating?.let {
++          data.putDouble("starRating", it)
++        } ?: run {
++          data.putNull("starRating")
++        }
++        nativeAd.icon?.let {
++          val icon = Arguments.createMap()
++          icon.putDouble("scale", it.scale)
++          icon.putString("url", it.uri.toString())
++          data.putMap("icon", icon)
++        } ?: run {
++          data.putNull("icon")
++        }
++        val mediaContent = Arguments.createMap()
++        nativeAd.mediaContent?.let {
++          mediaContent.putDouble("aspectRatio", it.aspectRatio.toDouble())
++          mediaContent.putBoolean("hasVideoContent", it.hasVideoContent())
++          mediaContent.putDouble("duration", it.duration.toDouble())
++          data.putMap("mediaContent", mediaContent)
++        }
+ 
+-      promise.resolve(data)
+-    }
++        promise.resolve(data)
++      },
++      { loadAdError ->
++        promise.reject("ERROR_LOAD_${loadAdError.code}", loadAdError.message)
++      },
++    )
+   }
+ 
+   @ReactMethod
+@@ -102,6 +113,12 @@ class ReactNativeGoogleMobileAdsNativeModule(
+       private set
+ 
+     private val adListener: AdListener = object : AdListener() {
++      override fun onAdFailedToLoad(loadAdError: LoadAdError) {
++        val listener = failedListener
++        failedListener = null
++        listener?.invoke(loadAdError)
++      }
++
+       override fun onAdImpression() {
+         emitAdEvent("impression")
+       }
+@@ -119,6 +136,8 @@ class ReactNativeGoogleMobileAdsNativeModule(
+       }
+     }
+ 
++    private var failedListener: ((LoadAdError) -> Unit)? = null
++
+     private val videoLifecycleCallbacks: VideoLifecycleCallbacks = object : VideoLifecycleCallbacks() {
+       override fun onVideoPlay() {
+         emitAdEvent("video_played")
+@@ -141,7 +160,11 @@ class ReactNativeGoogleMobileAdsNativeModule(
+       }
+     }
+ 
+-    fun loadAd(loadedListener: NativeAd.OnNativeAdLoadedListener) {
++    fun loadAd(
++      loadedListener: NativeAd.OnNativeAdLoadedListener,
++      failedListener: (LoadAdError) -> Unit,
++    ) {
++      this.failedListener = failedListener
+       val mediaAspectRatio = if (requestOptions.hasKey("aspectRatio")) {
+         when (requestOptions.getInt("aspectRatio")) {
+           1 -> MediaAspectRatio.ANY
+@@ -182,6 +205,7 @@ class ReactNativeGoogleMobileAdsNativeModule(
+         .withNativeAdOptions(nativeAdOptions)
+         .withAdListener(adListener)
+         .forNativeAd { nativeAd ->
++          this.failedListener = null
+           this.nativeAd = nativeAd
+           nativeAd.mediaContent?.videoController?.videoLifecycleCallbacks = videoLifecycleCallbacks
+           nativeAd.setOnPaidEventListener { adValue ->

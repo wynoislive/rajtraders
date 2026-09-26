@@ -9,6 +9,7 @@ out-tsc
 .expo
 .expo-shared
 .gradle/
+**/.gradle/
 build/
 
 # dependencies

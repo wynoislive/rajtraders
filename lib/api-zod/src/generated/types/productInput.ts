@@ -24,4 +24,8 @@ export interface ProductInput {
   featured?: boolean;
   /** @minimum 0 */
   inventory: number;
+  /** @minimum 1 */
+  prepTimeMinutes?: number;
+  isVeg?: boolean;
+  isBestseller?: boolean;
 }

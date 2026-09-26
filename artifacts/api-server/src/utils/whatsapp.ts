@@ -168,7 +168,7 @@ export async function sendOrderConfirmationWhatsApp(
     `⚡ *Fulfillment:* ${isPickup ? "Store Self-Pickup (Ready in 15–30 mins)" : "Local Home Delivery"}`,
     `📍 *${isPickup ? "Pickup Location" : "Delivery Address"}:*`,
     isPickup
-      ? `🏪 *RT Super Bazar (RAJ TRADERS)*\n📍 ${shop?.shopAddress || "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551"}\n🗺️ Map: ${shop?.googleMapsUrl || "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"}`
+      ? `🏪 *Raj Traders*\n📍 ${shop?.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551"}\n🗺️ Map: ${shop?.googleMapsUrl || "https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv"}`
       : (order.shippingAddress || "Birsingpur Pali"),
     ``,
     `🔗 *View Invoice & Live Order:*`,
@@ -235,9 +235,9 @@ export async function sendOrderStatusWhatsApp(
       detailsText = isPickup
         ? [
             "Your items are ready for pickup at our retail store counter:",
-            `🏪 *RT Super Bazar (RAJ TRADERS)*`,
-            `📍 ${shop?.shopAddress || "RT Super Bazar, Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551"}`,
-            `🗺️ *Google Maps:* ${shop?.googleMapsUrl || "https://www.google.com/maps/place/RT+Super+Bazar/@23.3643019,81.0441434,19z/data=!4m6!3m5!1s0x3986c59768b1b729:0xff6086a7d0b5099d!8m2!3d23.3643019!4d81.0441434!16s%2Fg%2F11vpln2fpt"}`,
+            `🏪 *Raj Traders*`,
+            `📍 ${shop?.shopAddress || "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, MP 484551"}`,
+            `🗺️ *Google Maps:* ${shop?.googleMapsUrl || "https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv"}`,
             `🕒 *Hours:* 7:00 AM – 10:00 PM Everyday`,
           ].join("\n")
         : "Our delivery fleet is assigned and preparing for dispatch.";

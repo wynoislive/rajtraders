@@ -29,7 +29,8 @@ export async function getStaffFromToken(token?: string): Promise<StaffSession | 
   if (!token) return null;
   const clean = token.replace(/^Bearer\s+/i, "").trim();
 
-  if (clean === "staff_master_admin_offline" || clean === "staff_master_admin" || clean.startsWith("staff_master_")) {
+  const isDev = process.env.NODE_ENV !== "production" || process.env.ALLOW_OFFLINE_ADMIN === "true";
+  if (isDev && (clean === "staff_master_admin_offline" || clean === "staff_master_admin" || clean.startsWith("staff_master_"))) {
     return {
       userId: "main_admin_01",
       name: "Master Administrator",
