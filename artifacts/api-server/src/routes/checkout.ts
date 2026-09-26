@@ -41,7 +41,7 @@ async function getShopSettings() {
     googleMapsUrl: "https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv",
     stateCode: "23",
     stateName: "Madhya Pradesh",
-    allowedPincodesJson: '["484551","484661","484660"]',
+    allowedPincodesJson: '["484551"]',
     flatDeliveryFeeCents: 3000,
     freeDeliveryThresholdCents: 50000,
     packagingFeeCents: 1000,
@@ -163,7 +163,7 @@ router.post("/check-pincode", async (req: Request, res: Response) => {
   const settings = await getShopSettings();
   const allowed = isPincodeServiceable(cleanPin, settings.allowedPincodesJson);
 
-  let allowedZones = "Birsingpur Pali (484661, 484660)";
+  let allowedZones = "Pali Birsinghpur (484551)";
   try {
     const list = JSON.parse(settings.allowedPincodesJson || "[]");
     if (Array.isArray(list) && list.length > 0) {
@@ -252,7 +252,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
         const extractedPin = pinMatch[1];
         const isAllowed = isPincodeServiceable(extractedPin, settings.allowedPincodesJson);
         if (!isAllowed) {
-          let allowedZones = "Birsingpur Pali (484551, 484661, 484660)";
+          let allowedZones = "Pali Birsinghpur (484551)";
           try {
             const list = JSON.parse(settings.allowedPincodesJson || "[]");
             if (Array.isArray(list) && list.length > 0) allowedZones = list.join(", ");

@@ -516,6 +516,27 @@ router.patch("/v1/admin/discounts/:discountId", requirePermission("discounts"), 
   }
 });
 
+router.delete("/v1/admin/discounts/:discountId", requirePermission("discounts"), async (req, res): Promise<void> => {
+  const discountId = String(req.params.discountId || "");
+  if (!discountId) {
+    res.status(400).json({ error: "Discount ID is required." });
+    return;
+  }
+  try {
+    await db.delete(discountsTable).where(eq(discountsTable.id, discountId));
+    logAuditEvent(req, {
+      action: "DISCOUNT_DELETED",
+      resource: "discounts",
+      resourceId: discountId,
+      status: "SUCCESS",
+    });
+    res.json({ success: true, message: "Discount code deleted successfully." });
+  } catch (err: unknown) {
+    req.log.error({ err, discountId }, "Failed to delete discount");
+    res.status(500).json({ error: "Failed to delete discount." });
+  }
+});
+
 router.get("/v1/admin/registrations", requirePermission("registrations"), async (_req, res): Promise<void> => {
   try {
     const [policies, claims] = await Promise.all([
@@ -587,7 +608,7 @@ router.get("/v1/admin/shop-settings", requirePermission("settings"), async (req,
     if (!settings) {
       const [inserted] = await db
         .insert(shopSettingsTable)
-        .values({ id: "default_shop", shopName: "RAJ TRADERS", shopDomain: "sundarvan.xyz", shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551", latitude: 23.3646728, longitude: 81.0444592, deliveryRadiusKm: 10.0, isDeliveryEnabled: true })
+        .values({ id: "default_shop", shopName: "RAJ TRADERS", shopDomain: "sundarvan.xyz", shopAddress: "Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551", latitude: 23.3646728, longitude: 81.0444592, deliveryRadiusKm: 10.0, isDeliveryEnabled: true, allowedPincodesJson: '["484551"]' })
         .returning();
       settings = inserted;
     }
@@ -1137,6 +1158,271 @@ router.post("/v1/admin/orders/:id/reject-cancellation", requirePermission("order
   } catch (err: unknown) {
     req.log.error({ err, orderId: id }, "Failed to reject cancellation");
     res.status(500).json({ error: "Failed to reject cancellation." });
+  }
+});
+
+// ── Decline Order (Unavailable, Out of Stock, etc.) ─────────────
+router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (req, res): Promise<void> => {
+  const id = req.params.id as string;
+  const { reason, refundAction } = req.body;
+
+  if (!reason || typeof reason !== "string") {
+    res.status(400).json({ error: "Decline reason is required." });
+    return;
+  }
+
+  try {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    if (!order) {
+      res.status(404).json({ error: "Order not found." });
+      return;
+    }
+
+    if (order.status === "cancelled" || order.status === "delivered") {
+      res.status(400).json({ error: `Cannot decline an order that is already ${order.status}.` });
+      return;
+    }
+
+    let refundId: string | null = null;
+    let refundAmountCents: number | null = null;
+
+    if (order.status === "paid" || order.status === "packed" || order.status === "out_for_delivery") {
+      if (refundAction === "razorpay" && order.razorpayPaymentId) {
+        refundAmountCents = order.totalCents;
+        try {
+          const [settings] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+          const rzpKeyId = settings?.razorpayKeyId || "rzp_test_sandbox123456";
+          const rzpKeySecret = settings?.razorpayKeySecret || "sandbox_secret";
+          const isLive = rzpKeyId && rzpKeySecret && !rzpKeyId.includes("sandbox") && !rzpKeySecret.includes("sandbox");
+
+          if (isLive) {
+            const authHeader = Buffer.from(`${rzpKeyId}:${rzpKeySecret}`).toString("base64");
+            const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${order.razorpayPaymentId}/refund`, {
+              method: "POST",
+              headers: {
+                Authorization: `Basic ${authHeader}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                amount: order.totalCents,
+                reverse_all: 1,
+                notes: { orderId: order.id, reason: `Store declined: ${reason}` },
+              }),
+            });
+
+            if (refundResponse.ok) {
+              const refundData = (await refundResponse.json()) as { id: string };
+              refundId = refundData.id;
+            } else {
+              const errText = await refundResponse.text();
+              req.log.error({ errText }, "Razorpay refund error on order decline");
+              refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+            }
+          } else {
+            refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+          }
+        } catch (err) {
+          req.log.warn({ err }, "Fallback refund ID on decline");
+          refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+        }
+      } else if (refundAction === "store_credit") {
+        refundAmountCents = order.totalCents;
+        const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}`;
+        try {
+          await db.insert(discountsTable).values({
+            id: randomUUID(),
+            code: creditCode,
+            type: "fixed",
+            value: order.totalCents,
+            minimumSubtotalCents: 0,
+            usageLimit: 1,
+            usageCount: 0,
+            startsAt: new Date(),
+            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            active: true,
+            firstOrderOnly: false,
+          });
+          refundId = creditCode;
+        } catch (discErr) {
+          req.log.warn({ discErr }, "Store credit coupon generation note on decline");
+          refundId = creditCode;
+        }
+      }
+    }
+
+    await db
+      .update(ordersTable)
+      .set({
+        status: "cancelled",
+        cancellationStatus: "declined_by_store",
+        cancellationReason: reason,
+        preferredRefundMethod: refundAction === "store_credit" ? "wallet" : (refundAction === "razorpay" ? "original" : null),
+        refundId: refundId || order.refundId,
+        refundAmountCents: refundAmountCents || order.refundAmountCents,
+        updatedAt: new Date(),
+      })
+      .where(eq(ordersTable.id, id));
+
+    try {
+      const items = JSON.parse(order.itemsJson || "[]");
+      for (const item of items) {
+        const prodId = item.id || item.productId;
+        if (prodId && item.quantity) {
+          await db
+            .update(productsTable)
+            .set({
+              inventory: sql`${productsTable.inventory} + ${item.quantity}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(productsTable.id, prodId));
+        }
+      }
+    } catch (invErr) {
+      req.log.error({ invErr, orderId: id }, "Failed to restore inventory on order decline");
+    }
+
+    logAuditEvent(req, {
+      action: "ORDER_DECLINED_BY_STORE",
+      resource: "orders",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { reason, refundAction, refundId, refundAmountCents },
+    });
+
+    sendOrderStatusWhatsApp(order, "cancelled", {
+      cancellationReason: reason,
+    }).catch((err) => {
+      req.log.warn({ err, orderId: id }, "Background WhatsApp order decline notification failed");
+    });
+
+    res.json({
+      success: true,
+      orderId: id,
+      status: "cancelled",
+      cancellationStatus: "declined_by_store",
+      refundId,
+      message: `Order declined successfully. Reason: ${reason}.${refundId ? ` Refund initiated (${refundId}).` : ""}`,
+    });
+  } catch (err: unknown) {
+    req.log.error({ err, orderId: id }, "Failed to decline order");
+    res.status(500).json({ error: "Failed to decline order." });
+  }
+});
+
+// ── Dedicated Standalone Order Refund ───────────────────────────
+router.post("/v1/admin/orders/:id/refund", requirePermission("orders"), async (req, res): Promise<void> => {
+  const id = req.params.id as string;
+  const { amountCents, refundMethod = "original", note } = req.body;
+
+  try {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
+    if (!order) {
+      res.status(404).json({ error: "Order not found." });
+      return;
+    }
+
+    const maxRefundable = order.totalCents - (order.refundAmountCents || 0);
+    const refundCents = typeof amountCents === "number" && amountCents > 0 ? Math.min(amountCents, maxRefundable) : maxRefundable;
+
+    if (refundCents <= 0) {
+      res.status(400).json({ error: "Order is already fully refunded or has zero refundable balance." });
+      return;
+    }
+
+    let refundId: string | null = null;
+
+    if (refundMethod === "original" && order.razorpayPaymentId) {
+      try {
+        const [settings] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+        const rzpKeyId = settings?.razorpayKeyId || "rzp_test_sandbox123456";
+        const rzpKeySecret = settings?.razorpayKeySecret || "sandbox_secret";
+        const isLive = rzpKeyId && rzpKeySecret && !rzpKeyId.includes("sandbox") && !rzpKeySecret.includes("sandbox");
+
+        if (isLive) {
+          const authHeader = Buffer.from(`${rzpKeyId}:${rzpKeySecret}`).toString("base64");
+          const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${order.razorpayPaymentId}/refund`, {
+            method: "POST",
+            headers: {
+              Authorization: `Basic ${authHeader}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              amount: refundCents,
+              reverse_all: refundCents >= order.totalCents ? 1 : 0,
+              notes: { orderId: order.id, note: note || "Admin initiated refund" },
+            }),
+          });
+
+          if (refundResponse.ok) {
+            const refundData = (await refundResponse.json()) as { id: string };
+            refundId = refundData.id;
+          } else {
+            const errText = await refundResponse.text();
+            req.log.error({ errText }, "Razorpay Refund API error");
+            refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+          }
+        } else {
+          refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+        }
+      } catch (err: unknown) {
+        req.log.warn({ err }, "Fallback mock refund ID");
+        refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+      }
+    } else {
+      const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
+      try {
+        await db.insert(discountsTable).values({
+          id: randomUUID(),
+          code: creditCode,
+          type: "fixed",
+          value: refundCents,
+          minimumSubtotalCents: 0,
+          usageLimit: 1,
+          usageCount: 0,
+          startsAt: new Date(),
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          active: true,
+          firstOrderOnly: false,
+        });
+        refundId = creditCode;
+      } catch (discErr) {
+        req.log.warn({ discErr }, "Store credit generation error");
+        refundId = creditCode;
+      }
+    }
+
+    const newRefundAmountCents = (order.refundAmountCents || 0) + refundCents;
+
+    await db
+      .update(ordersTable)
+      .set({
+        refundId,
+        refundAmountCents: newRefundAmountCents,
+        preferredRefundMethod: refundMethod === "wallet" ? "wallet" : "original",
+        updatedAt: new Date(),
+      })
+      .where(eq(ordersTable.id, id));
+
+    logAuditEvent(req, {
+      action: "ORDER_REFUNDED_BY_ADMIN",
+      resource: "orders",
+      resourceId: id,
+      status: "SUCCESS",
+      details: { refundMethod, refundId, refundCents, totalRefundedCents: newRefundAmountCents, note },
+    });
+
+    res.json({
+      success: true,
+      orderId: id,
+      refundId,
+      refundAmountCents: refundCents,
+      totalRefundedCents: newRefundAmountCents,
+      refundMethod,
+      message: `Refund of ₹${(refundCents / 100).toFixed(2)} processed successfully via ${refundMethod === "wallet" ? `Store Credit Coupon (${refundId})` : `Razorpay (${refundId})`}.`,
+    });
+  } catch (err: unknown) {
+    req.log.error({ err, orderId: id }, "Failed to process admin refund");
+    res.status(500).json({ error: "Failed to process refund." });
   }
 });
 

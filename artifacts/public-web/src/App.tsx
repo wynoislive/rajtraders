@@ -100,7 +100,7 @@ export default function App() {
     supportPhone: '',
     whatsappNumber: '',
     googleMapsUrl: 'https://www.google.com/maps/place/Raj+Traders/@23.3644543,81.0442869,21z/data=!4m12!1m5!3m4!2zMjPCsDIxJzUxLjUiTiA4McKwMDInMzguOSJF!8m2!3d23.3643056!4d81.0441389!3m5!1s0x3986c58bb0edcb51:0x49e2a8728e29e896!8m2!3d23.3644551!4d81.0442634!16s%2Fg%2F11t29m5jmv',
-    allowedPincodesJson: '["484551", "484661", "484660"]',
+    allowedPincodesJson: '["484551"]',
     availableInLocation: 'BIRSINGPUR PALI',
     aboutUsText: 'Premium cakes, party decorations & artisanal local delights.',
     isStoreOpen: true,
@@ -144,9 +144,9 @@ export default function App() {
       if (Array.isArray(shopSettings.allowedPincodesJson)) {
         return shopSettings.allowedPincodesJson;
       }
-      return ['484551', '484661', '484660'];
+      return ['484551'];
     } catch {
-      return ['484551', '484661', '484660'];
+      return ['484551'];
     }
   }, [shopSettings.allowedPincodesJson]);
 

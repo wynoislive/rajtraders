@@ -27,8 +27,8 @@ export function filterOrders(orders: OrderRow[], query: OrderFilterQuery): Order
       filtered = filtered.filter((o) => o.status === "paid");
     } else if (targetStatus === "pending" || targetStatus === "created") {
       filtered = filtered.filter((o) => o.status === "created");
-    } else if (targetStatus === "cancelled" || targetStatus === "cancel" || targetStatus === "failed") {
-      filtered = filtered.filter((o) => o.status === "cancelled" || o.status === "failed");
+    } else if (targetStatus === "cancelled" || targetStatus === "cancel" || targetStatus === "failed" || targetStatus === "declined") {
+      filtered = filtered.filter((o) => o.status === "cancelled" || o.status === "failed" || o.cancellationStatus === "declined_by_store");
     } else {
       filtered = filtered.filter((o) => o.status === targetStatus);
     }

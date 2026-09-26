@@ -67,7 +67,7 @@ export const shopSettingsTable = pgTable("shop_settings", {
   panNumber: text("pan_number").default("AAAAA0000A"),
   stateCode: text("state_code").default("23"),
   stateName: text("state_name").default("Madhya Pradesh"),
-  allowedPincodesJson: text("allowed_pincodes_json").default("[\"484551\",\"484661\",\"484660\"]"),
+  allowedPincodesJson: text("allowed_pincodes_json").default("[\"484551\"]"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

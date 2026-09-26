@@ -50,6 +50,9 @@ import {
   UserRoundPlus,
   UsersRound,
   X,
+  Ban,
+  RotateCcw,
+  ExternalLink,
 } from 'lucide-react';
 import {
   getGetAdminSummaryQueryKey,
@@ -1703,7 +1706,7 @@ function StoreSettings() {
     panNumber: 'AAAAA0000A',
     stateCode: '23',
     stateName: 'Madhya Pradesh',
-    allowedPincodesJson: '["484551", "484661", "484660"]',
+    allowedPincodesJson: '["484551"]',
     whatsappGatewayUrl: '',
     whatsappApiKey: '',
     whatsappSessionId: 'default',
@@ -1782,7 +1785,7 @@ function StoreSettings() {
           panNumber: data.panNumber ?? 'AAAAA0000A',
           stateCode: data.stateCode ?? '23',
           stateName: data.stateName ?? 'Madhya Pradesh',
-          allowedPincodesJson: data.allowedPincodesJson ? (typeof data.allowedPincodesJson === 'string' ? data.allowedPincodesJson : JSON.stringify(data.allowedPincodesJson)) : '["484551", "484661", "484660"]',
+          allowedPincodesJson: data.allowedPincodesJson ? (typeof data.allowedPincodesJson === 'string' ? data.allowedPincodesJson : JSON.stringify(data.allowedPincodesJson)) : '["484551"]',
           whatsappGatewayUrl: data.whatsappGatewayUrl ?? '',
           whatsappApiKey: data.whatsappApiKey ?? '',
           whatsappSessionId: data.whatsappSessionId ?? 'default',
@@ -2061,10 +2064,10 @@ function StoreSettings() {
                 <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Serviceable PIN Codes (Pali Local Fleet)</label>
                 <input
                   type="text"
-                  value={typeof form.allowedPincodesJson === 'string' ? form.allowedPincodesJson : JSON.stringify(form.allowedPincodesJson || ["484661", "484660"])}
+                  value={typeof form.allowedPincodesJson === 'string' ? form.allowedPincodesJson : JSON.stringify(form.allowedPincodesJson || ["484551"])}
                   onChange={(e) => setForm({ ...form, allowedPincodesJson: e.target.value })}
                   className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono font-bold"
-                  placeholder='["484661", "484660"]'
+                  placeholder='["484551"]'
                 />
                 <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Customers entering PINs outside this list are prevented from completing checkout.</p>
               </div>
@@ -2665,6 +2668,19 @@ function Orders() {
   const [riderPhone, setRiderPhone] = useState('+91 98261 23456');
   const [dispatchSlot, setDispatchSlot] = useState('Morning Slot (9 AM - 1 PM)');
   const [trackingUrl, setTrackingUrl] = useState('');
+
+  // Decline Order Modal State
+  const [declineModalOrder, setDeclineModalOrder] = useState<any | null>(null);
+  const [declineReason, setDeclineReason] = useState('Store temporarily unavailable for delivery');
+  const [declineCustomReason, setDeclineCustomReason] = useState('');
+  const [declineRefundAction, setDeclineRefundAction] = useState<'razorpay' | 'store_credit' | 'none'>('razorpay');
+
+  // Standalone Refund Modal State
+  const [refundModalOrder, setRefundModalOrder] = useState<any | null>(null);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundMethod, setRefundMethod] = useState<'original' | 'wallet'>('original');
+  const [refundNote, setRefundNote] = useState('');
+
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [cancellationNotice, setCancellationNotice] = useState<{ id: string; message: string; success: boolean } | null>(null);
 
@@ -2672,7 +2688,11 @@ function Orders() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter !== 'all' && statusFilter !== 'cancellation_requests') params.append('status', statusFilter);
+      if (statusFilter !== 'all' && statusFilter !== 'cancellation_requests' && statusFilter !== 'declined') {
+        params.append('status', statusFilter);
+      } else if (statusFilter === 'declined') {
+        params.append('status', 'declined');
+      }
       if (durationFilter !== 'all') params.append('duration', durationFilter);
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
@@ -2740,6 +2760,82 @@ function Orders() {
       }
     } catch {
       alert('Network error while updating status');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDeclineOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!declineModalOrder) return;
+    const reasonText = (declineReason === 'custom' ? declineCustomReason : declineReason).trim();
+    if (!reasonText) {
+      alert('Please specify a decline reason.');
+      return;
+    }
+    setActionLoadingId(declineModalOrder.id);
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/admin/orders/${declineModalOrder.id}/decline`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          reason: reasonText,
+          refundAction: declineRefundAction,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCancellationNotice({
+          id: declineModalOrder.id,
+          message: data.message || `Order declined successfully. Reason: ${reasonText}`,
+          success: true,
+        });
+        setDeclineModalOrder(null);
+        fetchOrdersData();
+      } else {
+        alert(data.error || 'Failed to decline order.');
+      }
+    } catch {
+      alert('Network error while declining order.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleProcessRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refundModalOrder) return;
+    const amtNum = parseFloat(refundAmount);
+    if (isNaN(amtNum) || amtNum <= 0) {
+      alert('Please enter a valid refund amount in ₹.');
+      return;
+    }
+    const amtCents = Math.round(amtNum * 100);
+    setActionLoadingId(refundModalOrder.id);
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/admin/orders/${refundModalOrder.id}/refund`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          amountCents: amtCents,
+          refundMethod,
+          note: refundNote.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCancellationNotice({
+          id: refundModalOrder.id,
+          message: data.message || `Refund processed successfully!`,
+          success: true,
+        });
+        setRefundModalOrder(null);
+        fetchOrdersData();
+      } else {
+        alert(data.error || 'Failed to process refund.');
+      }
+    } catch {
+      alert('Network error while processing refund.');
     } finally {
       setActionLoadingId(null);
     }
@@ -2819,6 +2915,9 @@ function Orders() {
     if (statusFilter === 'cancellation_requests') {
       return orders.filter(o => o.cancellationStatus === 'requested');
     }
+    if (statusFilter === 'declined') {
+      return orders.filter(o => o.status === 'cancelled' || o.cancellationStatus === 'declined_by_store');
+    }
     return orders;
   }, [orders, statusFilter]);
 
@@ -2850,6 +2949,7 @@ function Orders() {
           { id: 'out_for_delivery', label: 'Out for Delivery' },
           { id: 'delivered', label: 'Delivered' },
           { id: 'cancellation_requests', label: 'Cancellation Requests' },
+          { id: 'declined', label: 'Declined / Cancelled' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -2861,12 +2961,12 @@ function Orders() {
         ))}
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {displayedOrders.length === 0 ? (
           <EmptyState icon={Receipt} title="No orders match filters" detail="Adjust your status tab or date range to inspect historical orders." />
         ) : (
           displayedOrders.map((order) => (
-            <div key={order.id} className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-4 sm:p-5 space-y-3">
+            <div key={order.id} className="rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] p-4 sm:p-5 space-y-4 shadow-sm hover:border-[hsl(var(--primary)/.3)] transition">
               {/* Order Row Header */}
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--border))] pb-3 text-xs">
                 <div>
@@ -2877,23 +2977,122 @@ function Orders() {
                 <div className="flex items-center gap-2">
                   <span className="font-extrabold text-sm text-[hsl(var(--primary))]">{money(order.totalCents)}</span>
                   <StatusPill tone={order.status === 'delivered' ? 'green' : order.status === 'out_for_delivery' ? 'teal' : order.status === 'packed' ? 'yellow' : order.status === 'paid' ? 'green' : 'coral'}>
-                    {order.status === 'out_for_delivery' ? 'Out for Delivery' : order.status}
+                    {order.cancellationStatus === 'declined_by_store' ? 'Declined by Store' : (order.status === 'out_for_delivery' ? 'Out for Delivery' : order.status)}
                   </StatusPill>
                 </div>
               </div>
 
-              {/* Customer & Address Details */}
-              <div className="grid sm:grid-cols-2 gap-2 text-xs">
-                <div>
-                  <p className="font-bold">{order.customerName || 'Customer'} · <span className="font-mono text-[hsl(var(--muted-foreground))]">{order.customerMobile || order.customerEmail || 'No contact'}</span></p>
-                  <p className="text-[hsl(var(--muted-foreground))] mt-0.5">{order.shippingAddress || 'Store Pickup'}</p>
+              {/* Customer Contact & Delivery Location (Swiggy / Blinkit Style) */}
+              <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] p-3.5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[hsl(var(--border))] pb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-9 rounded-full bg-[hsl(var(--primary)/.15)] text-[hsl(var(--primary))] flex items-center justify-center font-bold text-sm shadow-inner">
+                      {(order.customerName || 'C').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-extrabold text-xs text-[hsl(var(--foreground))] flex items-center gap-1.5">
+                        {order.customerName || 'Customer'}
+                        {order.userId && <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">Registered</span>}
+                      </p>
+                      <p className="text-[10px] text-[hsl(var(--muted-foreground))] font-mono">Customer ID: {order.userId ? order.userId.slice(0, 10) : 'Guest Checkout'}</p>
+                    </div>
+                  </div>
+
+                  {/* Quick Action Contact Links */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {order.customerMobile && (
+                      <>
+                        <a
+                          href={`tel:${order.customerMobile}`}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold hover:bg-emerald-100 transition shadow-sm"
+                          title="Call Customer Directly"
+                        >
+                          <Phone size={12} className="text-emerald-700" />
+                          <span>Call: {order.customerMobile}</span>
+                        </a>
+                        <a
+                          href={`https://wa.me/91${order.customerMobile.replace(/\D/g, '').slice(-10)}?text=${encodeURIComponent(`Hello ${order.customerName || 'Customer'}, this is Raj Traders regarding your Order #${order.formattedOrderId || order.id.slice(0, 8)}.`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 text-green-800 border border-green-200 text-[11px] font-bold hover:bg-green-100 transition shadow-sm"
+                          title="Chat on WhatsApp"
+                        >
+                          <MessageSquare size={12} className="text-green-700" />
+                          <span>WhatsApp</span>
+                        </a>
+                      </>
+                    )}
+                    {order.customerEmail && (
+                      <a
+                        href={`mailto:${order.customerEmail}?subject=${encodeURIComponent(`Raj Traders - Order #${order.formattedOrderId || order.id.slice(0, 8)}`)}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 border border-sky-200 text-[11px] font-bold hover:bg-sky-100 transition shadow-sm"
+                        title="Send Email"
+                      >
+                        <Mail size={12} className="text-sky-700" />
+                        <span>Email</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* Delivery Address & GPS Coordinates */}
+                <div className="flex flex-wrap items-start justify-between gap-3 text-xs">
+                  <div className="flex items-start gap-2 flex-1 min-w-[220px]">
+                    <MapPin size={15} className="text-[hsl(var(--primary))] shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-[hsl(var(--foreground))]">{order.shippingAddress || 'Store Pickup (Birsingpur Pali)'}</p>
+                      {(order.deliveryLatitude && order.deliveryLongitude) && (
+                        <p className="text-[10px] text-[hsl(var(--muted-foreground))] font-mono mt-0.5">
+                          GPS: {Number(order.deliveryLatitude).toFixed(5)}, {Number(order.deliveryLongitude).toFixed(5)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {order.deliveryDistanceKm != null && (
+                      <span className="px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] text-[10px] font-mono font-bold border border-[hsl(var(--border))]">
+                        🚗 {Number(order.deliveryDistanceKm).toFixed(1)} km from shop
+                      </span>
+                    )}
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        order.deliveryLatitude && order.deliveryLongitude
+                          ? `${order.deliveryLatitude},${order.deliveryLongitude}`
+                          : (order.shippingAddress || 'Raj Traders Pali Birsinghpur')
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[hsl(var(--card))] text-[hsl(var(--foreground))] border border-[hsl(var(--border))] text-[11px] font-bold hover:bg-[hsl(var(--muted))] transition shadow-sm"
+                    >
+                      <Navigation size={12} className="text-[hsl(var(--primary))]" />
+                      <span>View on Google Maps</span>
+                      <ExternalLink size={10} className="text-[hsl(var(--muted-foreground))]" />
+                    </a>
+                  </div>
                 </div>
 
                 {/* Rider details if assigned */}
                 {order.riderName && (
-                  <div className="bg-[hsl(var(--muted)/.5)] p-2.5 rounded-xl text-xs space-y-1">
-                    <p className="font-bold flex items-center gap-1.5"><Truck size={13} className="text-[hsl(var(--primary))]" /> Rider: {order.riderName} ({order.riderPhone})</p>
+                  <div className="bg-[hsl(var(--card))] p-2.5 rounded-xl border border-[hsl(var(--border))] text-xs space-y-1">
+                    <p className="font-bold flex items-center gap-1.5"><Truck size={13} className="text-[hsl(var(--primary))]" /> Fleet Rider: {order.riderName} ({order.riderPhone})</p>
                     <p className="text-[11px] text-[hsl(var(--muted-foreground))]">Slot: {order.dispatchSlot || 'Pali Fleet'}</p>
+                  </div>
+                )}
+
+                {/* Decline reason notice if declined */}
+                {order.cancellationReason && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 space-y-0.5">
+                    <p className="font-bold flex items-center gap-1"><Ban size={12} /> Status: {order.cancellationStatus === 'declined_by_store' ? 'Declined by Store' : 'Cancelled'}</p>
+                    <p className="text-[11px] text-rose-800">Reason: <em>"{order.cancellationReason}"</em></p>
+                  </div>
+                )}
+
+                {/* Refund Status Pill if already refunded */}
+                {order.refundId && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2 text-xs text-emerald-900 font-semibold flex items-center justify-between">
+                    <span>💰 Refund Recorded: <strong>{money(order.refundAmountCents || order.totalCents)}</strong> via {order.preferredRefundMethod === 'wallet' ? 'Store Credit Coupon' : 'Razorpay'}</span>
+                    <code className="text-[10px] font-mono bg-emerald-100 px-1.5 py-0.5 rounded">{order.refundId}</code>
                   </div>
                 )}
               </div>
@@ -2937,9 +3136,42 @@ function Orders() {
                   >
                     <Download size={13} /> Tax Invoice PDF
                   </Button>
+
+                  {/* Dedicated Standalone Refund Button */}
+                  {((order.status === 'paid' || order.status === 'packed' || order.status === 'out_for_delivery' || order.status === 'delivered' || order.status === 'cancelled') && ((order.refundAmountCents || 0) < order.totalCents)) && (
+                    <Button
+                      variant="outline"
+                      className="!h-8 !px-3 text-xs text-amber-800 border-amber-300 hover:bg-amber-50"
+                      onClick={() => {
+                        setRefundModalOrder(order);
+                        const remainingCents = order.totalCents - (order.refundAmountCents || 0);
+                        setRefundAmount((remainingCents / 100).toFixed(2));
+                        setRefundMethod(order.razorpayPaymentId ? 'original' : 'wallet');
+                        setRefundNote('');
+                      }}
+                    >
+                      <RotateCcw size={13} /> Process Refund
+                    </Button>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Decline Order Button for active or pending orders */}
+                  {(order.status === 'paid' || order.status === 'packed' || order.status === 'created') && (
+                    <Button
+                      variant="danger"
+                      className="!h-8 !px-3 text-xs"
+                      onClick={() => {
+                        setDeclineModalOrder(order);
+                        setDeclineReason('Store temporarily unavailable for delivery');
+                        setDeclineCustomReason('');
+                        setDeclineRefundAction(order.razorpayPaymentId ? 'razorpay' : 'none');
+                      }}
+                    >
+                      <Ban size={13} /> Decline Order
+                    </Button>
+                  )}
+
                   {order.status === 'paid' && (
                     <>
                       <Button
@@ -3091,6 +3323,189 @@ function Orders() {
           </div>
         </div>
       )}
+
+      {/* Decline Order Modal */}
+      {declineModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-[hsl(var(--card))] border border-[hsl(var(--card-border))] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[hsl(var(--border))] pb-3">
+              <div className="flex items-center gap-2 text-rose-600">
+                <Ban size={18} />
+                <h3 className="text-base font-extrabold text-[hsl(var(--foreground))]">Decline Order</h3>
+              </div>
+              <button onClick={() => setDeclineModalOrder(null)} className="p-1.5 rounded-lg hover:bg-[hsl(var(--muted))]"><X size={16} /></button>
+            </div>
+
+            <div className="text-xs text-[hsl(var(--muted-foreground))] space-y-1">
+              <p>Order: <strong className="text-[hsl(var(--foreground))] font-mono">{declineModalOrder.formattedOrderId || declineModalOrder.id}</strong> ({money(declineModalOrder.totalCents)})</p>
+              <p>Customer: <strong>{declineModalOrder.customerName || 'Customer'}</strong> ({declineModalOrder.customerMobile || declineModalOrder.customerEmail})</p>
+            </div>
+
+            <form onSubmit={handleDeclineOrder} className="space-y-3.5">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Decline Reason *</label>
+                <select
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                >
+                  <option value="Store temporarily unavailable for delivery">Store temporarily unavailable for delivery</option>
+                  <option value="Product or ingredients currently out of stock">Product or ingredients currently out of stock</option>
+                  <option value="Delivery address is beyond serviceable radius">Delivery address is beyond serviceable radius</option>
+                  <option value="Kitchen / Shop at maximum capacity">Kitchen / Shop at maximum capacity</option>
+                  <option value="custom">Other / Custom reason...</option>
+                </select>
+              </div>
+
+              {declineReason === 'custom' && (
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Specify Reason *</label>
+                  <textarea
+                    required
+                    rows={2}
+                    value={declineCustomReason}
+                    onChange={(e) => setDeclineCustomReason(e.target.value)}
+                    placeholder="Explain why the store cannot fulfill this order..."
+                    className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-2.5 text-xs font-semibold"
+                  />
+                </div>
+              )}
+
+              {(declineModalOrder.status === 'paid' || declineModalOrder.status === 'packed' || declineModalOrder.status === 'out_for_delivery') && (
+                <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.4)] p-3 space-y-2 text-xs">
+                  <label className="font-bold text-[hsl(var(--foreground))] block">Refund Payment Action</label>
+                  <div className="space-y-1.5">
+                    {declineModalOrder.razorpayPaymentId && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="declineRefund"
+                          value="razorpay"
+                          checked={declineRefundAction === 'razorpay'}
+                          onChange={() => setDeclineRefundAction('razorpay')}
+                          className="accent-[hsl(var(--primary))]"
+                        />
+                        <span>Refund <strong>{money(declineModalOrder.totalCents)}</strong> back to original payment source (Razorpay)</span>
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="declineRefund"
+                        value="store_credit"
+                        checked={declineRefundAction === 'store_credit'}
+                        onChange={() => setDeclineRefundAction('store_credit')}
+                        className="accent-[hsl(var(--primary))]"
+                      />
+                      <span>Generate Instant Store Credit Coupon for <strong>{money(declineModalOrder.totalCents)}</strong></span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="declineRefund"
+                        value="none"
+                        checked={declineRefundAction === 'none'}
+                        onChange={() => setDeclineRefundAction('none')}
+                        className="accent-[hsl(var(--primary))]"
+                      />
+                      <span>Decline only (do not process refund immediately)</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" type="button" onClick={() => setDeclineModalOrder(null)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button variant="danger" type="submit" disabled={actionLoadingId === declineModalOrder.id} className="flex-1">
+                  {actionLoadingId === declineModalOrder.id ? 'Declining...' : 'Confirm Decline'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Standalone Dedicated Refund Modal */}
+      {refundModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-[hsl(var(--card))] border border-[hsl(var(--card-border))] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[hsl(var(--border))] pb-3">
+              <div className="flex items-center gap-2 text-amber-600">
+                <RotateCcw size={18} />
+                <h3 className="text-base font-extrabold text-[hsl(var(--foreground))]">Process Order Refund</h3>
+              </div>
+              <button onClick={() => setRefundModalOrder(null)} className="p-1.5 rounded-lg hover:bg-[hsl(var(--muted))]"><X size={16} /></button>
+            </div>
+
+            <div className="text-xs text-[hsl(var(--muted-foreground))] space-y-1 bg-[hsl(var(--muted)/.4)] p-3 rounded-xl border border-[hsl(var(--border))]">
+              <div className="flex justify-between">
+                <span>Order Total:</span>
+                <strong className="text-[hsl(var(--foreground))]">{money(refundModalOrder.totalCents)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Already Refunded:</span>
+                <strong className="text-emerald-700">{money(refundModalOrder.refundAmountCents || 0)}</strong>
+              </div>
+              <div className="flex justify-between pt-1 border-t border-[hsl(var(--border))] font-bold">
+                <span>Max Refundable:</span>
+                <span className="text-[hsl(var(--primary))]">{money(refundModalOrder.totalCents - (refundModalOrder.refundAmountCents || 0))}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleProcessRefund} className="space-y-3.5">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Refund Amount (₹) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  max={(refundModalOrder.totalCents - (refundModalOrder.refundAmountCents || 0)) / 100}
+                  required
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Refund Destination *</label>
+                <select
+                  value={refundMethod}
+                  onChange={(e) => setRefundMethod(e.target.value as 'original' | 'wallet')}
+                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                >
+                  {refundModalOrder.razorpayPaymentId && (
+                    <option value="original">Original Payment Source via Razorpay ({refundModalOrder.razorpayPaymentId})</option>
+                  )}
+                  <option value="wallet">Generate Instant Store Credit Coupon (1-year validity)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Admin Note / Reason</label>
+                <input
+                  type="text"
+                  value={refundNote}
+                  onChange={(e) => setRefundNote(e.target.value)}
+                  placeholder="e.g. Item unavailable, store closed, customer compensation"
+                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" type="button" onClick={() => setRefundModalOrder(null)} className="flex-1">
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit" disabled={actionLoadingId === refundModalOrder.id} className="flex-1 bg-amber-600 hover:bg-amber-700">
+                  {actionLoadingId === refundModalOrder.id ? 'Refunding...' : 'Confirm & Execute Refund'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AdminGate>
   );
 }
@@ -3161,17 +3576,52 @@ function Discounts() {
     setDialog('edit');
   };
 
-  const handleToggle = (id: string) => {
+  const handleToggle = async (id: string) => {
+    const item = data.find((d) => d.id === id);
+    if (!item) return;
+    const newActive = !item.active;
     setData((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, active: !item.active } : item)),
+      prev.map((d) => (d.id === id ? { ...d, active: newActive } : d)),
     );
-    setNotice('Promotion status updated!');
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/admin/discounts/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ active: newActive }),
+      });
+      if (res.ok) {
+        setNotice(`Promotion status updated to ${newActive ? 'Active' : 'Disabled'}!`);
+      } else {
+        setData((prev) =>
+          prev.map((d) => (d.id === id ? { ...d, active: !newActive } : d)),
+        );
+        alert('Failed to update promotion status on server.');
+      }
+    } catch {
+      setData((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, active: !newActive } : d)),
+      );
+      alert('Network error updating promotion status.');
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setData((prev) => prev.filter((item) => item.id !== id));
-    setDeleteTarget(null);
-    setNotice('Promotion code deleted successfully!');
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(getApiUrl(`/api/v1/admin/discounts/${id}`), {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setData((prev) => prev.filter((item) => item.id !== id));
+        setNotice('Promotion code deleted successfully!');
+      } else {
+        alert('Failed to delete promotion code on server.');
+      }
+    } catch {
+      alert('Network error while deleting promotion code.');
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -3183,6 +3633,7 @@ function Discounts() {
       code: form.code.trim().toUpperCase(),
       type: form.type,
       value: Number(form.value) || 0,
+      minimumSubtotalCents: Math.round((Number(form.minSpend) || 0) * 100),
       minSpendCents: Math.round((Number(form.minSpend) || 0) * 100),
       active: form.active,
       usageCount: 0,
@@ -3190,14 +3641,18 @@ function Discounts() {
     };
 
     try {
-      await fetch(getApiUrl('/api/v1/admin/discounts'), {
-        method: 'POST',
+      const url = editingId ? getApiUrl(`/api/v1/admin/discounts/${editingId}`) : getApiUrl('/api/v1/admin/discounts');
+      const method = editingId ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(payload),
       });
-    } catch (err) {
-      console.error(err);
-    } finally {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Failed to save discount code.');
+        return;
+      }
       if (editingId) {
         setData((prev) => prev.map((item) => (item.id === editingId ? { ...item, ...payload } : item)));
         setNotice(`Promotion code "${payload.code}" updated!`);
@@ -3206,6 +3661,8 @@ function Discounts() {
         setNotice(`New promotion code "${payload.code}" created & live!`);
       }
       setDialog(null);
+    } catch {
+      alert('Network error while saving promotion code.');
     }
   };
 
@@ -3411,41 +3868,265 @@ function Discounts() {
 }
 
 function Registrations() {
-  const [data, setData] = useState<any[]>([]);
+  const [policies, setPolicies] = useState<any[]>([]);
+  const [claims, setClaims] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [editingPolicy, setEditingPolicy] = useState<any | null>(null);
+  const [policyForm, setPolicyForm] = useState({ name: '', offerCode: '', windowDays: 30, active: true });
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const fetchPolicies = () => {
+  const fetchRegistrationsData = async () => {
     setLoading(true);
     setError(false);
-    fetch(getApiUrl('/api/v1/admin/registrations'), { headers: getAuthHeaders() })
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((items) => setData(Array.isArray(items) ? items : []))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+    try {
+      const res = await fetch(getApiUrl('/api/v1/admin/registrations'), { headers: getAuthHeaders() });
+      if (res.ok) {
+        const json = await res.json();
+        setPolicies(Array.isArray(json.policies) ? json.policies : (Array.isArray(json) ? json : []));
+        setClaims(Array.isArray(json.claims) ? json.claims : []);
+      } else {
+        setError(true);
+      }
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchPolicies();
+    fetchRegistrationsData();
   }, []);
 
-  const defaultPolicies = [
-    { id: '1', name: 'First Order Welcome Offer', offerCode: 'WELCOME10', active: true },
-    { id: '2', name: 'Festive Season Promotion', offerCode: 'FESTIVE20', active: true },
-  ];
-  const list = data.length > 0 ? data : defaultPolicies;
+  const handleTogglePolicy = async (policy: any) => {
+    const updatedActive = !policy.active;
+    setPolicies(prev => prev.map(p => p.id === policy.id ? { ...p, active: updatedActive } : p));
+    try {
+      const res = await fetch(getApiUrl('/api/v1/admin/registrations'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ active: updatedActive }),
+      });
+      if (res.ok) {
+        setNotice(`Welcome reward policy "${policy.name}" is now ${updatedActive ? 'Active' : 'Disabled'}.`);
+      } else {
+        setPolicies(prev => prev.map(p => p.id === policy.id ? { ...p, active: !updatedActive } : p));
+        alert('Failed to update policy status.');
+      }
+    } catch {
+      setPolicies(prev => prev.map(p => p.id === policy.id ? { ...p, active: !updatedActive } : p));
+      alert('Network error updating policy.');
+    }
+  };
+
+  const handleSavePolicy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPolicy) return;
+    try {
+      const res = await fetch(getApiUrl('/api/v1/admin/registrations'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          offerCode: policyForm.offerCode.trim().toUpperCase(),
+          windowDays: Number(policyForm.windowDays) || 30,
+          active: policyForm.active,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setPolicies(prev => prev.map(p => p.id === editingPolicy.id ? { ...p, ...updated } : p));
+        setNotice(`Policy updated with code "${policyForm.offerCode.toUpperCase()}".`);
+        setEditingPolicy(null);
+      } else {
+        alert('Failed to update policy configuration.');
+      }
+    } catch {
+      alert('Network error while saving policy.');
+    }
+  };
 
   return (
-    <AdminGate isLoading={loading && data.length === 0} isError={error} retry={fetchPolicies}>
-      <PageIntro eyebrow="Growth" title="Welcome Policies" detail="Configure first-order customer reward rules." />
-      <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] divide-y divide-[hsl(var(--border))]">
-        {list.map((p) => (
-          <div key={p.id} className="p-4 flex items-center justify-between">
-            <span className="font-bold text-sm">{p.name}</span>
-            <StatusPill tone={p.active ? 'green' : 'slate'}>{p.offerCode}</StatusPill>
-          </div>
-        ))}
+    <AdminGate isLoading={loading && policies.length === 0} isError={error} retry={fetchRegistrationsData}>
+      <PageIntro
+        eyebrow="Growth & Retention"
+        title="Customer Sign-up Rewards & Claims"
+        detail="Manage automated registration coupon rewards, validity windows, and audit newly registered customer redemptions."
+        action={
+          <Button variant="outline" onClick={fetchRegistrationsData}>
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh Ledger
+          </Button>
+        }
+      />
+
+      {notice && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-[hsl(148_37%_43%/.25)] bg-[hsl(148_37%_43%/.08)] px-4 py-3 text-sm font-bold text-[hsl(148_37%_32%)]">
+          <CheckCircle2 size={16} />
+          {notice}
+          <button className="ml-auto" onClick={() => setNotice(null)}><X size={15} /></button>
+        </div>
+      )}
+
+      {/* Metrics */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <MetricCard label="Active Welcome Policies" value={policies.filter(p => p.active).length} detail="Live auto-apply incentives" icon={BadgePercent} tone="teal" />
+        <MetricCard label="Total Customer Claims" value={claims.length} detail="Redeemed registration promo codes" icon={UserCheck} tone="green" />
+        <MetricCard label="Default Promo Code" value={policies[0]?.offerCode || 'WELCOME10'} detail="Applied on first checkout" icon={Tag} tone="coral" />
       </div>
+
+      {/* Policies Section */}
+      <div className="mb-8 space-y-3">
+        <h3 className="text-sm font-extrabold tracking-tight uppercase text-[hsl(var(--muted-foreground))]">Active Welcome Offer Rules</h3>
+        <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))] divide-y divide-[hsl(var(--border))]">
+          {policies.length === 0 ? (
+            <div className="p-4 text-xs text-[hsl(var(--muted-foreground))]">No policies configured.</div>
+          ) : (
+            policies.map((p) => (
+              <div key={p.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-sm text-[hsl(var(--foreground))]">{p.name}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-[hsl(var(--primary)/.1)] text-[hsl(var(--primary))] font-mono font-bold text-xs">
+                      {p.offerCode}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    {p.description || 'Welcome promotion for newly registered customer accounts.'} · Valid for {p.windowDays || 30} days after sign-up
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    className="!h-8 !px-3 text-xs"
+                    onClick={() => {
+                      setEditingPolicy(p);
+                      setPolicyForm({
+                        name: p.name,
+                        offerCode: p.offerCode,
+                        windowDays: p.windowDays || 30,
+                        active: p.active !== false,
+                      });
+                    }}
+                  >
+                    <Pencil size={13} /> Edit Offer
+                  </Button>
+                  <button
+                    onClick={() => handleTogglePolicy(p)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold border transition ${
+                      p.active
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                        : 'bg-zinc-100 text-zinc-600 border-zinc-300 hover:bg-zinc-200'
+                    }`}
+                  >
+                    {p.active ? 'Active & Live' : 'Disabled'}
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Customer Claims Ledger Table */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-extrabold tracking-tight uppercase text-[hsl(var(--muted-foreground))]">Customer Registrations & Claims Ledger</h3>
+          <span className="text-xs font-mono font-bold text-[hsl(var(--muted-foreground))]">{claims.length} registered customers</span>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-[hsl(var(--card-border))] bg-[hsl(var(--card))]">
+          <div className="hidden grid-cols-[minmax(160px,1.5fr)_1fr_1fr_1fr_100px] gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/.45)] px-5 py-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))] md:grid">
+            <span>Customer ID / Mobile</span>
+            <span>Reward Code</span>
+            <span>Claim Date</span>
+            <span>Valid Until</span>
+            <span>Status</span>
+          </div>
+
+          <div className="divide-y divide-[hsl(var(--border))]">
+            {claims.length === 0 ? (
+              <div className="p-8 text-center text-xs text-[hsl(var(--muted-foreground))]">
+                No customer registration claims recorded yet. Newly registered shoppers will appear here automatically.
+              </div>
+            ) : (
+              claims.map((claim) => (
+                <div key={claim.id} className="grid grid-cols-1 md:grid-cols-[minmax(160px,1.5fr)_1fr_1fr_1fr_100px] gap-2 md:gap-4 items-center px-5 py-3.5 text-xs">
+                  <div>
+                    <p className="font-bold text-[hsl(var(--foreground))]">{claim.customerMobile || claim.userId || 'Verified Customer'}</p>
+                    <p className="text-[10px] font-mono text-[hsl(var(--muted-foreground))]">ID: {claim.userId ? claim.userId.slice(0, 12) : claim.id.slice(0, 8)}</p>
+                  </div>
+                  <div>
+                    <code className="font-mono font-bold text-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)] px-2 py-0.5 rounded">
+                      {claim.offerCode}
+                    </code>
+                  </div>
+                  <div className="text-[hsl(var(--muted-foreground))] font-mono">
+                    {claim.createdAt ? new Date(claim.createdAt).toLocaleDateString() : 'N/A'}
+                  </div>
+                  <div className="text-[hsl(var(--muted-foreground))] font-mono">
+                    {claim.expiresAt ? new Date(claim.expiresAt).toLocaleDateString() : '30 Days'}
+                  </div>
+                  <div>
+                    <StatusPill tone={claim.status === 'redeemed' ? 'teal' : (claim.status === 'expired' ? 'coral' : 'green')}>
+                      {claim.status || 'Active'}
+                    </StatusPill>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Edit Policy Dialog */}
+      {editingPolicy && (
+        <DialogFrame title="Edit Welcome Reward Policy" detail="Update the promotional code and window days granted to verified new customers." onClose={() => setEditingPolicy(null)}>
+          <form onSubmit={handleSavePolicy} className="space-y-4">
+            <div>
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Reward Offer Code *</label>
+              <input
+                type="text"
+                required
+                value={policyForm.offerCode}
+                onChange={(e) => setPolicyForm({ ...policyForm, offerCode: e.target.value.toUpperCase() })}
+                placeholder="WELCOME10"
+                className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-mono font-bold uppercase outline-none focus:border-[hsl(var(--primary))]"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Redemption Window (Days) *</label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                required
+                value={policyForm.windowDays}
+                onChange={(e) => setPolicyForm({ ...policyForm, windowDays: Number(e.target.value) || 30 })}
+                className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-bold outline-none focus:border-[hsl(var(--primary))]"
+              />
+            </div>
+
+            <div className="flex items-center justify-between border-t border-[hsl(var(--border))] pt-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={policyForm.active}
+                  onChange={(e) => setPolicyForm({ ...policyForm, active: e.target.checked })}
+                  className="size-4 rounded accent-[hsl(var(--primary))]"
+                />
+                <span className="text-xs font-bold">{policyForm.active ? 'Active & Auto-grant on sign-up' : 'Disabled'}</span>
+              </label>
+
+              <div className="flex gap-2">
+                <Button variant="outline" type="button" onClick={() => setEditingPolicy(null)}>Cancel</Button>
+                <Button variant="primary" type="submit">Save Changes</Button>
+              </div>
+            </div>
+          </form>
+        </DialogFrame>
+      )}
     </AdminGate>
   );
 }

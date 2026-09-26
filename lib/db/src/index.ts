@@ -321,7 +321,7 @@ ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS gstin_number TEXT DEFAULT '23
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS pan_number TEXT DEFAULT 'AAAAA0000A';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS state_code TEXT DEFAULT '23';
 ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS state_name TEXT DEFAULT 'Madhya Pradesh';
-ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS allowed_pincodes_json TEXT DEFAULT '["484661","484660"]';
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS allowed_pincodes_json TEXT DEFAULT '["484551"]';
 
 -- Products GST & HSN
 ALTER TABLE products ADD COLUMN IF NOT EXISTS gst_rate_percentage INTEGER NOT NULL DEFAULT 5;
