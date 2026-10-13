@@ -2679,7 +2679,10 @@ function Orders() {
   const [refundModalOrder, setRefundModalOrder] = useState<any | null>(null);
   const [refundAmount, setRefundAmount] = useState('');
   const [refundMethod, setRefundMethod] = useState<'original' | 'wallet'>('original');
+  const [refundReason, setRefundReason] = useState('Consumer Issue: Damaged / Defective quality');
   const [refundNote, setRefundNote] = useState('');
+  const [refundCancelOrder, setRefundCancelOrder] = useState(false);
+  const [refundRestockInventory, setRefundRestockInventory] = useState(true);
 
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [cancellationNotice, setCancellationNotice] = useState<{ id: string; message: string; success: boolean } | null>(null);
@@ -2819,7 +2822,10 @@ function Orders() {
         body: JSON.stringify({
           amountCents: amtCents,
           refundMethod,
+          refundReason,
           note: refundNote.trim() || undefined,
+          cancelOrder: refundCancelOrder,
+          restockInventory: refundCancelOrder ? refundRestockInventory : false,
         }),
       });
       const data = await res.json();
@@ -3144,10 +3150,13 @@ function Orders() {
                       className="!h-8 !px-3 text-xs text-amber-800 border-amber-300 hover:bg-amber-50"
                       onClick={() => {
                         setRefundModalOrder(order);
-                        const remainingCents = order.totalCents - (order.refundAmountCents || 0);
+                        const remainingCents = Math.max(0, order.totalCents - (order.refundAmountCents || 0));
                         setRefundAmount((remainingCents / 100).toFixed(2));
                         setRefundMethod(order.razorpayPaymentId ? 'original' : 'wallet');
+                        setRefundReason('Consumer Issue: Damaged / Defective quality');
                         setRefundNote('');
+                        setRefundCancelOrder(order.status !== 'cancelled');
+                        setRefundRestockInventory(true);
                       }}
                     >
                       <RotateCcw size={13} /> Process Refund
@@ -3162,10 +3171,15 @@ function Orders() {
                       variant="danger"
                       className="!h-8 !px-3 text-xs"
                       onClick={() => {
+                        const remainingCents = Math.max(0, order.totalCents - (order.refundAmountCents || 0));
                         setDeclineModalOrder(order);
                         setDeclineReason('Store temporarily unavailable for delivery');
                         setDeclineCustomReason('');
-                        setDeclineRefundAction(order.razorpayPaymentId ? 'razorpay' : 'none');
+                        if (remainingCents <= 0) {
+                          setDeclineRefundAction('none');
+                        } else {
+                          setDeclineRefundAction(order.razorpayPaymentId ? 'razorpay' : 'store_credit');
+                        }
                       }}
                     >
                       <Ban size={13} /> Decline Order
@@ -3325,187 +3339,264 @@ function Orders() {
       )}
 
       {/* Decline Order Modal */}
-      {declineModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-[hsl(var(--card))] border border-[hsl(var(--card-border))] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[hsl(var(--border))] pb-3">
-              <div className="flex items-center gap-2 text-rose-600">
-                <Ban size={18} />
-                <h3 className="text-base font-extrabold text-[hsl(var(--foreground))]">Decline Order</h3>
-              </div>
-              <button onClick={() => setDeclineModalOrder(null)} className="p-1.5 rounded-lg hover:bg-[hsl(var(--muted))]"><X size={16} /></button>
-            </div>
-
-            <div className="text-xs text-[hsl(var(--muted-foreground))] space-y-1">
-              <p>Order: <strong className="text-[hsl(var(--foreground))] font-mono">{declineModalOrder.formattedOrderId || declineModalOrder.id}</strong> ({money(declineModalOrder.totalCents)})</p>
-              <p>Customer: <strong>{declineModalOrder.customerName || 'Customer'}</strong> ({declineModalOrder.customerMobile || declineModalOrder.customerEmail})</p>
-            </div>
-
-            <form onSubmit={handleDeclineOrder} className="space-y-3.5">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Decline Reason *</label>
-                <select
-                  value={declineReason}
-                  onChange={(e) => setDeclineReason(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
-                >
-                  <option value="Store temporarily unavailable for delivery">Store temporarily unavailable for delivery</option>
-                  <option value="Product or ingredients currently out of stock">Product or ingredients currently out of stock</option>
-                  <option value="Delivery address is beyond serviceable radius">Delivery address is beyond serviceable radius</option>
-                  <option value="Kitchen / Shop at maximum capacity">Kitchen / Shop at maximum capacity</option>
-                  <option value="custom">Other / Custom reason...</option>
-                </select>
+      {declineModalOrder && (() => {
+        const remainingRefundCents = Math.max(0, declineModalOrder.totalCents - (declineModalOrder.refundAmountCents || 0));
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-[hsl(var(--card))] border border-[hsl(var(--card-border))] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-[hsl(var(--border))] pb-3">
+                <div className="flex items-center gap-2 text-rose-600">
+                  <Ban size={18} />
+                  <h3 className="text-base font-extrabold text-[hsl(var(--foreground))]">Decline Order</h3>
+                </div>
+                <button onClick={() => setDeclineModalOrder(null)} className="p-1.5 rounded-lg hover:bg-[hsl(var(--muted))]"><X size={16} /></button>
               </div>
 
-              {declineReason === 'custom' && (
+              <div className="text-xs text-[hsl(var(--muted-foreground))] space-y-1">
+                <p>Order: <strong className="text-[hsl(var(--foreground))] font-mono">{declineModalOrder.formattedOrderId || declineModalOrder.id}</strong> ({money(declineModalOrder.totalCents)})</p>
+                <p>Customer: <strong>{declineModalOrder.customerName || 'Customer'}</strong> ({declineModalOrder.customerMobile || declineModalOrder.customerEmail})</p>
+              </div>
+
+              <form onSubmit={handleDeclineOrder} className="space-y-3.5">
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Specify Reason *</label>
-                  <textarea
-                    required
-                    rows={2}
-                    value={declineCustomReason}
-                    onChange={(e) => setDeclineCustomReason(e.target.value)}
-                    placeholder="Explain why the store cannot fulfill this order..."
-                    className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-2.5 text-xs font-semibold"
-                  />
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Decline Reason *</label>
+                  <select
+                    value={declineReason}
+                    onChange={(e) => setDeclineReason(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                  >
+                    <option value="Store temporarily unavailable for delivery">Store temporarily unavailable for delivery</option>
+                    <option value="Product or ingredients currently out of stock">Product or ingredients currently out of stock</option>
+                    <option value="Delivery address is beyond serviceable radius">Delivery address is beyond serviceable radius</option>
+                    <option value="Kitchen / Shop at maximum capacity">Kitchen / Shop at maximum capacity</option>
+                    <option value="Consumer Issue / Customer requested cancellation">Consumer Issue / Customer requested cancellation</option>
+                    <option value="custom">Other / Custom reason...</option>
+                  </select>
                 </div>
-              )}
 
-              {(declineModalOrder.status === 'paid' || declineModalOrder.status === 'packed' || declineModalOrder.status === 'out_for_delivery') && (
-                <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.4)] p-3 space-y-2 text-xs">
-                  <label className="font-bold text-[hsl(var(--foreground))] block">Refund Payment Action</label>
-                  <div className="space-y-1.5">
-                    {declineModalOrder.razorpayPaymentId && (
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="declineRefund"
-                          value="razorpay"
-                          checked={declineRefundAction === 'razorpay'}
-                          onChange={() => setDeclineRefundAction('razorpay')}
-                          className="accent-[hsl(var(--primary))]"
-                        />
-                        <span>Refund <strong>{money(declineModalOrder.totalCents)}</strong> back to original payment source (Razorpay)</span>
-                      </label>
-                    )}
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="declineRefund"
-                        value="store_credit"
-                        checked={declineRefundAction === 'store_credit'}
-                        onChange={() => setDeclineRefundAction('store_credit')}
-                        className="accent-[hsl(var(--primary))]"
-                      />
-                      <span>Generate Instant Store Credit Coupon for <strong>{money(declineModalOrder.totalCents)}</strong></span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="declineRefund"
-                        value="none"
-                        checked={declineRefundAction === 'none'}
-                        onChange={() => setDeclineRefundAction('none')}
-                        className="accent-[hsl(var(--primary))]"
-                      />
-                      <span>Decline only (do not process refund immediately)</span>
-                    </label>
+                {declineReason === 'custom' && (
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Specify Reason *</label>
+                    <textarea
+                      required
+                      rows={2}
+                      value={declineCustomReason}
+                      onChange={(e) => setDeclineCustomReason(e.target.value)}
+                      placeholder="Explain why the store cannot fulfill this order..."
+                      className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-2.5 text-xs font-semibold"
+                    />
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="flex gap-2 pt-2">
-                <Button variant="outline" type="button" onClick={() => setDeclineModalOrder(null)} className="flex-1">
-                  Cancel
-                </Button>
-                <Button variant="danger" type="submit" disabled={actionLoadingId === declineModalOrder.id} className="flex-1">
-                  {actionLoadingId === declineModalOrder.id ? 'Declining...' : 'Confirm Decline'}
-                </Button>
-              </div>
-            </form>
+                {/* Refund Handling on Decline */}
+                {remainingRefundCents <= 0 ? (
+                  <div className="rounded-xl border border-emerald-300 bg-emerald-50/80 p-3 space-y-1 text-xs">
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                      <CheckCircle2 size={15} className="text-emerald-600" />
+                      <span>Order Already Fully Refunded ({money(declineModalOrder.refundAmountCents || declineModalOrder.totalCents)})</span>
+                    </div>
+                    <p className="text-emerald-700 leading-relaxed text-[11px]">
+                      This order has already received a full refund/store credit. Confirming decline will cancel and close the order without processing duplicate refunds or issuing duplicate coupons.
+                    </p>
+                  </div>
+                ) : (
+                  (declineModalOrder.status === 'paid' || declineModalOrder.status === 'packed' || declineModalOrder.status === 'out_for_delivery') && (
+                    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.4)] p-3 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-[hsl(var(--foreground))] block">Refund Payment Action</label>
+                        <span className="text-[11px] font-semibold text-[hsl(var(--muted-foreground))]">
+                          Remaining Refundable: <strong className="text-[hsl(var(--primary))]">{money(remainingRefundCents)}</strong>
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {declineModalOrder.razorpayPaymentId && (
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="declineRefund"
+                              value="razorpay"
+                              checked={declineRefundAction === 'razorpay'}
+                              onChange={() => setDeclineRefundAction('razorpay')}
+                              className="accent-[hsl(var(--primary))]"
+                            />
+                            <span>Refund remaining <strong>{money(remainingRefundCents)}</strong> back to original payment source (Razorpay)</span>
+                          </label>
+                        )}
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="declineRefund"
+                            value="store_credit"
+                            checked={declineRefundAction === 'store_credit'}
+                            onChange={() => setDeclineRefundAction('store_credit')}
+                            className="accent-[hsl(var(--primary))]"
+                          />
+                          <span>Generate Instant Store Credit Coupon for remaining <strong>{money(remainingRefundCents)}</strong></span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="declineRefund"
+                            value="none"
+                            checked={declineRefundAction === 'none'}
+                            onChange={() => setDeclineRefundAction('none')}
+                            className="accent-[hsl(var(--primary))]"
+                          />
+                          <span>Decline only (do not process remaining refund now)</span>
+                        </label>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" type="button" onClick={() => setDeclineModalOrder(null)} className="flex-1">
+                    Cancel
+                  </Button>
+                  <Button variant="danger" type="submit" disabled={actionLoadingId === declineModalOrder.id} className="flex-1">
+                    {actionLoadingId === declineModalOrder.id ? 'Declining...' : 'Confirm Decline'}
+                  </Button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Standalone Dedicated Refund Modal */}
-      {refundModalOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-[hsl(var(--card))] border border-[hsl(var(--card-border))] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[hsl(var(--border))] pb-3">
-              <div className="flex items-center gap-2 text-amber-600">
-                <RotateCcw size={18} />
-                <h3 className="text-base font-extrabold text-[hsl(var(--foreground))]">Process Order Refund</h3>
+      {refundModalOrder && (() => {
+        const remainingRefundCents = Math.max(0, refundModalOrder.totalCents - (refundModalOrder.refundAmountCents || 0));
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-[hsl(var(--card))] border border-[hsl(var(--card-border))] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-[hsl(var(--border))] pb-3">
+                <div className="flex items-center gap-2 text-amber-600">
+                  <RotateCcw size={18} />
+                  <h3 className="text-base font-extrabold text-[hsl(var(--foreground))]">Process Order Refund</h3>
+                </div>
+                <button onClick={() => setRefundModalOrder(null)} className="p-1.5 rounded-lg hover:bg-[hsl(var(--muted))]"><X size={16} /></button>
               </div>
-              <button onClick={() => setRefundModalOrder(null)} className="p-1.5 rounded-lg hover:bg-[hsl(var(--muted))]"><X size={16} /></button>
+
+              <div className="text-xs text-[hsl(var(--muted-foreground))] space-y-1 bg-[hsl(var(--muted)/.4)] p-3 rounded-xl border border-[hsl(var(--border))]">
+                <div className="flex justify-between">
+                  <span>Order Total:</span>
+                  <strong className="text-[hsl(var(--foreground))]">{money(refundModalOrder.totalCents)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>Already Refunded:</span>
+                  <strong className="text-emerald-700">{money(refundModalOrder.refundAmountCents || 0)}</strong>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-[hsl(var(--border))] font-bold">
+                  <span>Max Refundable:</span>
+                  <span className="text-[hsl(var(--primary))]">{money(remainingRefundCents)}</span>
+                </div>
+              </div>
+
+              <form onSubmit={handleProcessRefund} className="space-y-3.5">
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Refund Amount (₹) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    max={remainingRefundCents / 100}
+                    required
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Refund Destination *</label>
+                  <select
+                    value={refundMethod}
+                    onChange={(e) => setRefundMethod(e.target.value as 'original' | 'wallet')}
+                    className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                  >
+                    {refundModalOrder.razorpayPaymentId && (
+                      <option value="original">Original Payment Source via Razorpay ({refundModalOrder.razorpayPaymentId})</option>
+                    )}
+                    <option value="wallet">Generate Instant Store Credit Coupon (1-year validity)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Refund Reason / Issue Category *</label>
+                  <select
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                  >
+                    <option value="Consumer Issue: Damaged / Defective quality">Consumer Issue: Damaged / Defective quality</option>
+                    <option value="Consumer Issue: Missing item(s)">Consumer Issue: Missing item(s)</option>
+                    <option value="Consumer Issue: Delayed delivery / Service compensation">Consumer Issue: Delayed delivery / Service compensation</option>
+                    <option value="Consumer Issue: Customer requested cancellation / return">Consumer Issue: Customer requested cancellation / return</option>
+                    <option value="Store Issue: Product out of stock">Store Issue: Product out of stock</option>
+                    <option value="Order Cancelled by Merchant">Order Cancelled by Merchant</option>
+                    <option value="Other customer compensation or issue">Other customer compensation or issue</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Admin Note / Details</label>
+                  <input
+                    type="text"
+                    value={refundNote}
+                    onChange={(e) => setRefundNote(e.target.value)}
+                    placeholder="e.g. Compensation for missing biscuits packet, customer satisfied"
+                    className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
+                  />
+                </div>
+
+                {refundModalOrder.status !== 'cancelled' && (
+                  <div className="pt-2 border-t border-[hsl(var(--border))] space-y-2">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={refundCancelOrder}
+                        onChange={(e) => setRefundCancelOrder(e.target.checked)}
+                        className="mt-0.5 rounded border-[hsl(var(--border))] accent-rose-600"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-[hsl(var(--foreground))]">Also cancel and close this order</span>
+                        <p className="text-[11px] text-[hsl(var(--muted-foreground))]">
+                          Transition order status to Cancelled. Check this if order will not be fulfilled or customer cancelled the whole order.
+                        </p>
+                      </div>
+                    </label>
+
+                    {refundCancelOrder && (
+                      <div className="ml-6 pl-2 border-l-2 border-[hsl(var(--border))]">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={refundRestockInventory}
+                            onChange={(e) => setRefundRestockInventory(e.target.checked)}
+                            className="rounded border-[hsl(var(--border))] accent-[hsl(var(--primary))]"
+                          />
+                          <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                            Restock items back into inventory catalogue
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" type="button" onClick={() => setRefundModalOrder(null)} className="flex-1">
+                    Cancel
+                  </Button>
+                  <Button variant="primary" type="submit" disabled={actionLoadingId === refundModalOrder.id} className="flex-1 bg-amber-600 hover:bg-amber-700">
+                    {actionLoadingId === refundModalOrder.id ? 'Refunding...' : (refundCancelOrder ? 'Confirm Refund & Cancel Order' : 'Confirm & Execute Refund')}
+                  </Button>
+                </div>
+              </form>
             </div>
-
-            <div className="text-xs text-[hsl(var(--muted-foreground))] space-y-1 bg-[hsl(var(--muted)/.4)] p-3 rounded-xl border border-[hsl(var(--border))]">
-              <div className="flex justify-between">
-                <span>Order Total:</span>
-                <strong className="text-[hsl(var(--foreground))]">{money(refundModalOrder.totalCents)}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Already Refunded:</span>
-                <strong className="text-emerald-700">{money(refundModalOrder.refundAmountCents || 0)}</strong>
-              </div>
-              <div className="flex justify-between pt-1 border-t border-[hsl(var(--border))] font-bold">
-                <span>Max Refundable:</span>
-                <span className="text-[hsl(var(--primary))]">{money(refundModalOrder.totalCents - (refundModalOrder.refundAmountCents || 0))}</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleProcessRefund} className="space-y-3.5">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Refund Amount (₹) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="1"
-                  max={(refundModalOrder.totalCents - (refundModalOrder.refundAmountCents || 0)) / 100}
-                  required
-                  value={refundAmount}
-                  onChange={(e) => setRefundAmount(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Refund Destination *</label>
-                <select
-                  value={refundMethod}
-                  onChange={(e) => setRefundMethod(e.target.value as 'original' | 'wallet')}
-                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
-                >
-                  {refundModalOrder.razorpayPaymentId && (
-                    <option value="original">Original Payment Source via Razorpay ({refundModalOrder.razorpayPaymentId})</option>
-                  )}
-                  <option value="wallet">Generate Instant Store Credit Coupon (1-year validity)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Admin Note / Reason</label>
-                <input
-                  type="text"
-                  value={refundNote}
-                  onChange={(e) => setRefundNote(e.target.value)}
-                  placeholder="e.g. Item unavailable, store closed, customer compensation"
-                  className="mt-1 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-xs font-semibold"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <Button variant="outline" type="button" onClick={() => setRefundModalOrder(null)} className="flex-1">
-                  Cancel
-                </Button>
-                <Button variant="primary" type="submit" disabled={actionLoadingId === refundModalOrder.id} className="flex-1 bg-amber-600 hover:bg-amber-700">
-                  {actionLoadingId === refundModalOrder.id ? 'Refunding...' : 'Confirm & Execute Refund'}
-                </Button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </AdminGate>
   );
 }

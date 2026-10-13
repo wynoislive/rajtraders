@@ -1217,72 +1217,77 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
       return;
     }
 
-    let refundId: string | null = null;
-    let refundAmountCents: number | null = null;
+    const remainingRefundableCents = Math.max(0, order.totalCents - (order.refundAmountCents || 0));
+    let refundId: string | null = order.refundId;
+    let refundIssuedCents: number = 0;
 
     if (order.status === "paid" || order.status === "packed" || order.status === "out_for_delivery") {
-      if (refundAction === "razorpay" && order.razorpayPaymentId) {
-        refundAmountCents = order.totalCents;
-        try {
-          const [settings] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
-          const rzpKeyId = settings?.razorpayKeyId || "rzp_test_sandbox123456";
-          const rzpKeySecret = settings?.razorpayKeySecret || "sandbox_secret";
-          const isLive = rzpKeyId && rzpKeySecret && !rzpKeyId.includes("sandbox") && !rzpKeySecret.includes("sandbox");
+      if (remainingRefundableCents > 0) {
+        if (refundAction === "razorpay" && order.razorpayPaymentId) {
+          refundIssuedCents = remainingRefundableCents;
+          try {
+            const [settings] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+            const rzpKeyId = settings?.razorpayKeyId || "rzp_test_sandbox123456";
+            const rzpKeySecret = settings?.razorpayKeySecret || "sandbox_secret";
+            const isLive = rzpKeyId && rzpKeySecret && !rzpKeyId.includes("sandbox") && !rzpKeySecret.includes("sandbox");
 
-          if (isLive) {
-            const authHeader = Buffer.from(`${rzpKeyId}:${rzpKeySecret}`).toString("base64");
-            const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${order.razorpayPaymentId}/refund`, {
-              method: "POST",
-              headers: {
-                Authorization: `Basic ${authHeader}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                amount: order.totalCents,
-                reverse_all: 1,
-                notes: { orderId: order.id, reason: `Store declined: ${reason}` },
-              }),
-            });
+            if (isLive) {
+              const authHeader = Buffer.from(`${rzpKeyId}:${rzpKeySecret}`).toString("base64");
+              const refundResponse = await fetch(`https://api.razorpay.com/v1/payments/${order.razorpayPaymentId}/refund`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Basic ${authHeader}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  amount: remainingRefundableCents,
+                  reverse_all: remainingRefundableCents >= order.totalCents ? 1 : 0,
+                  notes: { orderId: order.id, reason: `Store declined: ${reason}` },
+                }),
+              });
 
-            if (refundResponse.ok) {
-              const refundData = (await refundResponse.json()) as { id: string };
-              refundId = refundData.id;
+              if (refundResponse.ok) {
+                const refundData = (await refundResponse.json()) as { id: string };
+                refundId = refundData.id;
+              } else {
+                const errText = await refundResponse.text();
+                req.log.error({ errText }, "Razorpay refund error on order decline");
+                refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
+              }
             } else {
-              const errText = await refundResponse.text();
-              req.log.error({ errText }, "Razorpay refund error on order decline");
               refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
             }
-          } else {
+          } catch (err) {
+            req.log.warn({ err }, "Fallback refund ID on decline");
             refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
           }
-        } catch (err) {
-          req.log.warn({ err }, "Fallback refund ID on decline");
-          refundId = `rfnd_mock_${randomUUID().slice(0, 8)}`;
-        }
-      } else if (refundAction === "store_credit") {
-        refundAmountCents = order.totalCents;
-        const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
-        try {
-          await db.insert(discountsTable).values({
-            id: randomUUID(),
-            code: creditCode,
-            type: "fixed",
-            value: order.totalCents,
-            minimumSubtotalCents: 0,
-            usageLimit: 1,
-            usageCount: 0,
-            startsAt: new Date(),
-            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            active: true,
-            firstOrderOnly: false,
-          });
-          refundId = creditCode;
-        } catch (discErr) {
-          req.log.warn({ discErr }, "Store credit coupon generation note on decline");
-          refundId = creditCode;
+        } else if (refundAction === "store_credit") {
+          refundIssuedCents = remainingRefundableCents;
+          const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
+          try {
+            await db.insert(discountsTable).values({
+              id: randomUUID(),
+              code: creditCode,
+              type: "fixed",
+              value: remainingRefundableCents,
+              minimumSubtotalCents: 0,
+              usageLimit: 1,
+              usageCount: 0,
+              startsAt: new Date(),
+              expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+              active: true,
+              firstOrderOnly: false,
+            });
+            refundId = creditCode;
+          } catch (discErr) {
+            req.log.warn({ discErr }, "Store credit coupon generation note on decline");
+            refundId = creditCode;
+          }
         }
       }
     }
+
+    const newRefundAmountCents = (order.refundAmountCents || 0) + refundIssuedCents;
 
     await db
       .update(ordersTable)
@@ -1290,9 +1295,11 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
         status: "cancelled",
         cancellationStatus: "declined_by_store",
         cancellationReason: reason,
-        preferredRefundMethod: refundAction === "store_credit" ? "wallet" : (refundAction === "razorpay" ? "original" : null),
+        preferredRefundMethod: refundIssuedCents > 0
+          ? (refundAction === "store_credit" ? "wallet" : (refundAction === "razorpay" ? "original" : null))
+          : order.preferredRefundMethod,
         refundId: refundId || order.refundId,
-        refundAmountCents: refundAmountCents || order.refundAmountCents,
+        refundAmountCents: newRefundAmountCents,
         updatedAt: new Date(),
       })
       .where(eq(ordersTable.id, id));
@@ -1320,20 +1327,32 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
       resource: "orders",
       resourceId: id,
       status: "SUCCESS",
-      details: { reason, refundAction, refundId, refundAmountCents },
+      details: { reason, refundAction, refundId, refundIssuedCents, totalRefundedCents: newRefundAmountCents },
     });
 
     // In-App Notification
-    if (order.userId && refundAmountCents > 0) {
+    if (order.userId) {
       const isCredit = refundAction === "store_credit";
-      const formattedAmt = `₹${(refundAmountCents / 100).toFixed(2)}`;
+      const formattedAmt = `₹${(refundIssuedCents / 100).toFixed(2)}`;
+      const prevAmt = `₹${((order.refundAmountCents || 0) / 100).toFixed(2)}`;
+
+      let notifTitle = `Order Declined`;
+      let notifMsg = `Order #${order.id.slice(0, 8).toUpperCase()} was declined (${reason || 'Store Capacity'}).`;
+
+      if (refundIssuedCents > 0) {
+        notifTitle = isCredit ? `Store Credit Issued (${formattedAmt})` : `Order Refunded (${formattedAmt})`;
+        notifMsg = isCredit
+          ? `Order #${order.id.slice(0, 8).toUpperCase()} was declined (${reason || 'Store Capacity'}). A Store Credit coupon (${refundId}) of ${formattedAmt} has been credited to your account.`
+          : `Order #${order.id.slice(0, 8).toUpperCase()} was declined (${reason || 'Store Capacity'}). A refund of ${formattedAmt} has been initiated to your original payment method.`;
+      } else if ((order.refundAmountCents || 0) > 0) {
+        notifMsg = `Order #${order.id.slice(0, 8).toUpperCase()} was declined (${reason || 'Store Capacity'}). The order was previously refunded (${prevAmt}).`;
+      }
+
       db.insert(customerNotificationsTable).values({
         id: randomUUID(),
         userId: order.userId,
-        title: isCredit ? `Store Credit Issued (${formattedAmt})` : `Order Refunded (${formattedAmt})`,
-        message: isCredit
-          ? `Order #${order.id.slice(0, 8).toUpperCase()} was declined (${reason || 'Store Capacity'}). A Store Credit coupon (${refundId}) of ${formattedAmt} has been credited to your account.`
-          : `Order #${order.id.slice(0, 8).toUpperCase()} was declined (${reason || 'Store Capacity'}). A refund of ${formattedAmt} has been initiated to your original payment method.`,
+        title: notifTitle,
+        message: notifMsg,
         type: "order_update",
         link: "/account",
         isRead: false,
@@ -1344,18 +1363,20 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
     }
 
     // Email Notification
-    if (order.customerEmail && refundAmountCents > 0) {
-      sendRefundConfirmationEmail(
-        order.customerEmail,
-        order.customerName || "Valued Customer",
-        order.id,
-        refundAmountCents,
-        refundAction === "store_credit" ? "wallet" : "original",
-        refundAction === "store_credit" ? refundId : undefined,
-        reason ? `Order cancelled by store: ${reason}` : undefined,
-      ).catch((mailErr) => {
-        req.log.warn({ mailErr, orderId: id }, "Failed sending decline refund confirmation email");
-      });
+    if (order.customerEmail) {
+      if (refundIssuedCents > 0) {
+        sendRefundConfirmationEmail(
+          order.customerEmail,
+          order.customerName || "Valued Customer",
+          order.id,
+          refundIssuedCents,
+          refundAction === "store_credit" ? "wallet" : "original",
+          refundAction === "store_credit" ? refundId : undefined,
+          reason ? `Order cancelled by store: ${reason}` : undefined,
+        ).catch((mailErr) => {
+          req.log.warn({ mailErr, orderId: id }, "Failed sending decline refund confirmation email");
+        });
+      }
     }
 
     sendOrderStatusWhatsApp(order, "cancelled", {
@@ -1364,13 +1385,19 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
       req.log.warn({ err, orderId: id }, "Background WhatsApp order decline notification failed");
     });
 
+    const refundMsg = refundIssuedCents > 0
+      ? ` Refund of ₹${(refundIssuedCents / 100).toFixed(2)} initiated (${refundId}).`
+      : ((order.refundAmountCents || 0) > 0 ? " (Order was previously refunded)." : "");
+
     res.json({
       success: true,
       orderId: id,
       status: "cancelled",
       cancellationStatus: "declined_by_store",
       refundId,
-      message: `Order declined successfully. Reason: ${reason}.${refundId ? ` Refund initiated (${refundId}).` : ""}`,
+      refundIssuedCents,
+      totalRefundedCents: newRefundAmountCents,
+      message: `Order declined successfully. Reason: ${reason}.${refundMsg}`,
     });
   } catch (err: unknown) {
     req.log.error({ err, orderId: id }, "Failed to decline order");
@@ -1381,7 +1408,7 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
 // ── Dedicated Standalone Order Refund ───────────────────────────
 router.post("/v1/admin/orders/:id/refund", requirePermission("orders"), async (req, res): Promise<void> => {
   const id = req.params.id as string;
-  const { amountCents, refundMethod = "original", note } = req.body;
+  const { amountCents, refundMethod = "original", note, refundReason, cancelOrder, restockInventory = true } = req.body;
 
   try {
     const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, id)).limit(1);
@@ -1390,7 +1417,7 @@ router.post("/v1/admin/orders/:id/refund", requirePermission("orders"), async (r
       return;
     }
 
-    const maxRefundable = order.totalCents - (order.refundAmountCents || 0);
+    const maxRefundable = Math.max(0, order.totalCents - (order.refundAmountCents || 0));
     const refundCents = typeof amountCents === "number" && amountCents > 0 ? Math.min(amountCents, maxRefundable) : maxRefundable;
 
     if (refundCents <= 0) {
@@ -1417,8 +1444,8 @@ router.post("/v1/admin/orders/:id/refund", requirePermission("orders"), async (r
             },
             body: JSON.stringify({
               amount: refundCents,
-              reverse_all: refundCents >= order.totalCents ? 1 : 0,
-              notes: { orderId: order.id, note: note || "Admin initiated refund" },
+              reverse_all: refundCents >= maxRefundable ? 1 : 0,
+              notes: { orderId: order.id, note: [refundReason, note].filter(Boolean).join(" - ") || "Admin initiated refund" },
             }),
           });
 
@@ -1461,36 +1488,87 @@ router.post("/v1/admin/orders/:id/refund", requirePermission("orders"), async (r
     }
 
     const newRefundAmountCents = (order.refundAmountCents || 0) + refundCents;
+    const combinedReason = [refundReason, note].filter(Boolean).join(" - ") || (cancelOrder ? "Refunded & Cancelled by store" : "Store refund");
 
-    await db
-      .update(ordersTable)
-      .set({
-        refundId,
-        refundAmountCents: newRefundAmountCents,
-        preferredRefundMethod: refundMethod === "wallet" ? "wallet" : "original",
-        updatedAt: new Date(),
-      })
-      .where(eq(ordersTable.id, id));
+    if (cancelOrder) {
+      await db
+        .update(ordersTable)
+        .set({
+          status: "cancelled",
+          cancellationStatus: "refunded_and_cancelled",
+          cancellationReason: combinedReason,
+          refundId,
+          refundAmountCents: newRefundAmountCents,
+          preferredRefundMethod: refundMethod === "wallet" ? "wallet" : "original",
+          updatedAt: new Date(),
+        })
+        .where(eq(ordersTable.id, id));
+
+      if (restockInventory) {
+        try {
+          const items = JSON.parse(order.itemsJson || "[]");
+          for (const item of items) {
+            const prodId = item.id || item.productId;
+            if (prodId && item.quantity) {
+              await db
+                .update(productsTable)
+                .set({
+                  inventory: sql`${productsTable.inventory} + ${item.quantity}`,
+                  updatedAt: new Date(),
+                })
+                .where(eq(productsTable.id, prodId));
+            }
+          }
+        } catch (invErr) {
+          req.log.error({ invErr, orderId: id }, "Failed to restore inventory on refund order cancellation");
+        }
+      }
+
+      sendOrderStatusWhatsApp(order, "cancelled", {
+        cancellationReason: combinedReason,
+      }).catch((err) => {
+        req.log.warn({ err, orderId: id }, "Background WhatsApp cancellation notification failed");
+      });
+    } else {
+      await db
+        .update(ordersTable)
+        .set({
+          refundId,
+          refundAmountCents: newRefundAmountCents,
+          preferredRefundMethod: refundMethod === "wallet" ? "wallet" : "original",
+          updatedAt: new Date(),
+        })
+        .where(eq(ordersTable.id, id));
+    }
 
     logAuditEvent(req, {
-      action: "ORDER_REFUNDED_BY_ADMIN",
+      action: cancelOrder ? "ORDER_REFUNDED_AND_CANCELLED" : "ORDER_REFUNDED_BY_ADMIN",
       resource: "orders",
       resourceId: id,
       status: "SUCCESS",
-      details: { refundMethod, refundId, refundCents, totalRefundedCents: newRefundAmountCents, note },
+      details: { refundMethod, refundId, refundCents, totalRefundedCents: newRefundAmountCents, note: combinedReason, cancelOrder, restockInventory },
     });
 
     // In-App Notification
     if (order.userId) {
       const isCredit = refundMethod === "wallet";
       const formattedAmt = `₹${(refundCents / 100).toFixed(2)}`;
+      const title = cancelOrder
+        ? (isCredit ? `Order Cancelled & Store Credit Issued (${formattedAmt})` : `Order Cancelled & Refund Processed (${formattedAmt})`)
+        : (isCredit ? `Store Credit Issued (${formattedAmt})` : `Refund Processed (${formattedAmt})`);
+      const message = cancelOrder
+        ? (isCredit
+            ? `Order #${order.id.slice(0, 8).toUpperCase()} was cancelled (${combinedReason}). A Store Credit coupon (${refundId}) of ${formattedAmt} has been credited to your account.`
+            : `Order #${order.id.slice(0, 8).toUpperCase()} was cancelled (${combinedReason}). A refund of ${formattedAmt} has been initiated to your original payment method.`)
+        : (isCredit
+            ? `A Store Credit coupon (${refundId}) of ${formattedAmt} was issued for order #${order.id.slice(0, 8).toUpperCase()} (${combinedReason}).`
+            : `A refund of ${formattedAmt} for order #${order.id.slice(0, 8).toUpperCase()} has been initiated to your original payment method (${combinedReason}).`);
+
       db.insert(customerNotificationsTable).values({
         id: randomUUID(),
         userId: order.userId,
-        title: isCredit ? `Store Credit Issued (${formattedAmt})` : `Refund Processed (${formattedAmt})`,
-        message: isCredit
-          ? `A Store Credit coupon (${refundId}) of ${formattedAmt} has been credited to your account for order #${order.id.slice(0, 8).toUpperCase()}. You can apply it at checkout anytime!`
-          : `A refund of ${formattedAmt} for order #${order.id.slice(0, 8).toUpperCase()} has been initiated to your original payment method.`,
+        title,
+        message,
         type: "order_update",
         link: "/account",
         isRead: false,
@@ -1509,7 +1587,7 @@ router.post("/v1/admin/orders/:id/refund", requirePermission("orders"), async (r
         refundCents,
         refundMethod,
         refundMethod === "wallet" ? refundId : undefined,
-        note,
+        combinedReason,
       ).catch((mailErr) => {
         req.log.warn({ mailErr, orderId: id }, "Failed sending manual refund confirmation email");
       });
@@ -1522,7 +1600,8 @@ router.post("/v1/admin/orders/:id/refund", requirePermission("orders"), async (r
       refundAmountCents: refundCents,
       totalRefundedCents: newRefundAmountCents,
       refundMethod,
-      message: `Refund of ₹${(refundCents / 100).toFixed(2)} processed successfully via ${refundMethod === "wallet" ? `Store Credit Coupon (${refundId})` : `Razorpay (${refundId})`}.`,
+      orderStatus: cancelOrder ? "cancelled" : order.status,
+      message: `${cancelOrder ? "Order cancelled and refund" : "Refund"} of ₹${(refundCents / 100).toFixed(2)} processed successfully via ${refundMethod === "wallet" ? `Store Credit Coupon (${refundId})` : `Razorpay (${refundId})`}.`,
     });
   } catch (err: unknown) {
     req.log.error({ err, orderId: id }, "Failed to process admin refund");
