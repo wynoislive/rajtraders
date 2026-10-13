@@ -287,11 +287,15 @@ export default function App() {
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   useEffect(() => {
-    if (token && location === '/account') {
+    if (token && (location === '/account' || location === '/checkout')) {
       setAddressLoading(true);
       fetch(getApiUrl('/api/v1/auth/addresses'), { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.ok ? r.json() : [])
-        .then(data => { if (Array.isArray(data)) setSavedAddresses(data); })
+        .then(data => {
+          if (Array.isArray(data)) {
+            setSavedAddresses(data);
+          }
+        })
         .catch(() => {})
         .finally(() => setAddressLoading(false));
     }
@@ -496,7 +500,13 @@ export default function App() {
   }, []);
 
   // Shipping & Checkout
-  const [shippingAddress, setShippingAddress] = useState(`PIN: ${pincode}, ${city}`);
+  const [shippingAddress, setShippingAddress] = useState('');
+  const [addressHouseNo, setAddressHouseNo] = useState('');
+  const [addressStreetArea, setAddressStreetArea] = useState('');
+  const [addressLandmark, setAddressLandmark] = useState('');
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<string | null>(null);
+  const [saveAddressToAccount, setSaveAddressToAccount] = useState(true);
+  const [newAddressLabel, setNewAddressLabel] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'cod'>('online');
   const [discountCode, setDiscountCode] = useState('');
   const [discountResult, setDiscountResult] = useState<any>(null);
@@ -650,7 +660,7 @@ export default function App() {
       if (data.allowed) {
         setPincode(data.pincode);
         setCity(data.city);
-        setShippingAddress(`PIN: ${data.pincode}, ${data.city}`);
+        setDeliveryPincode(data.pincode);
       }
     } catch {
       setPincodeResult({ allowed: true, pincode: clean, city: 'India', message: `Delivery available to ${clean}` });
@@ -940,17 +950,47 @@ export default function App() {
         showToast(`Delivery PIN ${deliveryPincode} is not serviceable. We only deliver to: ${allowedPincodes.join(', ')}`, 'error');
         return;
       }
-      if (!shippingAddress || shippingAddress.length < 5) {
-        showToast('Please enter a valid shipping address.', 'error');
+      if (!addressHouseNo.trim()) {
+        showToast('Please enter your House / Shop / Building number.', 'error');
+        return;
+      }
+      if (!addressStreetArea.trim()) {
+        showToast('Please enter your Street / Area / Ward name.', 'error');
         return;
       }
     }
     setIsCheckingOut(true);
     try {
       const items = cart.map((i) => ({ productId: i.product.id, quantity: i.quantity }));
+      const finalFullAddress = [
+        addressHouseNo.trim(),
+        addressStreetArea.trim(),
+        addressLandmark.trim() ? `Near ${addressLandmark.trim()}` : '',
+        `Birsingpur Pali, MP - ${deliveryPincode.trim()}`
+      ].filter(Boolean).join(', ');
+
       const orderShippingAddress = fulfillmentType === 'pickup'
         ? `⚡ Self-Pickup at Raj Traders: ${shopSettings.shopAddress || 'Thana Rd, beside NAGAR PALIKA, BIRSINGPUR, Pali Birsinghpur, Madhya Pradesh 484551'}`
-        : `${shippingAddress.trim()}, PIN: ${deliveryPincode.trim()}`;
+        : finalFullAddress;
+
+      // Save new address to customer account if requested
+      if (fulfillmentType === 'delivery' && saveAddressToAccount && !selectedSavedAddressId && token) {
+        fetch(getApiUrl('/api/v1/auth/addresses'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            label: newAddressLabel,
+            fullAddress: finalFullAddress,
+            houseNumber: addressHouseNo.trim(),
+            buildingSociety: addressStreetArea.trim(),
+            landmark: addressLandmark.trim(),
+            pincode: deliveryPincode.trim(),
+            city: 'Birsingpur Pali',
+            state: 'Madhya Pradesh',
+            isDefault: savedAddresses.length === 0,
+          }),
+        }).catch(() => {});
+      }
 
       const res = await fetch(getApiUrl('/api/v1/checkout/create-order'), {
         method: 'POST',
@@ -1442,53 +1482,220 @@ export default function App() {
                       )}
                     </div>
 
-                    {/* Delivery Address (shown for Home Delivery) */}
+                    {/* Delivery Address (shown only for Home Delivery) */}
                     {fulfillmentType === 'delivery' && (
-                      <div className="bg-white p-6 rounded-2xl border border-[#0E3D42]/10 shadow-sm space-y-4">
-                        <h3 className="text-sm font-black text-[#0E3D42] flex items-center gap-2"><MapPin size={16} /> Delivery Address</h3>
-                        <div>
-                          <div className="flex items-center justify-between mb-1.5">
-                            <label className="text-xs font-extrabold text-[#0E3D42]">PIN Code</label>
-                            <span className="text-[10px] text-gray-500 font-semibold">Serviceable: {allowedPincodes.join(', ')}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              maxLength={6}
-                              value={deliveryPincode}
-                              onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, ''))}
-                              placeholder="484551"
-                              className="w-28 p-2.5 text-xs font-mono font-bold rounded-xl border border-gray-300"
-                            />
-                            <div className="flex-1">
-                              {deliveryPincode.length === 6 ? (
-                                isPincodeServiceable ? (
-                                  <span className="text-xs font-bold text-emerald-700 flex items-center gap-1"><CheckCircle2 size={14} /> Serviceable</span>
-                                ) : (
-                                  <span className="text-xs font-bold text-red-600 flex items-center gap-1"><AlertCircle size={14} /> Not Serviceable</span>
-                                )
-                              ) : (
-                                <span className="text-[11px] text-gray-400">Enter 6-digit PIN</span>
+                      <div className="bg-white p-6 rounded-2xl border border-[#0E3D42]/10 shadow-sm space-y-5">
+                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                          <h3 className="text-sm font-black text-[#0E3D42] flex items-center gap-2">
+                            <MapPin size={16} /> Delivery Address
+                          </h3>
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                            Pali Local Fleet
+                          </span>
+                        </div>
+
+                        {/* Saved Addresses Selector (if logged in and user has saved addresses) */}
+                        {user && savedAddresses.length > 0 && (
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-black text-[#0E3D42]">Select Saved Address</label>
+                              {selectedSavedAddressId && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedSavedAddressId(null);
+                                    setAddressHouseNo('');
+                                    setAddressStreetArea('');
+                                    setAddressLandmark('');
+                                  }}
+                                  className="text-[11px] font-bold text-[#0E3D42] hover:underline"
+                                >
+                                  + Deliver to a Different Address
+                                </button>
                               )}
                             </div>
-                          </div>
-                          {!isPincodeServiceable && deliveryPincode.length === 6 && (
-                            <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-[11px] text-red-700 font-semibold flex items-start gap-2">
-                              <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                              <span>Delivery only available in Pali PINs ({allowedPincodes.join(', ')}).</span>
+                            <div className="grid sm:grid-cols-2 gap-2.5">
+                              {savedAddresses.map((addr) => {
+                                const isSelected = selectedSavedAddressId === addr.id;
+                                return (
+                                  <div
+                                    key={addr.id}
+                                    onClick={() => {
+                                      setSelectedSavedAddressId(addr.id);
+                                      setAddressHouseNo(addr.houseNumber || '');
+                                      setAddressStreetArea(addr.buildingSociety || addr.fullAddress || '');
+                                      setAddressLandmark(addr.landmark || '');
+                                      if (addr.pincode) setDeliveryPincode(addr.pincode);
+                                    }}
+                                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition text-left space-y-1 ${
+                                      isSelected
+                                        ? 'border-[#0E3D42] bg-[#0E3D42]/5 shadow-sm'
+                                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${
+                                        isSelected ? 'bg-[#0E3D42] text-white' : 'bg-gray-100 text-gray-700'
+                                      }`}>
+                                        {addr.label || 'Saved'}
+                                      </span>
+                                      {isSelected && <span className="text-xs text-[#0E3D42] font-black">✓ Selected</span>}
+                                    </div>
+                                    <p className="text-xs font-bold text-[#0E3D42] line-clamp-1">{addr.fullAddress}</p>
+                                    <p className="text-[10px] text-gray-500 font-semibold">{addr.city || 'Birsingpur Pali'}, PIN: {addr.pincode}</p>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          )}
-                        </div>
-                        <div>
-                          <label className="text-xs font-extrabold text-[#0E3D42]">Full Address & Landmark</label>
-                          <textarea
-                            rows={3}
-                            value={shippingAddress}
-                            onChange={(e) => setShippingAddress(e.target.value)}
-                            className="w-full mt-1 p-3 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
-                            placeholder="House/Shop no., Landmark, Ward name, Pali, MP"
-                          />
-                        </div>
+                          </div>
+                        )}
+
+                        {/* Structured Address Form */}
+                        {(!user || savedAddresses.length === 0 || !selectedSavedAddressId) && (
+                          <div className="space-y-4 pt-1">
+                            {user && savedAddresses.length > 0 && !selectedSavedAddressId && (
+                              <div className="flex items-center justify-between pb-1">
+                                <span className="text-xs font-black text-[#0E3D42]">New Delivery Address</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const def = savedAddresses.find((a: any) => a.isDefault) || savedAddresses[0];
+                                    if (def) {
+                                      setSelectedSavedAddressId(def.id);
+                                      setAddressHouseNo(def.houseNumber || '');
+                                      setAddressStreetArea(def.buildingSociety || def.fullAddress || '');
+                                      setAddressLandmark(def.landmark || '');
+                                      if (def.pincode) setDeliveryPincode(def.pincode);
+                                    }
+                                  }}
+                                  className="text-[11px] font-bold text-[#0E3D42] hover:underline"
+                                >
+                                  ← Choose From Saved Addresses
+                                </button>
+                              </div>
+                            )}
+
+                            {/* PIN Code Input */}
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-xs font-extrabold text-[#0E3D42]">PIN Code *</label>
+                                <span className="text-[10px] text-gray-500 font-semibold">Serviceable: {allowedPincodes.join(', ')}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  maxLength={6}
+                                  value={deliveryPincode}
+                                  onChange={(e) => setDeliveryPincode(e.target.value.replace(/\D/g, ''))}
+                                  placeholder="484551"
+                                  className="w-32 p-2.5 text-xs font-mono font-bold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
+                                />
+                                <div className="flex-1">
+                                  {deliveryPincode.length === 6 ? (
+                                    isPincodeServiceable ? (
+                                      <span className="text-xs font-bold text-emerald-700 flex items-center gap-1"><CheckCircle2 size={14} /> Serviceable</span>
+                                    ) : (
+                                      <span className="text-xs font-bold text-red-600 flex items-center gap-1"><AlertCircle size={14} /> Not Serviceable</span>
+                                    )
+                                  ) : (
+                                    <span className="text-[11px] text-gray-400">Enter 6-digit PIN</span>
+                                  )}
+                                </div>
+                              </div>
+                              {!isPincodeServiceable && deliveryPincode.length === 6 && (
+                                <div className="mt-2 p-2.5 rounded-xl bg-red-50 border border-red-200 text-[11px] text-red-700 font-semibold flex items-start gap-2">
+                                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                                  <span>Delivery only available in Pali PINs ({allowedPincodes.join(', ')}).</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* House / Flat / Building / Shop No. (Required) */}
+                            <div>
+                              <label className="text-xs font-extrabold text-[#0E3D42] flex items-center justify-between">
+                                <span>House / Flat / Building / Shop No. <span className="text-red-600">*</span></span>
+                                {!addressHouseNo.trim() && <span className="text-[10px] text-amber-700 font-semibold">Required</span>}
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={addressHouseNo}
+                                onChange={(e) => setAddressHouseNo(e.target.value)}
+                                placeholder="e.g. Shop No. 14 / House 28, Ward 4"
+                                className="w-full mt-1 p-2.5 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
+                              />
+                            </div>
+
+                            {/* Street / Area / Colony / Ward Name (Required) */}
+                            <div>
+                              <label className="text-xs font-extrabold text-[#0E3D42] flex items-center justify-between">
+                                <span>Street / Area / Colony / Ward Name <span className="text-red-600">*</span></span>
+                                {!addressStreetArea.trim() && <span className="text-[10px] text-amber-700 font-semibold">Required</span>}
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={addressStreetArea}
+                                onChange={(e) => setAddressStreetArea(e.target.value)}
+                                placeholder="e.g. Main Market, Thana Road, Near Bus Stand"
+                                className="w-full mt-1 p-2.5 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
+                              />
+                            </div>
+
+                            {/* Landmark (Optional) */}
+                            <div>
+                              <label className="text-xs font-extrabold text-[#0E3D42] flex items-center justify-between">
+                                <span>Landmark <span className="text-gray-400 font-normal">(Optional)</span></span>
+                              </label>
+                              <input
+                                type="text"
+                                value={addressLandmark}
+                                onChange={(e) => setAddressLandmark(e.target.value)}
+                                placeholder="e.g. Beside Nagar Palika / Opposite Civil Hospital"
+                                className="w-full mt-1 p-2.5 text-xs font-semibold rounded-xl border border-gray-300 focus:outline-none focus:border-[#0E3D42]"
+                              />
+                            </div>
+
+                            {/* City & State fixed confirmation */}
+                            <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between text-xs font-bold text-gray-700">
+                              <span>City &amp; State:</span>
+                              <span className="text-[#0E3D42]">Birsingpur Pali, Madhya Pradesh</span>
+                            </div>
+
+                            {/* Save Address to Account Checkbox (for logged-in customers) */}
+                            {user && (
+                              <div className="pt-1 border-t border-gray-100 space-y-2">
+                                <label className="flex items-center gap-2 text-xs font-bold text-[#0E3D42] cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={saveAddressToAccount}
+                                    onChange={(e) => setSaveAddressToAccount(e.target.checked)}
+                                    className="rounded text-[#0E3D42] focus:ring-[#0E3D42]"
+                                  />
+                                  <span>Save this address to my account</span>
+                                </label>
+                                {saveAddressToAccount && (
+                                  <div className="flex items-center gap-2 pl-6">
+                                    {(['Home', 'Work', 'Other'] as const).map((lbl) => (
+                                      <button
+                                        key={lbl}
+                                        type="button"
+                                        onClick={() => setNewAddressLabel(lbl)}
+                                        className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition ${
+                                          newAddressLabel === lbl
+                                            ? 'bg-[#0E3D42] text-white border-[#0E3D42]'
+                                            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                                        }`}
+                                      >
+                                        {lbl}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1557,13 +1764,44 @@ export default function App() {
                         </span>
                       </label>
 
-                      <button
-                        onClick={handleCheckout}
-                        disabled={isCheckingOut || !checkoutConsent || !shopSettings.isStoreOpen || (fulfillmentType === 'delivery' && !isPincodeServiceable)}
-                        className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition disabled:bg-gray-400 text-sm"
-                      >
-                        {isCheckingOut ? 'Processing Order...' : !checkoutConsent ? 'Accept Terms to Proceed' : !shopSettings.isStoreOpen ? '🔴 Store Offline' : (fulfillmentType === 'delivery' && !isPincodeServiceable) ? `Enter Serviceable PIN` : `Pay & Complete · ${money(finalPayableCents)}`}
-                      </button>
+                      {/* Primary Checkout Action Button */}
+                      {(!user || !token) ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowAuthModal(true)}
+                          className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition text-sm flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <User size={16} /> Sign In to Complete Order · {money(finalPayableCents)}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleCheckout}
+                          disabled={
+                            isCheckingOut ||
+                            !checkoutConsent ||
+                            !shopSettings.isStoreOpen ||
+                            (fulfillmentType === 'delivery' && (
+                              !isPincodeServiceable ||
+                              !addressHouseNo.trim() ||
+                              !addressStreetArea.trim()
+                            ))
+                          }
+                          className="w-full py-4 bg-[#0E3D42] text-white font-extrabold rounded-2xl shadow-lg hover:bg-[#0E3D42]/95 transition disabled:bg-gray-400 text-sm cursor-pointer"
+                        >
+                          {isCheckingOut
+                            ? 'Processing Order...'
+                            : !checkoutConsent
+                            ? 'Accept Terms to Proceed'
+                            : !shopSettings.isStoreOpen
+                            ? '🔴 Store Offline'
+                            : fulfillmentType === 'delivery' && !isPincodeServiceable
+                            ? 'Enter Serviceable PIN (484551)'
+                            : fulfillmentType === 'delivery' && (!addressHouseNo.trim() || !addressStreetArea.trim())
+                            ? 'Enter Delivery Address to Proceed'
+                            : `Pay & Complete · ${money(finalPayableCents)}`}
+                        </button>
+                      )}
 
                       <div className="flex items-center justify-center gap-1.5 text-[10px] text-gray-400 font-semibold">
                         <Lock size={10} /> Secure checkout powered by Razorpay
