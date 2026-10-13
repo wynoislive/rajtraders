@@ -447,9 +447,20 @@ export default function App() {
       const searchParams = new URLSearchParams(window.location.search);
       const urlToken = searchParams.get('token');
       const urlEmail = searchParams.get('email');
+      const urlOtp = searchParams.get('otp');
       const isResetPath = window.location.pathname.startsWith('/reset-password');
 
-      if (urlToken || isResetPath) {
+      if (urlOtp && urlEmail) {
+        // Immediate address bar sanitization: wipe otp and query parameters from URL bar
+        const cleanPath = window.location.pathname || '/';
+        window.history.replaceState({}, '', cleanPath);
+
+        setShowAuthModal(true);
+        setOtpRequired(true);
+        setPendingEmail(urlEmail);
+        setOtpCode(urlOtp);
+        showToast('Verification code loaded from email link!', 'info');
+      } else if (urlToken || isResetPath) {
         // Immediate address bar sanitization: wipe token and query parameters from URL bar so it never lingers on refresh
         const cleanPath = window.location.pathname.replace(/\/reset-password\/?/, '') || '/';
         window.history.replaceState({}, '', cleanPath);
@@ -2597,7 +2608,45 @@ export default function App() {
                   </div>
                 </div>
 
-                <input required type="text" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="6-Digit OTP" autoComplete="one-time-code" className="w-full p-3 text-center tracking-widest text-xl font-bold rounded-xl border border-gray-300" />
+                <div className="relative flex items-center">
+                  <input
+                    required
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="6-Digit OTP"
+                    autoComplete="one-time-code"
+                    className="w-full p-3.5 pr-20 text-center tracking-[0.4em] text-2xl font-black rounded-xl border border-gray-300 font-mono focus:border-[#0E3D42] focus:ring-2 focus:ring-[#0E3D42]/20 outline-none"
+                  />
+                  {typeof navigator !== 'undefined' && 'clipboard' in navigator && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          const clean = text.replace(/\D/g, '').slice(0, 6);
+                          if (clean.length === 6) {
+                            setOtpCode(clean);
+                            showToast('Verification code pasted from clipboard!', 'success');
+                          } else if (clean.length > 0) {
+                            setOtpCode(clean);
+                          } else {
+                            showToast('No numeric verification code found in clipboard.', 'info');
+                          }
+                        } catch {
+                          showToast('Clipboard access denied. Please paste manually.', 'info');
+                        }
+                      }}
+                      className="absolute right-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#0E3D42] text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1 border border-gray-200"
+                      title="Paste verification code from clipboard"
+                    >
+                      📋 Paste
+                    </button>
+                  )}
+                </div>
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">{authLoading ? 'Verifying...' : 'Verify OTP'}</button>
                 <div className="flex justify-between items-center text-xs pt-1">
                   <button

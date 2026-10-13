@@ -25,13 +25,13 @@ export function startEmailWorker(): Worker | null {
     workerInstance = new Worker<EmailJobData>(
       "email",
       async (job) => {
-        const { type, to, userName, otpCode, resetToken, resetUrl } = job.data;
+        const { type, to, userName, otpCode, resetToken, resetUrl, directVerifyUrl } = job.data;
         logger.info({ jobId: job.id, type, to }, "Processing email job");
 
         switch (type) {
           case "verification-otp": {
             if (!otpCode) throw new Error("Missing otpCode for verification email");
-            const result = await sendVerificationOtpEmail(to, userName, otpCode);
+            const result = await sendVerificationOtpEmail(to, userName, otpCode, directVerifyUrl);
             if (!result.success) throw new Error("Failed to send verification OTP email");
             break;
           }

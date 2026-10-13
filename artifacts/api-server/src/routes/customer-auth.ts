@@ -376,17 +376,26 @@ async function issueVerificationOtp(
   let dispatchedChannel: "whatsapp" | "email" = "email";
   let previewUrl: string | undefined;
 
+  let directVerifyUrl: string | undefined;
+  try {
+    const [shopSettings] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+    const shopDomain = shopSettings?.shopDomain || process.env.PUBLIC_STORE_DOMAIN || "";
+    if (shopDomain) {
+      directVerifyUrl = `https://${shopDomain}/?action=verify_otp&email=${encodeURIComponent(cleanEmail)}&otp=${otpCode}`;
+    }
+  } catch {}
+
   if (channel === "whatsapp" && user.mobileNumber) {
     const waResult = await sendOtpWhatsApp(user.mobileNumber, otpCode, "verification");
     if (waResult.success) {
       dispatchedChannel = "whatsapp";
     } else {
       // Fallback to email if WhatsApp gateway returns error
-      const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
+      const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode, directVerifyUrl);
       previewUrl = emailResult.previewUrl;
     }
   } else {
-    const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
+    const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode, directVerifyUrl);
     previewUrl = emailResult.previewUrl;
   }
 

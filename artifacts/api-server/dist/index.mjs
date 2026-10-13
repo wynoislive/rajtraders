@@ -127642,12 +127642,12 @@ async function sendEmail(to, subject, htmlContent, forceProvider, attachments) {
     }
   }
 }
-async function sendVerificationOtpEmail(toEmail, userName, otpCode) {
+async function sendVerificationOtpEmail(toEmail, userName, otpCode, directVerifyUrl) {
   try {
     const { shopName } = await getTransporter();
-    const formattedCode = `${otpCode.slice(0, 3)} ${otpCode.slice(3)}`;
-    const subject = `Your ${shopName} Verification Code: ${otpCode} (Valid 10 mins)`;
-    const htmlContent = buildOtpHtml(shopName, userName, formattedCode);
+    const cleanCode = otpCode.trim().replace(/\s+/g, "");
+    const subject = `${cleanCode} is your ${shopName} verification code`;
+    const htmlContent = buildOtpHtml(shopName, userName, cleanCode, directVerifyUrl);
     return await sendEmail(toEmail, subject, htmlContent);
   } catch (err) {
     logger2.error({ err, toEmail }, "Failed to send verification OTP email");
@@ -127665,50 +127665,235 @@ async function sendPasswordRecoveryEmail(toEmail, userName, resetToken, resetUrl
     return { success: false };
   }
 }
-function buildOtpHtml(shopName, userName, formattedCode) {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #F7F2EA; margin: 0; padding: 20px; }
-        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
-        .header { background: #0E3D42; color: #ffffff; padding: 32px 24px; text-align: center; }
-        .header h1 { margin: 0; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; }
-        .content { padding: 32px 28px; color: #2D3748; line-height: 1.6; text-align: center; }
-        .otp-badge { display: inline-block; background: #FAF5EE; border: 2px dashed #0E3D42; color: #0E3D42; font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 8px; padding: 18px 36px; border-radius: 12px; margin: 24px 0; }
-        .notice { font-size: 13px; color: #4A5568; margin-top: 15px; }
-        .footer { background: #FAF5EE; padding: 20px; text-align: center; font-size: 12px; color: #718096; border-top: 1px solid #E2E8F0; }
-        .warning { background: #FFFBEB; border-left: 4px solid #D97706; padding: 12px; margin-top: 24px; font-size: 13px; color: #92400E; text-align: left; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>${shopName}</h1>
-          <p style="margin: 6px 0 0; opacity: 0.8; font-size: 13px;">Wholesale & Retail Artisanal Goods</p>
-        </div>
-        <div class="content">
-          <h2 style="margin-top: 0; color: #0E3D42;">Your Verification Code</h2>
-          <p style="color: #4A5568;">Hello ${userName || "Valued Customer"},</p>
-          <p style="color: #4A5568;">Use the 6-digit verification code below to verify your ${shopName} account:</p>
-          <div class="otp-badge">${formattedCode}</div>
-          <p class="notice">This single-use code is valid for <strong>10 minutes</strong>.</p>
-          <div class="warning">
-            <strong>Security Notice:</strong><br>
-            \u2022 Never share this code with anyone. ${shopName} staff will never ask for your verification code.<br>
-            \u2022 If you did not attempt to log in, please reset your password immediately.
+function buildOtpHtml(shopName, userName, cleanCode, directVerifyUrl) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+  <title>${cleanCode} is your verification code</title>
+  <!-- Schema.org EmailMessage for Gmail & modern email clients -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "EmailMessage",
+    "description": "Your ${shopName} verification code is ${cleanCode}",
+    "about": {
+      "@type": "Thing",
+      "name": "One-Time Password",
+      "identifier": "${cleanCode}"
+    }
+  }
+  </script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #F7F2EA;
+      margin: 0;
+      padding: 24px 12px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container {
+      max-width: 540px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+      border: 1px solid #E2E8F0;
+    }
+    .header {
+      background: #0E3D42;
+      color: #ffffff;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    .brand-title {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .brand-subtitle {
+      margin: 6px 0 0;
+      opacity: 0.85;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+    }
+    .content {
+      padding: 36px 28px;
+      color: #2D3748;
+      line-height: 1.6;
+      text-align: center;
+    }
+    .title {
+      margin: 0 0 12px;
+      color: #0E3D42;
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .greeting {
+      font-size: 15px;
+      font-weight: 600;
+      color: #4A5568;
+      margin: 0 0 8px;
+    }
+    .message {
+      font-size: 15px;
+      color: #4A5568;
+      margin: 0 0 20px;
+    }
+    .otp-container {
+      margin: 22px 0;
+      text-align: center;
+    }
+    .otp-card {
+      display: inline-block;
+      background: #F8FAFC;
+      border: 2px solid #CBD5E1;
+      border-radius: 16px;
+      padding: 20px 36px;
+      text-align: center;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+      cursor: pointer;
+      user-select: all;
+      -webkit-user-select: all;
+      -moz-user-select: all;
+      -ms-user-select: all;
+    }
+    .otp-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748B;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 8px;
+    }
+    .otp-code {
+      font-family: 'SF Pro Mono', 'Roboto Mono', Menlo, Consolas, Monaco, monospace;
+      font-size: 38px;
+      font-weight: 800;
+      color: #0E3D42;
+      letter-spacing: 12px;
+      margin: 4px 0 6px 12px;
+      user-select: all;
+      -webkit-user-select: all;
+      -moz-user-select: all;
+      -ms-user-select: all;
+    }
+    .otp-helper {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 5px 14px;
+      background-color: #E6F4F1;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #0E3D42;
+      letter-spacing: 0.5px;
+    }
+    .action-container {
+      margin: 22px 0 16px;
+      text-align: center;
+    }
+    .action-btn {
+      display: inline-block;
+      background-color: #0E3D42;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 13px 28px;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px rgba(14,61,66,0.22);
+    }
+    .action-subtext {
+      font-size: 11px;
+      color: #64748B;
+      margin-top: 6px;
+    }
+    .expiry-notice {
+      font-size: 13px;
+      color: #64748B;
+      margin-top: 16px;
+    }
+    .warning-box {
+      background: #FFFBEB;
+      border-left: 4px solid #D97706;
+      border-radius: 0 8px 8px 0;
+      padding: 14px;
+      margin-top: 24px;
+      font-size: 12px;
+      color: #92400E;
+      text-align: left;
+      line-height: 1.6;
+    }
+    .footer {
+      background: #FAF5EE;
+      padding: 22px;
+      text-align: center;
+      font-size: 12px;
+      color: #718096;
+      border-top: 1px solid #E2E8F0;
+    }
+  </style>
+</head>
+<body>
+  <!-- Gmail & Mail Client Snippet (Triggers automatic OTP highlight & inbox preview) -->
+  <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">
+    Your ${shopName} verification code is: ${cleanCode}. Valid for 10 minutes. Do not share this code.
+  </div>
+
+  <div class="container">
+    <div class="header">
+      <div class="brand-title">${shopName}</div>
+      <div class="brand-subtitle">Wholesale &amp; Retail Artisanal Goods</div>
+    </div>
+    <div class="content">
+      <h2 class="title">Your Verification Code</h2>
+      <p class="greeting">Hello ${userName || "Valued Customer"},</p>
+      <p class="message">
+        We received a request to access your ${shopName} account. Your verification code is:
+      </p>
+
+      <!-- Google-Style Verification Code Highlight Card with Instant Select/Copy -->
+      <div class="otp-container">
+        <div class="otp-card" title="Click or tap to select all">
+          <div class="otp-label">Verification Code</div>
+          <div class="otp-code">${cleanCode}</div>
+          <div class="otp-helper">
+            \u{1F4CB} Tap code to select all
           </div>
         </div>
-        <div class="footer">
-          <p>\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} ${shopName}. All rights reserved.</p>
-          <p>End-to-End Encrypted Login Security</p>
-        </div>
       </div>
-    </body>
-    </html>
-  `;
+
+      ${directVerifyUrl ? `
+      <!-- Direct 1-Click Auto-Verify Action -->
+      <div class="action-container">
+        <a href="${directVerifyUrl}" class="action-btn" target="_blank" rel="noopener noreferrer">
+          \u26A1 1-Click Auto-Verify &amp; Continue
+        </a>
+        <div class="action-subtext">Opens your store directly with this code auto-filled</div>
+      </div>
+      ` : ""}
+
+      <p class="expiry-notice">This single-use code is valid for <strong>10 minutes</strong>.</p>
+      <div class="warning-box">
+        <strong>Security Notice:</strong><br>
+        \u2022 Never share this code with anyone. ${shopName} staff will never ask for your verification code.<br>
+        \u2022 If you did not attempt to log in, please reset your password immediately.
+      </div>
+    </div>
+    <div class="footer">
+      <p style="margin: 0 0 6px;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} ${shopName}. All rights reserved.</p>
+      <p style="margin: 0;">End-to-End Encrypted Login Security</p>
+    </div>
+  </div>
+</body>
+</html>`;
 }
 function buildRecoveryHtml(shopName, userName, resetToken, resetUrl) {
   return `
@@ -130486,16 +130671,25 @@ async function issueVerificationOtp(req, res, user, cleanEmail, extra, channel =
   });
   let dispatchedChannel = "email";
   let previewUrl;
+  let directVerifyUrl;
+  try {
+    const [shopSettings] = await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1);
+    const shopDomain = shopSettings?.shopDomain || process.env.PUBLIC_STORE_DOMAIN || "";
+    if (shopDomain) {
+      directVerifyUrl = `https://${shopDomain}/?action=verify_otp&email=${encodeURIComponent(cleanEmail)}&otp=${otpCode}`;
+    }
+  } catch {
+  }
   if (channel === "whatsapp" && user.mobileNumber) {
     const waResult = await sendOtpWhatsApp(user.mobileNumber, otpCode, "verification");
     if (waResult.success) {
       dispatchedChannel = "whatsapp";
     } else {
-      const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
+      const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode, directVerifyUrl);
       previewUrl = emailResult.previewUrl;
     }
   } else {
-    const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode);
+    const emailResult = await sendVerificationOtpEmail(cleanEmail, user.firstName, otpCode, directVerifyUrl);
     previewUrl = emailResult.previewUrl;
   }
   req.log.info({ userId: user.id, email: cleanEmail, channel: dispatchedChannel }, "Dispatched 6-digit verification OTP");
@@ -132247,12 +132441,12 @@ function startEmailWorker() {
     workerInstance = new import_bullmq.Worker(
       "email",
       async (job) => {
-        const { type, to, userName, otpCode, resetToken, resetUrl } = job.data;
+        const { type, to, userName, otpCode, resetToken, resetUrl, directVerifyUrl } = job.data;
         logger2.info({ jobId: job.id, type, to }, "Processing email job");
         switch (type) {
           case "verification-otp": {
             if (!otpCode) throw new Error("Missing otpCode for verification email");
-            const result = await sendVerificationOtpEmail(to, userName, otpCode);
+            const result = await sendVerificationOtpEmail(to, userName, otpCode, directVerifyUrl);
             if (!result.success) throw new Error("Failed to send verification OTP email");
             break;
           }

@@ -8,6 +8,7 @@ export interface EmailJobData {
   userName: string;
   /** For OTP emails */
   otpCode?: string;
+  directVerifyUrl?: string;
   /** For password recovery emails */
   resetToken?: string;
   resetUrl?: string;
