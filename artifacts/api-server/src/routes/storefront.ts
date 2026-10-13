@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { and, asc, eq, ilike, or, ne } from "drizzle-orm";
-import { db, discountsTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable } from "@workspace/db";
+import { db, discountsTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable, ordersTable } from "@workspace/db";
 import { seedStoreData } from "../lib/seed";
+import { getUserIdFromToken } from "./customer-auth";
 import {
   CheckRegistrationEligibilityBody,
   CheckRegistrationEligibilityResponse,
@@ -284,7 +285,7 @@ router.post("/v1/registrations/claim", async (req, res): Promise<void> => {
 });
 
 // Public endpoint: list active, non-expired coupons for customer browsing
-router.get("/v1/discounts/active", async (_req, res): Promise<void> => {
+router.get("/v1/discounts/active", async (req, res): Promise<void> => {
   try {
     let allDiscounts = await db.select().from(discountsTable);
     if (allDiscounts.length === 0) {
@@ -292,6 +293,20 @@ router.get("/v1/discounts/active", async (_req, res): Promise<void> => {
       allDiscounts = await db.select().from(discountsTable);
     }
     const now = Date.now();
+
+    // Check if customer is authenticated to show their private credit coupons
+    const authHeader = req.headers.authorization;
+    const authUserId = authHeader ? await getUserIdFromToken(authHeader) : null;
+
+    let userOrderPrefixes: string[] = [];
+    if (authUserId) {
+      const userOrders = await db
+        .select({ id: ordersTable.id })
+        .from(ordersTable)
+        .where(eq(ordersTable.userId, authUserId));
+      userOrderPrefixes = userOrders.map((o) => o.id.slice(0, 6).toUpperCase());
+    }
+
     const activeCoupons = allDiscounts.filter((d: any) => {
       if (!d.active) return false;
       const startsAtMs = d.startsAt ? new Date(d.startsAt).getTime() : 0;
@@ -299,6 +314,15 @@ router.get("/v1/discounts/active", async (_req, res): Promise<void> => {
       if (startsAtMs > now) return false;
       if (expiresAtMs && expiresAtMs < now) return false;
       if (d.usageLimit && d.usageCount >= d.usageLimit) return false;
+      if (typeof d.value === "number" && d.value <= 0) return false;
+
+      // Privacy: Store Credit coupons (CREDIT-*) only visible to the user who owns that order!
+      if (d.code.startsWith("CREDIT-")) {
+        if (!authUserId) return false; // Guest cannot see private store credits
+        const match = userOrderPrefixes.some((prefix) => d.code.startsWith(`CREDIT-${prefix}`));
+        if (!match) return false;
+      }
+
       return true;
     });
 

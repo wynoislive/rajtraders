@@ -689,7 +689,9 @@ export default function App() {
   const fetchCoupons = async () => {
     setCouponsLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/v1/discounts/active'));
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(getApiUrl('/api/v1/discounts/active'), { headers });
       if (res.ok) {
         const data = await res.json();
         setAvailableCoupons(Array.isArray(data) ? data : []);
@@ -1235,7 +1237,21 @@ export default function App() {
             <div className="flex items-center gap-3">
               {/* Notification Bell */}
               <button
-                onClick={() => setShowNotificationsModal(true)}
+                onClick={() => {
+                  setShowNotificationsModal(true);
+                  if (token) {
+                    fetch(getApiUrl('/api/v1/auth/notifications'), { headers: { Authorization: `Bearer ${token}` } })
+                      .then(r => r.ok ? r.json() : null)
+                      .then(data => {
+                        if (data) {
+                          setNotifications(data.notifications || []);
+                          setUnreadNotificationsCount(0);
+                        }
+                      })
+                      .catch(() => {});
+                    fetch(getApiUrl('/api/v1/auth/notifications/read-all'), { method: 'PUT', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+                  }
+                }}
                 aria-label="View notifications"
                 className="relative p-2.5 rounded-xl bg-[#0E3D42]/5 hover:bg-[#0E3D42]/10 transition text-[#0E3D42]"
               >
@@ -2637,9 +2653,12 @@ export default function App() {
                       <p>
                         {coupon.type === 'percentage'
                           ? `${coupon.value}% OFF`
-                          : `Flat ${money(coupon.value * 100)} OFF`}
+                          : `Flat ${money(coupon.value)} OFF`}
                         {coupon.minimumSubtotalCents > 0 && ` on orders above ${money(coupon.minimumSubtotalCents)}`}
                       </p>
+                      {coupon.code.startsWith('CREDIT-') && (
+                        <p className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded-md inline-block">🏷️ Store Credit Refund (Your Account)</p>
+                      )}
                       {coupon.firstOrderOnly && (
                         <p className="text-[10px] text-amber-700 font-bold">🌟 First order only</p>
                       )}
@@ -3046,11 +3065,21 @@ export default function App() {
             {notifications.length === 0 ? (
               <p className="text-xs text-gray-500 text-center py-6">No new notifications.</p>
             ) : (
-              <div className="space-y-3 max-h-80 overflow-y-auto">
+              <div className="space-y-2.5 max-h-80 overflow-y-auto">
                 {notifications.map((n) => (
-                  <div key={n.id} className="p-3 bg-gray-50 rounded-xl border text-xs">
-                    <div className="font-extrabold text-[#0E3D42]">{n.title}</div>
-                    <div className="text-gray-600 font-medium">{n.message}</div>
+                  <div key={n.id} className="p-3.5 bg-gray-50 hover:bg-gray-100/80 rounded-2xl border border-gray-200/80 text-xs space-y-1 transition">
+                    <div className="flex items-center justify-between">
+                      <div className="font-extrabold text-[#0E3D42] flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-emerald-500 inline-block"></span>
+                        {n.title}
+                      </div>
+                      {n.createdAt && (
+                        <span className="text-[10px] text-gray-400 font-semibold">
+                          {new Date(n.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-gray-600 font-medium leading-relaxed pl-3.5">{n.message}</div>
                   </div>
                 ))}
               </div>

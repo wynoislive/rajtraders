@@ -693,3 +693,137 @@ export async function sendOrderConfirmationEmail(
   }
 }
 
+function buildRefundConfirmationHtml(
+  shopName: string,
+  customerName: string,
+  orderId: string,
+  refundCents: number,
+  refundMethod: string,
+  creditCode?: string,
+  note?: string,
+): string {
+  const isCredit = refundMethod === "wallet" || refundMethod === "store_credit" || Boolean(creditCode);
+  const formattedAmount = `₹${(refundCents / 100).toFixed(2)}`;
+  const orderRef = `#${orderId.slice(0, 8).toUpperCase()}`;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #F7F2EA; margin: 0; padding: 20px; }
+        .container { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+        .header { background: #0E3D42; color: #ffffff; padding: 32px 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; }
+        .content { padding: 32px 28px; color: #2D3748; line-height: 1.6; }
+        .badge { display: inline-block; padding: 8px 16px; border-radius: 9999px; font-weight: bold; font-size: 13px; margin-bottom: 16px; }
+        .badge-credit { background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
+        .badge-original { background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE; }
+        .coupon-card { background: #F7F2EA; border: 2px dashed #0E3D42; border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0; }
+        .coupon-code { font-family: monospace; font-size: 22px; font-weight: 900; color: #0E3D42; letter-spacing: 2px; }
+        .amount { font-size: 28px; font-weight: 900; color: #0E3D42; margin: 8px 0; }
+        .button { display: inline-block; background: #0E3D42; color: #ffffff !important; padding: 14px 28px; border-radius: 10px; font-weight: bold; text-decoration: none; margin: 16px 0; font-size: 14px; }
+        .details-box { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px; margin: 20px 0; font-size: 13px; }
+        .footer { background: #FAF5EE; padding: 20px; text-align: center; font-size: 12px; color: #718096; border-top: 1px solid #E2E8F0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>${shopName}</h1>
+          <p style="margin: 6px 0 0; opacity: 0.8; font-size: 13px;">Gourmet Bakery & Artisanal Store</p>
+        </div>
+        <div class="content">
+          <div style="text-align: center;">
+            <div class="badge ${isCredit ? 'badge-credit' : 'badge-original'}">
+              ${isCredit ? '✓ Store Credit Issued' : '✓ Refund Processed'}
+            </div>
+            <div class="amount">${formattedAmount}</div>
+            <p style="color: #64748B; font-size: 13px; margin-top: 0;">Order Reference: <strong>${orderRef}</strong></p>
+          </div>
+
+          <p>Hello ${customerName || "Valued Customer"},</p>
+          
+          ${isCredit ? `
+            <p>Your refund of <strong>${formattedAmount}</strong> has been issued as an instant <strong>Store Credit Coupon</strong>. You can use it on any upcoming order at ${shopName}:</p>
+            
+            <div class="coupon-card">
+              <div style="font-size: 12px; font-weight: bold; text-transform: uppercase; color: #0E3D42; margin-bottom: 6px;">Your Store Credit Code</div>
+              <div class="coupon-code">${creditCode}</div>
+              <div style="font-size: 13px; color: #0E3D42; font-weight: 700; margin-top: 8px;">Flat ${formattedAmount} OFF</div>
+              <div style="font-size: 11px; color: #64748B; margin-top: 4px;">Valid for 1 year · Usable across entire bakery & store catalog</div>
+            </div>
+
+            <div style="background: #F0FDF4; border-left: 4px solid #10B981; padding: 12px; font-size: 12px; color: #065F46; border-radius: 6px;">
+              <strong>Remaining Balance Retention:</strong> If your next order total is less than ${formattedAmount}, the remainder will stay on this coupon code for future purchases automatically!
+            </div>
+          ` : `
+            <p>We have processed a refund of <strong>${formattedAmount}</strong> to your original payment method (via Razorpay).</p>
+            <div class="details-box">
+              <p style="margin: 0 0 6px;"><strong>Refund Status:</strong> Initiated</p>
+              <p style="margin: 0 0 6px;"><strong>Refund Method:</strong> Original Bank / UPI / Card</p>
+              <p style="margin: 0;"><strong>Estimated Timeline:</strong> Standard bank processing takes 3–5 working days to reflect in your account.</p>
+            </div>
+          `}
+
+          ${note ? `
+            <div style="background: #FFFBEB; border: 1px solid #FDE68A; padding: 12px; border-radius: 8px; font-size: 12px; color: #92400E; margin-top: 16px;">
+              <strong>Note from Store:</strong> ${note}
+            </div>
+          ` : ''}
+
+          <div style="text-align: center; margin-top: 24px;">
+            <a href="https://sundarvan.xyz/cart" class="button">Visit Raj Traders Store</a>
+          </div>
+
+          <p style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 20px;">
+            Questions about your refund? Contact us at support@sundarvan.xyz or visit our store in Birsingpur Pali.
+          </p>
+        </div>
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} ${shopName}. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Sends a branded refund & store credit confirmation email to the customer.
+ */
+export async function sendRefundConfirmationEmail(
+  toEmail: string,
+  customerName: string,
+  orderId: string,
+  refundCents: number,
+  refundMethod: "wallet" | "original" | "razorpay" | string,
+  creditCode?: string,
+  note?: string,
+): Promise<{ success: boolean; previewUrl?: string }> {
+  try {
+    const { shopName } = await getTransporter();
+    const isCredit = refundMethod === "wallet" || refundMethod === "store_credit" || Boolean(creditCode);
+    const formattedAmount = `₹${(refundCents / 100).toFixed(2)}`;
+    const subject = isCredit
+      ? `Store Credit Issued: ${formattedAmount} for Order #${orderId.slice(0, 8).toUpperCase()} - ${shopName}`
+      : `Refund Processed: ${formattedAmount} for Order #${orderId.slice(0, 8).toUpperCase()} - ${shopName}`;
+    const htmlContent = buildRefundConfirmationHtml(
+      shopName,
+      customerName,
+      orderId,
+      refundCents,
+      refundMethod,
+      creditCode,
+      note,
+    );
+
+    return await sendEmail(toEmail, subject, htmlContent);
+  } catch (err) {
+    logger.error({ err, toEmail, orderId }, "Failed to send refund confirmation email");
+    return { success: false };
+  }
+}
+
+

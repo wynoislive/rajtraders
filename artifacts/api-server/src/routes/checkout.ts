@@ -489,10 +489,39 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
     });
 
     if (appliedDiscountId) {
-      await db
-        .update(discountsTable)
-        .set({ usageCount: sql`${discountsTable.usageCount} + 1` })
-        .where(eq(discountsTable.id, appliedDiscountId));
+      const [appliedDiscount] = await db
+        .select()
+        .from(discountsTable)
+        .where(eq(discountsTable.id, appliedDiscountId))
+        .limit(1);
+
+      if (appliedDiscount && appliedDiscount.code.startsWith("CREDIT-")) {
+        const remainingCreditCents = Math.max(0, Math.round(appliedDiscount.value) - discountCents);
+        if (remainingCreditCents > 0) {
+          // Customer still has remaining store credit! Keep coupon active with reduced balance.
+          await db
+            .update(discountsTable)
+            .set({
+              value: remainingCreditCents,
+            })
+            .where(eq(discountsTable.id, appliedDiscountId));
+        } else {
+          // Fully utilized
+          await db
+            .update(discountsTable)
+            .set({
+              value: 0,
+              usageCount: sql`${discountsTable.usageCount} + 1`,
+              active: false,
+            })
+            .where(eq(discountsTable.id, appliedDiscountId));
+        }
+      } else {
+        await db
+          .update(discountsTable)
+          .set({ usageCount: sql`${discountsTable.usageCount} + 1` })
+          .where(eq(discountsTable.id, appliedDiscountId));
+      }
     }
 
     req.log.info({ internalOrderId, razorpayOrderId, totalCents, userId: resolvedUserId }, "Created checkout order");

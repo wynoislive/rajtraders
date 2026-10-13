@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, ilike, lt, sql } from "drizzle-orm";
-import { db, discountsTable, ordersTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable } from "@workspace/db";
+import { db, discountsTable, ordersTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable, customerNotificationsTable } from "@workspace/db";
 import { seedStoreData } from "../lib/seed";
 import {
   CreateDiscountBody,
@@ -23,7 +23,7 @@ import { logAuditEvent } from "../utils/audit-logger";
 import { discountResponse } from "./storefront";
 import { getStaffFromToken } from "./staff-admin";
 import { filterOrders } from "../utils/order-filters";
-import { clearTransporterCache, sendEmail } from "../utils/mailer";
+import { clearTransporterCache, sendEmail, sendRefundConfirmationEmail } from "../utils/mailer";
 import { generateTaxInvoicePdf } from "../utils/invoice-generator";
 import { sendWhatsAppTextMessage, sendOrderStatusWhatsApp } from "../utils/whatsapp";
 import { z } from "zod";
@@ -1048,7 +1048,7 @@ router.post("/v1/admin/orders/:id/approve-cancellation", requirePermission("orde
       }
     } else if (preferredMethod === "wallet") {
       // 2. Wallet store credit: generate unique discount code
-      const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}`;
+      const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
       try {
         await db.insert(discountsTable).values({
           id: randomUUID(),
@@ -1108,6 +1108,40 @@ router.post("/v1/admin/orders/:id/approve-cancellation", requirePermission("orde
       status: "SUCCESS",
       details: { refundMethod: preferredMethod, refundId, refundAmountCents: order.totalCents },
     });
+
+    // 5. In-App Notification for Customer
+    if (order.userId) {
+      const isCredit = preferredMethod === "wallet";
+      const formattedAmt = `₹${(order.totalCents / 100).toFixed(2)}`;
+      db.insert(customerNotificationsTable).values({
+        id: randomUUID(),
+        userId: order.userId,
+        title: isCredit ? `Store Credit Issued (${formattedAmt})` : `Refund Processed (${formattedAmt})`,
+        message: isCredit
+          ? `Your cancellation for order #${order.id.slice(0, 8).toUpperCase()} was approved! A Store Credit coupon (${refundId}) of ${formattedAmt} has been credited to your account.`
+          : `Your cancellation for order #${order.id.slice(0, 8).toUpperCase()} was approved! A refund of ${formattedAmt} has been initiated to your original payment method.`,
+        type: "order_update",
+        link: "/account",
+        isRead: false,
+        createdAt: new Date(),
+      }).catch((notifErr) => {
+        req.log.warn({ notifErr, orderId: id }, "Failed creating in-app customer notification");
+      });
+    }
+
+    // 6. Email Notification
+    if (order.customerEmail) {
+      sendRefundConfirmationEmail(
+        order.customerEmail,
+        order.customerName || "Valued Customer",
+        order.id,
+        order.totalCents,
+        preferredMethod,
+        preferredMethod === "wallet" ? refundId : undefined,
+      ).catch((mailErr) => {
+        req.log.warn({ mailErr, orderId: id }, "Failed sending refund confirmation email");
+      });
+    }
 
     sendOrderStatusWhatsApp(order, "cancelled", {}).catch((err) => {
       req.log.warn({ err, orderId: id }, "Background WhatsApp order cancellation approval message failed");
@@ -1227,7 +1261,7 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
         }
       } else if (refundAction === "store_credit") {
         refundAmountCents = order.totalCents;
-        const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}`;
+        const creditCode = `CREDIT-${order.id.slice(0, 6).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`;
         try {
           await db.insert(discountsTable).values({
             id: randomUUID(),
@@ -1288,6 +1322,41 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
       status: "SUCCESS",
       details: { reason, refundAction, refundId, refundAmountCents },
     });
+
+    // In-App Notification
+    if (order.userId && refundAmountCents > 0) {
+      const isCredit = refundAction === "store_credit";
+      const formattedAmt = `₹${(refundAmountCents / 100).toFixed(2)}`;
+      db.insert(customerNotificationsTable).values({
+        id: randomUUID(),
+        userId: order.userId,
+        title: isCredit ? `Store Credit Issued (${formattedAmt})` : `Order Refunded (${formattedAmt})`,
+        message: isCredit
+          ? `Order #${order.id.slice(0, 8).toUpperCase()} was declined (${reason || 'Store Capacity'}). A Store Credit coupon (${refundId}) of ${formattedAmt} has been credited to your account.`
+          : `Order #${order.id.slice(0, 8).toUpperCase()} was declined (${reason || 'Store Capacity'}). A refund of ${formattedAmt} has been initiated to your original payment method.`,
+        type: "order_update",
+        link: "/account",
+        isRead: false,
+        createdAt: new Date(),
+      }).catch((notifErr) => {
+        req.log.warn({ notifErr, orderId: id }, "Failed creating in-app customer notification on decline");
+      });
+    }
+
+    // Email Notification
+    if (order.customerEmail && refundAmountCents > 0) {
+      sendRefundConfirmationEmail(
+        order.customerEmail,
+        order.customerName || "Valued Customer",
+        order.id,
+        refundAmountCents,
+        refundAction === "store_credit" ? "wallet" : "original",
+        refundAction === "store_credit" ? refundId : undefined,
+        reason ? `Order cancelled by store: ${reason}` : undefined,
+      ).catch((mailErr) => {
+        req.log.warn({ mailErr, orderId: id }, "Failed sending decline refund confirmation email");
+      });
+    }
 
     sendOrderStatusWhatsApp(order, "cancelled", {
       cancellationReason: reason,
@@ -1410,6 +1479,41 @@ router.post("/v1/admin/orders/:id/refund", requirePermission("orders"), async (r
       status: "SUCCESS",
       details: { refundMethod, refundId, refundCents, totalRefundedCents: newRefundAmountCents, note },
     });
+
+    // In-App Notification
+    if (order.userId) {
+      const isCredit = refundMethod === "wallet";
+      const formattedAmt = `₹${(refundCents / 100).toFixed(2)}`;
+      db.insert(customerNotificationsTable).values({
+        id: randomUUID(),
+        userId: order.userId,
+        title: isCredit ? `Store Credit Issued (${formattedAmt})` : `Refund Processed (${formattedAmt})`,
+        message: isCredit
+          ? `A Store Credit coupon (${refundId}) of ${formattedAmt} has been credited to your account for order #${order.id.slice(0, 8).toUpperCase()}. You can apply it at checkout anytime!`
+          : `A refund of ${formattedAmt} for order #${order.id.slice(0, 8).toUpperCase()} has been initiated to your original payment method.`,
+        type: "order_update",
+        link: "/account",
+        isRead: false,
+        createdAt: new Date(),
+      }).catch((notifErr) => {
+        req.log.warn({ notifErr, orderId: id }, "Failed creating in-app customer notification on manual refund");
+      });
+    }
+
+    // Email Notification
+    if (order.customerEmail) {
+      sendRefundConfirmationEmail(
+        order.customerEmail,
+        order.customerName || "Valued Customer",
+        order.id,
+        refundCents,
+        refundMethod,
+        refundMethod === "wallet" ? refundId : undefined,
+        note,
+      ).catch((mailErr) => {
+        req.log.warn({ mailErr, orderId: id }, "Failed sending manual refund confirmation email");
+      });
+    }
 
     res.json({
       success: true,
