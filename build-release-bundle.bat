@@ -35,7 +35,12 @@ echo.
 
 copy "%~dp0mobile-android\app\build\outputs\bundle\release\app-release.aab" "%~dp0RAJ_TRADERS_PlayStore_Release.aab" > nul 2>&1
 if exist "%~dp0RAJ_TRADERS_PlayStore_Release.aab" (
-    echo [READY] RAJ_TRADERS_PlayStore_Release.aab has been placed in the root directory!
+    echo [READY] Play Store AAB: RAJ_TRADERS_PlayStore_Release.aab
+)
+
+copy "%~dp0mobile-android\app\build\outputs\apk\release\app-release.apk" "%~dp0RAJ_TRADERS_Direct_Release.apk" > nul 2>&1
+if exist "%~dp0RAJ_TRADERS_Direct_Release.apk" (
+    echo [READY] Direct Phone APK: RAJ_TRADERS_Direct_Release.apk
 )
 goto :end
 

@@ -26,6 +26,12 @@ if ($LASTEXITCODE -eq 0) {
         Copy-Item -Path $aabPath -Destination $destAab -Force
     }
 
+    $apkPath = "$PSScriptRoot\mobile-android\app\build\outputs\apk\release\app-release.apk"
+    $destApk = "$PSScriptRoot\RAJ_TRADERS_Direct_Release.apk"
+    if (Test-Path $apkPath) {
+        Copy-Item -Path $apkPath -Destination $destApk -Force
+    }
+
     Write-Host "`n========================================================" -ForegroundColor Green
     Write-Host " BUILD SUCCESSFUL!" -ForegroundColor Green
     Write-Host "========================================================`n" -ForegroundColor Green
@@ -33,7 +39,8 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "   $aabPath" -ForegroundColor Yellow
     Write-Host "   -> Copied to root: $destAab" -ForegroundColor Green
     Write-Host "`n2. Standalone Release APK (.apk):" -ForegroundColor White
-    Write-Host "   $PSScriptRoot\mobile-android\app\build\outputs\apk\release\app-release.apk" -ForegroundColor Yellow
+    Write-Host "   $apkPath" -ForegroundColor Yellow
+    Write-Host "   -> Copied to root: $destApk" -ForegroundColor Green
 } else {
     Write-Host "`nBUILD FAILED with exit code $LASTEXITCODE" -ForegroundColor Red
 }

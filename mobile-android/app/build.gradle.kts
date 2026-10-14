@@ -35,7 +35,7 @@ android {
         create("release") {
             val keyStorePath = keystoreProps.getProperty("storeFile") ?: System.getenv("KEYSTORE_FILE")
             if (keyStorePath != null) {
-                val f = file(keyStorePath)
+                val f = if (file(keyStorePath).exists()) file(keyStorePath) else rootProject.file(keyStorePath)
                 if (f.exists()) {
                     storeFile = f
                     storePassword = keystoreProps.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD") ?: ""
