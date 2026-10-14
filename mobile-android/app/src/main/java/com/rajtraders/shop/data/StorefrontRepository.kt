@@ -200,4 +200,26 @@ class StorefrontRepository(private val api: StorefrontApi) {
 
     suspend fun recoverTotp(email: String, recoveryCode: String) =
         api.recoverTotp(TotpRecoveryRequest(email, recoveryCode))
+
+    // ─── Customer Saved Addresses ───────────────────────────────
+
+    suspend fun listAddresses(token: String): List<CustomerAddress> =
+        api.listAddresses("Bearer $token")
+
+    suspend fun createAddress(token: String, request: CustomerAddressRequest): CustomerAddress =
+        api.createAddress("Bearer $token", request)
+
+    suspend fun updateAddress(token: String, id: String, request: CustomerAddressRequest): CustomerAddress =
+        api.updateAddress("Bearer $token", id, request)
+
+    suspend fun deleteAddress(token: String, id: String): GenericResponse =
+        api.deleteAddress("Bearer $token", id)
+
+    // ─── Customer Notifications ─────────────────────────────────
+
+    suspend fun listNotifications(token: String): NotificationsResponse =
+        api.listNotifications("Bearer $token")
+
+    suspend fun markAllNotificationsRead(token: String): GenericResponse =
+        api.markAllNotificationsRead("Bearer $token")
 }

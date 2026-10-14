@@ -106,6 +106,23 @@ data class StorefrontUiState(
     val isCheckingPincode: Boolean = false,
     val pincodeError: String? = null,
     val isPincodeFilterActive: Boolean = false,
+    // Saved Addresses States
+    val savedAddresses: List<com.rajtraders.shop.data.CustomerAddress> = emptyList(),
+    val isLoadingAddresses: Boolean = false,
+    val selectedAddressId: String? = null,
+    val showAddressDialog: Boolean = false,
+    val editingAddress: com.rajtraders.shop.data.CustomerAddress? = null,
+    val addressError: String? = null,
+    val addressNotice: String? = null,
+    // Customer Notifications States
+    val notifications: List<com.rajtraders.shop.data.NotificationItem> = emptyList(),
+    val unreadNotificationsCount: Int = 0,
+    val isLoadingNotifications: Boolean = false,
+    val showNotificationsDialog: Boolean = false,
+    // In-App Legal & Policy Web Dialogs (Play Store Policy)
+    val activeLegalUrl: String? = null,
+    val activeLegalTitle: String? = null,
+    val showLegalDialog: Boolean = false,
 )
 
 class StorefrontViewModel(private val repository: StorefrontRepository) : ViewModel() {
@@ -319,6 +336,8 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                         )
                     }
                     fetchOrders()
+                    fetchAddresses()
+                    fetchNotifications()
                 } else {
                     _uiState.update { it.copy(isAuthenticating = false, authError = "Authentication failed.") }
                 }
@@ -351,6 +370,8 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                     )
                 }
                 fetchOrders()
+                fetchAddresses()
+                fetchNotifications()
             }.onFailure { err ->
                 _uiState.update {
                     it.copy(
@@ -398,6 +419,10 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                 authToken = null,
                 currentUser = null,
                 orders = emptyList(),
+                savedAddresses = emptyList(),
+                notifications = emptyList(),
+                unreadNotificationsCount = 0,
+                selectedAddressId = null,
                 authSuccess = null,
                 lockdownWarning = null,
             )
@@ -870,6 +895,167 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
 
     fun setPincodeFilter(enabled: Boolean) {
         _uiState.update { it.copy(isPincodeFilterActive = enabled) }
+    }
+
+    // ─── Customer Saved Addresses ───────────────────────────────
+
+    fun fetchAddresses() {
+        val token = _uiState.value.authToken ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingAddresses = true, addressError = null) }
+            runCatching {
+                repository.listAddresses(token)
+            }.onSuccess { addresses ->
+                _uiState.update { state ->
+                    val defaultAddr = addresses.firstOrNull { it.isDefault } ?: addresses.firstOrNull()
+                    val nextShipping = if (state.shippingAddress.isBlank() && defaultAddr != null) {
+                        "${defaultAddr.houseNumber?.let { "$it, " } ?: ""}${defaultAddr.fullAddress}, ${defaultAddr.city} ${defaultAddr.pincode}"
+                    } else state.shippingAddress
+
+                    state.copy(
+                        isLoadingAddresses = false,
+                        savedAddresses = addresses,
+                        selectedAddressId = defaultAddr?.id ?: state.selectedAddressId,
+                        shippingAddress = nextShipping,
+                    )
+                }
+            }.onFailure { err ->
+                _uiState.update { it.copy(isLoadingAddresses = false, addressError = err.message) }
+            }
+        }
+    }
+
+    fun selectSavedAddress(address: com.rajtraders.shop.data.CustomerAddress) {
+        val formatted = "${address.houseNumber?.let { "$it, " } ?: ""}${address.fullAddress}, ${address.city} ${address.pincode}"
+        _uiState.update {
+            it.copy(
+                selectedAddressId = address.id,
+                shippingAddress = formatted,
+                selectedPincode = address.pincode,
+                selectedCity = address.city,
+            )
+        }
+    }
+
+    fun openAddressDialog(address: com.rajtraders.shop.data.CustomerAddress? = null) {
+        _uiState.update { it.copy(showAddressDialog = true, editingAddress = address, addressError = null) }
+    }
+
+    fun dismissAddressDialog() {
+        _uiState.update { it.copy(showAddressDialog = false, editingAddress = null, addressError = null) }
+    }
+
+    fun saveAddress(
+        label: String,
+        fullAddress: String,
+        houseNumber: String?,
+        landmark: String?,
+        pincode: String,
+        city: String,
+        state: String,
+        isDefault: Boolean
+    ) {
+        val token = _uiState.value.authToken ?: return
+        if (fullAddress.isBlank() || pincode.isBlank() || city.isBlank()) {
+            _uiState.update { it.copy(addressError = "Please fill in Address, City, and 6-digit Pincode.") }
+            return
+        }
+        val request = com.rajtraders.shop.data.CustomerAddressRequest(
+            label = label.ifBlank { "Home" },
+            fullAddress = fullAddress.trim(),
+            houseNumber = houseNumber?.trim(),
+            landmark = landmark?.trim(),
+            pincode = pincode.trim(),
+            city = city.trim(),
+            state = state.trim(),
+            isDefault = isDefault
+        )
+        val editing = _uiState.value.editingAddress
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingAddresses = true, addressError = null) }
+            runCatching {
+                if (editing != null) {
+                    repository.updateAddress(token, editing.id, request)
+                } else {
+                    repository.createAddress(token, request)
+                }
+            }.onSuccess {
+                _uiState.update { it.copy(showAddressDialog = false, editingAddress = null, addressNotice = "Address saved successfully.") }
+                fetchAddresses()
+            }.onFailure { err ->
+                _uiState.update { it.copy(isLoadingAddresses = false, addressError = err.message ?: "Failed to save address.") }
+            }
+        }
+    }
+
+    fun deleteAddress(id: String) {
+        val token = _uiState.value.authToken ?: return
+        viewModelScope.launch {
+            runCatching {
+                repository.deleteAddress(token, id)
+            }.onSuccess {
+                fetchAddresses()
+            }.onFailure { err ->
+                _uiState.update { it.copy(addressError = err.message ?: "Failed to delete address.") }
+            }
+        }
+    }
+
+    // ─── Customer Notifications ─────────────────────────────────
+
+    fun fetchNotifications() {
+        val token = _uiState.value.authToken ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingNotifications = true) }
+            runCatching {
+                repository.listNotifications(token)
+            }.onSuccess { resp ->
+                _uiState.update {
+                    it.copy(
+                        isLoadingNotifications = false,
+                        notifications = resp.notifications,
+                        unreadNotificationsCount = resp.unreadCount,
+                    )
+                }
+            }.onFailure {
+                _uiState.update { it.copy(isLoadingNotifications = false) }
+            }
+        }
+    }
+
+    fun openNotificationsDialog() {
+        _uiState.update { it.copy(showNotificationsDialog = true) }
+        fetchNotifications()
+    }
+
+    fun dismissNotificationsDialog() {
+        _uiState.update { it.copy(showNotificationsDialog = false) }
+    }
+
+    fun markAllNotificationsRead() {
+        val token = _uiState.value.authToken ?: return
+        viewModelScope.launch {
+            runCatching {
+                repository.markAllNotificationsRead(token)
+            }.onSuccess {
+                _uiState.update { state ->
+                    state.copy(
+                        unreadNotificationsCount = 0,
+                        notifications = state.notifications.map { it.copy(isRead = true) }
+                    )
+                }
+            }
+        }
+    }
+
+    // ─── In-App Legal & Policies (Google Play Policy Compliance) ─
+
+    fun openLegalDialog(title: String, url: String) {
+        _uiState.update { it.copy(showLegalDialog = true, activeLegalTitle = title, activeLegalUrl = url) }
+    }
+
+    fun dismissLegalDialog() {
+        _uiState.update { it.copy(showLegalDialog = false, activeLegalTitle = null, activeLegalUrl = null) }
     }
 }
 

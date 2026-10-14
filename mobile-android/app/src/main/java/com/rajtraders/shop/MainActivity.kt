@@ -36,6 +36,15 @@ import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material.icons.outlined.Verified
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Policy
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import com.rajtraders.shop.data.CustomerAddress
+import com.rajtraders.shop.data.NotificationItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -138,6 +147,26 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.openNotificationsDialog() }) {
+                            Box {
+                                Icon(Icons.Outlined.Notifications, contentDescription = "Notifications")
+                                if (state.unreadNotificationsCount > 0) {
+                                    Surface(
+                                        modifier = Modifier.align(Alignment.TopEnd).size(16.dp),
+                                        shape = CircleShape,
+                                        color = Color(0xFFB84A3D),
+                                    ) {
+                                        Text(
+                                            "${state.unreadNotificationsCount}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         IconButton(onClick = { selectedTab = 1 }) {
                             Box {
                                 Icon(Icons.Outlined.ShoppingBag, contentDescription = "Open bag")
@@ -239,6 +268,21 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
     // TOTP 2FA Setup dialog overlay
     if (state.showTotpSetupDialog) {
         TotpSetupDialog(state, viewModel)
+    }
+
+    // Customer Notifications Dialog overlay
+    if (state.showNotificationsDialog) {
+        NotificationsDialog(state, viewModel)
+    }
+
+    // Customer Saved Address Dialog overlay
+    if (state.showAddressDialog) {
+        AddressDialog(state, viewModel)
+    }
+
+    // Google Play Policy Legal Dialog overlay
+    if (state.showLegalDialog) {
+        LegalDialog(state, viewModel)
     }
 }
 
@@ -1010,6 +1054,115 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                     }
 
                     Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = RajTeal.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(14.dp))
+
+                    // ─── Customer Saved Addresses ───────────────────────────
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Delivery Addresses", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                            Text("Saved addresses for 1-tap checkout", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.openAddressDialog() },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Add", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+                    if (state.savedAddresses.isEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = RajCanvas,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                "No saved addresses yet. Tap '+ Add' above to save your delivery location.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            state.savedAddresses.forEach { addr ->
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = RajCanvas,
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = RajTeal.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        addr.label ?: "Home",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = RajTeal,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                                if (addr.isDefault) {
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = RajSaffron.copy(alpha = 0.2f)
+                                                    ) {
+                                                        Text(
+                                                            "DEFAULT",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = Color(0xFFB45309),
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Spacer(Modifier.height(4.dp))
+                                            Text(
+                                                "${addr.houseNumber?.let { "$it, " } ?: ""}${addr.fullAddress}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            Text(
+                                                "${addr.city}, ${addr.state ?: "MP"} - ${addr.pincode}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color.Gray
+                                            )
+                                        }
+                                        Row {
+                                            IconButton(onClick = { viewModel.openAddressDialog(addr) }) {
+                                                Icon(Icons.Outlined.Edit, contentDescription = "Edit address", tint = RajTeal, modifier = Modifier.size(18.dp))
+                                            }
+                                            IconButton(onClick = { viewModel.deleteAddress(addr.id) }) {
+                                                Icon(Icons.Outlined.Delete, contentDescription = "Delete address", tint = Color(0xFFB84A3D), modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
                     OutlinedButton(onClick = { viewModel.logout() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
                         Text("Logout", fontWeight = FontWeight.Bold, color = RajTeal)
                     }
@@ -1028,6 +1181,87 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                         Text("Delete Account (Play Store Compliance)", color = Color(0xFFB84A3D), fontWeight = FontWeight.Bold)
                     }
                 }
+            }
+        }
+
+        // ─── Play Store Policy, Terms & Legal Links (Visible to ALL users) ───
+        val context = LocalContext.current
+        Spacer(Modifier.height(16.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(Modifier.padding(18.dp)) {
+                Text("Legal & Compliance", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text("Google Play policies, terms and customer protections", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://sundarvan.xyz/privacy"))
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Outlined.Security, contentDescription = null, modifier = Modifier.size(18.dp), tint = RajTeal)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Privacy Policy", color = RajTeal, fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://sundarvan.xyz/terms"))
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Outlined.Policy, contentDescription = null, modifier = Modifier.size(18.dp), tint = RajTeal)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Terms of Service", color = RajTeal, fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://sundarvan.xyz/refund-policy"))
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp), tint = RajTeal)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Refund & Cancellation Policy", color = RajTeal, fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:support@sundarvan.xyz?subject=Raj%20Traders%20Support%20Inquiry")
+                        }
+                        context.startActivity(intent)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Outlined.Email, contentDescription = null, modifier = Modifier.size(18.dp), tint = RajTeal)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Contact Support (support@sundarvan.xyz)", color = RajTeal, fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Raj Traders v1.0.0 (Production Release) · All Rights Reserved",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
@@ -1399,8 +1633,37 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
 
             Text("Shipping Address", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
-            Text("Required before payment. Enter delivery address & coordinates.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text("Select saved address or enter delivery coordinates.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             Spacer(Modifier.height(10.dp))
+
+            if (state.currentUser != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    state.savedAddresses.forEach { addr ->
+                        val isSelected = state.selectedAddressId == addr.id
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.selectSavedAddress(addr) },
+                            label = { Text(addr.label ?: "Address") },
+                            leadingIcon = if (isSelected) {
+                                { Icon(Icons.Outlined.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            } else null
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.openAddressDialog() },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("+ Add Address", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
 
             OutlinedTextField(
                 value = state.shippingAddress,
@@ -1816,4 +2079,175 @@ private fun money(cents: Int, currencyCode: String = "INR"): String {
     } catch (_: Exception) {
         "₹${cents / 100}"
     }
+}
+
+// ─── Customer Notifications Dialog ──────────────────────────
+
+@Composable
+private fun NotificationsDialog(state: StorefrontUiState, viewModel: StorefrontViewModel) {
+    AlertDialog(
+        onDismissRequest = { viewModel.dismissNotificationsDialog() },
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Notifications", fontWeight = FontWeight.Bold, color = RajTeal)
+                if (state.unreadNotificationsCount > 0) {
+                    TextButton(onClick = { viewModel.markAllNotificationsRead() }) {
+                        Text("Mark all read", style = MaterialTheme.typography.labelSmall, color = RajTeal)
+                    }
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (state.notifications.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                        Text("No notifications yet", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
+                    }
+                } else {
+                    state.notifications.forEach { item ->
+                        Surface(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (!item.isRead) RajSaffron.copy(alpha = 0.15f) else RajCanvas
+                        ) {
+                            Column(Modifier.padding(10.dp)) {
+                                Text(item.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                Spacer(Modifier.height(2.dp))
+                                Text(item.message, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { viewModel.dismissNotificationsDialog() }, colors = ButtonDefaults.buttonColors(containerColor = RajTeal)) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+// ─── Customer Address CRUD Dialog ───────────────────────────
+
+@Composable
+private fun AddressDialog(state: StorefrontUiState, viewModel: StorefrontViewModel) {
+    val editing = state.editingAddress
+    var label by remember { mutableStateOf(editing?.label ?: "Home") }
+    var houseNumber by remember { mutableStateOf(editing?.houseNumber ?: "") }
+    var landmark by remember { mutableStateOf(editing?.landmark ?: "") }
+    var fullAddress by remember { mutableStateOf(editing?.fullAddress ?: "") }
+    var city by remember { mutableStateOf(editing?.city ?: state.selectedCity) }
+    var pincode by remember { mutableStateOf(editing?.pincode ?: state.selectedPincode) }
+    var stateName by remember { mutableStateOf(editing?.state ?: "Madhya Pradesh") }
+    var isDefault by remember { mutableStateOf(editing?.isDefault ?: false) }
+
+    AlertDialog(
+        onDismissRequest = { viewModel.dismissAddressDialog() },
+        title = {
+            Text(if (editing != null) "Edit Address" else "Add New Address", fontWeight = FontWeight.Bold, color = RajTeal)
+        },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Home", "Office", "Other").forEach { tag ->
+                        FilterChip(
+                            selected = label == tag,
+                            onClick = { label = tag },
+                            label = { Text(tag) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(value = houseNumber, onValueChange = { houseNumber = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Flat / House No. / Building") }, singleLine = true)
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(value = fullAddress, onValueChange = { fullAddress = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Street Address / Colony *") }, minLines = 2)
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(value = landmark, onValueChange = { landmark = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Landmark (Optional)") }, singleLine = true)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = city, onValueChange = { city = it }, modifier = Modifier.weight(1f), label = { Text("City *") }, singleLine = true)
+                    OutlinedTextField(value = pincode, onValueChange = { if (it.length <= 6) pincode = it }, modifier = Modifier.weight(1f), label = { Text("Pincode *") }, singleLine = true)
+                }
+
+                state.addressError?.let { err ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(err, color = Color(0xFFB84A3D), style = MaterialTheme.typography.bodySmall)
+                }
+
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(checked = isDefault, onCheckedChange = { isDefault = it }, colors = SwitchDefaults.colors(checkedThumbColor = RajTeal, checkedTrackColor = RajTeal.copy(alpha = 0.5f)))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Set as default delivery address", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    viewModel.saveAddress(
+                        label = label,
+                        fullAddress = fullAddress,
+                        houseNumber = houseNumber,
+                        landmark = landmark,
+                        pincode = pincode,
+                        city = city,
+                        state = stateName,
+                        isDefault = isDefault
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
+                enabled = fullAddress.isNotBlank() && pincode.isNotBlank() && city.isNotBlank()
+            ) {
+                Text("Save Address")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { viewModel.dismissAddressDialog() }) {
+                Text("Cancel", color = RajTeal)
+            }
+        }
+    )
+}
+
+// ─── In-App Google Play Policy Legal Dialog ─────────────────
+
+@Composable
+private fun LegalDialog(state: StorefrontUiState, viewModel: StorefrontViewModel) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = { viewModel.dismissLegalDialog() },
+        title = { Text(state.activeLegalTitle ?: "Legal Policy", fontWeight = FontWeight.Bold, color = RajTeal) },
+        text = {
+            Text("You are opening the official ${state.activeLegalTitle} on our secure portal (sundarvan.xyz). Tap 'Open in Browser' to read the complete compliance documentation.")
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    state.activeLegalUrl?.let { url ->
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        context.startActivity(intent)
+                    }
+                    viewModel.dismissLegalDialog()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal)
+            ) {
+                Text("Open in Browser")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { viewModel.dismissLegalDialog() }) {
+                Text("Close", color = RajTeal)
+            }
+        }
+    )
 }

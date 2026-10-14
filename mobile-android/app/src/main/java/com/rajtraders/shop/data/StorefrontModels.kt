@@ -299,3 +299,53 @@ data class TotpRecoveryResponse(
     val remainingRecoveryCodes: Int,
     val message: String,
 )
+
+// ─── Customer Saved Addresses ───────────────────────────────
+
+data class CustomerAddress(
+    val id: String,
+    val userId: String? = null,
+    val label: String? = "Home",
+    val fullAddress: String,
+    val houseNumber: String? = null,
+    val buildingSociety: String? = null,
+    val landmark: String? = null,
+    val pincode: String,
+    val city: String,
+    val state: String? = "Madhya Pradesh",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val deliveryInstructions: String? = null,
+    val isDefault: Boolean = false,
+)
+
+data class CustomerAddressRequest(
+    val label: String = "Home",
+    val fullAddress: String,
+    val houseNumber: String? = null,
+    val buildingSociety: String? = null,
+    val landmark: String? = null,
+    val pincode: String,
+    val city: String,
+    val state: String = "Madhya Pradesh",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val deliveryInstructions: String? = null,
+    val isDefault: Boolean = false,
+)
+
+// ─── Customer Notifications ─────────────────────────────────
+
+data class NotificationItem(
+    val id: String,
+    val title: String,
+    val message: String,
+    val type: String? = "order",
+    val isRead: Boolean = false,
+    val createdAt: String? = null,
+)
+
+data class NotificationsResponse(
+    val notifications: List<NotificationItem> = emptyList(),
+    val unreadCount: Int = 0,
+)

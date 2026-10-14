@@ -131,4 +131,42 @@ interface StorefrontApi {
     suspend fun recoverTotp(
         @Body body: TotpRecoveryRequest,
     ): TotpRecoveryResponse
+
+    // ─── Customer Saved Addresses ───────────────────────────────
+
+    @GET("v1/auth/addresses")
+    suspend fun listAddresses(
+        @Header("Authorization") token: String,
+    ): List<CustomerAddress>
+
+    @POST("v1/auth/addresses")
+    suspend fun createAddress(
+        @Header("Authorization") token: String,
+        @Body body: CustomerAddressRequest,
+    ): CustomerAddress
+
+    @PUT("v1/auth/addresses/{id}")
+    suspend fun updateAddress(
+        @Header("Authorization") token: String,
+        @Path("id") id: String,
+        @Body body: CustomerAddressRequest,
+    ): CustomerAddress
+
+    @DELETE("v1/auth/addresses/{id}")
+    suspend fun deleteAddress(
+        @Header("Authorization") token: String,
+        @Path("id") id: String,
+    ): GenericResponse
+
+    // ─── Customer Notifications ─────────────────────────────────
+
+    @GET("v1/auth/notifications")
+    suspend fun listNotifications(
+        @Header("Authorization") token: String,
+    ): NotificationsResponse
+
+    @PUT("v1/auth/notifications/read-all")
+    suspend fun markAllNotificationsRead(
+        @Header("Authorization") token: String,
+    ): GenericResponse
 }
