@@ -61,3 +61,12 @@ Thumbs.db
 # Local database
 .local-db/
 .local-db.corrupt-*/
+
+# Android Keystores & Release Binaries
+*.keystore
+*.jks
+keystore.properties
+!keystore.properties.example
+*.aab
+*.apk
+.kotlin/

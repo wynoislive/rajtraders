@@ -101,6 +101,25 @@ app.get("/", (_req, res) => {
   });
 });
 
+// ── Static Uploads (Local VPS storage with Cloudflare CDN caching headers) ──
+import path from "node:path";
+import fs from "node:fs";
+
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  } catch {}
+}
+
+app.use(
+  "/uploads",
+  express.static(uploadsDir, {
+    maxAge: "365d",
+    immutable: true,
+  }),
+);
+
 app.use("/api", router);
 
 // ── Global error handler (MUST be last) ─────────────────────
