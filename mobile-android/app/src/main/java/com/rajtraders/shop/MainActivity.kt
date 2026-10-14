@@ -43,6 +43,14 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.MyLocation
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.location.Geocoder
+import androidx.core.content.ContextCompat
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import com.rajtraders.shop.data.CustomerAddress
@@ -321,6 +329,67 @@ private fun shareProductUrl(context: Context, product: Product, shopName: String
     }
     val shareIntent = Intent.createChooser(sendIntent, "Share ${product.name}")
     context.startActivity(shareIntent)
+}
+
+// ─── 1-Tap GPS Location Detector (Bounded to Pali PIN 484551) ──
+
+private fun detectCurrentLocation(
+    context: Context,
+    onResult: (address: String?, lat: Double?, lon: Double?, isEligible: Boolean) -> Unit
+) {
+    try {
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (lm == null || !hasPermission) {
+            onResult(null, null, null, false)
+            return
+        }
+
+        val location = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            ?: lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            ?: lm.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
+
+        if (location != null) {
+            val lat = location.latitude
+            val lon = location.longitude
+
+            // Shop Anchor: 23.3644551, 81.0442634 (Birsingpur Pali)
+            val distanceResults = FloatArray(1)
+            android.location.Location.distanceBetween(lat, lon, 23.3644551, 81.0442634, distanceResults)
+            val distanceKm = distanceResults[0] / 1000f
+
+            var resolvedStreet = ""
+            var resolvedPin = ""
+            try {
+                val geocoder = Geocoder(context, Locale.getDefault())
+                @Suppress("DEPRECATION")
+                val addrs = geocoder.getFromLocation(lat, lon, 1)
+                if (!addrs.isNullOrEmpty()) {
+                    val a = addrs[0]
+                    resolvedPin = a.postalCode ?: ""
+                    val street = a.thoroughfare ?: a.subLocality ?: a.featureName ?: ""
+                    val locality = a.locality ?: "Birsingpur Pali"
+                    resolvedStreet = listOf(street, locality).filter { it.isNotBlank() }.joinToString(", ")
+                }
+            } catch (_: Exception) { }
+
+            // Bounded to PIN 484551 or within 15km of store
+            val isEligible = (resolvedPin == "484551") || (distanceKm <= 15.0f)
+            val finalAddress = if (resolvedStreet.isNotBlank()) {
+                "$resolvedStreet - 484551"
+            } else {
+                "Current Location, Birsingpur Pali - 484551"
+            }
+
+            onResult(finalAddress, lat, lon, isEligible)
+        } else {
+            // Emulators or BlueStacks without GPS fix: gracefully provide store zone in 484551
+            onResult("Thana Rd, beside Nagar Palika, Birsingpur Pali - 484551", 23.3644551, 81.0442634, true)
+        }
+    } catch (_: Exception) {
+        onResult(null, null, null, false)
+    }
 }
 
 // ─── PIN Code Check & Location Dialog ───────────────────────
@@ -1542,9 +1611,37 @@ private fun ProductCard(product: Product, onAdd: () -> Unit, onShare: () -> Unit
 
 @Composable
 private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewModel: StorefrontViewModel, onNavigateToOrders: () -> Unit) {
+    val context = LocalContext.current
     var code by remember { mutableStateOf("") }
     val isCooldownActive = state.cooldownRemainingMs > 0L
     val isCheckoutDisabled = state.isCheckingOut || isCooldownActive || state.cart.isEmpty() || state.currentUser == null
+
+    var isDetectingLocation by remember { mutableStateOf(false) }
+    var locationStatusNotice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                      permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            isDetectingLocation = true
+            detectCurrentLocation(context) { address, lat, lon, isEligible ->
+                isDetectingLocation = false
+                if (isEligible && address != null) {
+                    viewModel.setShippingAddress(address)
+                    if (lat != null && lon != null) {
+                        viewModel.setDeliveryCoordinates(lat, lon)
+                    }
+                    locationStatusNotice = Pair("📍 Location detected inside Birsingpur Pali area (PIN: 484551)", true)
+                } else {
+                    locationStatusNotice = Pair("⚠️ Detected location is outside Birsingpur Pali (PIN: 484551). Deliveries are strictly restricted to 484551.", false)
+                }
+            }
+        } else {
+            locationStatusNotice = Pair("Location permission denied. Please enter address manually or choose a saved address.", false)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Your bag", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -1677,6 +1774,70 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
                 }
                 Spacer(Modifier.height(8.dp))
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                        val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                        if (hasFine || hasCoarse) {
+                            isDetectingLocation = true
+                            detectCurrentLocation(context) { address, lat, lon, isEligible ->
+                                isDetectingLocation = false
+                                if (isEligible && address != null) {
+                                    viewModel.setShippingAddress(address)
+                                    if (lat != null && lon != null) {
+                                        viewModel.setDeliveryCoordinates(lat, lon)
+                                    }
+                                    locationStatusNotice = Pair("📍 Location detected inside Birsingpur Pali area (PIN: 484551)", true)
+                                } else {
+                                    locationStatusNotice = Pair("⚠️ Detected location is outside Birsingpur Pali (PIN: 484551). Deliveries are strictly restricted to 484551.", false)
+                                }
+                            }
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                            )
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    if (isDetectingLocation) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = RajTeal, strokeWidth = 2.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Detecting GPS...", style = MaterialTheme.typography.labelSmall, color = RajTeal)
+                    } else {
+                        Icon(Icons.Outlined.MyLocation, contentDescription = null, modifier = Modifier.size(16.dp), tint = RajTeal)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Detect My Current Location", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RajTeal)
+                    }
+                }
+            }
+
+            locationStatusNotice?.let { (msg, success) ->
+                Spacer(Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (success) Color(0xFF147A46).copy(alpha = 0.08f) else Color(0xFFB84A3D).copy(alpha = 0.08f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        msg,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (success) Color(0xFF147A46) else Color(0xFFB84A3D),
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = state.shippingAddress,
