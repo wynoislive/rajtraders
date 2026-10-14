@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, asc, eq, ilike, or, ne } from "drizzle-orm";
-import { db, discountsTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable, ordersTable } from "@workspace/db";
+import { db, discountsTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable, ordersTable, usersTable } from "@workspace/db";
 import { seedStoreData } from "../lib/seed";
 import { getUserIdFromToken } from "./customer-auth";
 import {
@@ -285,8 +285,17 @@ router.post("/v1/registrations/claim", async (req, res): Promise<void> => {
 });
 
 // Public endpoint: list active, non-expired coupons for customer browsing
+// Authenticated customer endpoint: list active coupons and private refund credits
 router.get("/v1/discounts/active", async (req, res): Promise<void> => {
   try {
+    // Check if customer is authenticated (per policy: require login everywhere to view coupons)
+    const authHeader = req.headers.authorization;
+    const authUserId = authHeader ? await getUserIdFromToken(authHeader) : null;
+    if (!authUserId) {
+      res.json([]);
+      return;
+    }
+
     let allDiscounts = await db.select().from(discountsTable);
     if (allDiscounts.length === 0) {
       await seedStoreData();
@@ -294,46 +303,61 @@ router.get("/v1/discounts/active", async (req, res): Promise<void> => {
     }
     const now = Date.now();
 
-    // Check if customer is authenticated to show their private credit coupons
-    const authHeader = req.headers.authorization;
-    const authUserId = authHeader ? await getUserIdFromToken(authHeader) : null;
-
+    // Look up customer orders matching userId or email
     let userOrderPrefixes: string[] = [];
-    if (authUserId) {
+    try {
+      const [user] = await db
+        .select({ email: usersTable.email })
+        .from(usersTable)
+        .where(eq(usersTable.id, authUserId));
+
+      const conditions = [eq(ordersTable.userId, authUserId)];
+      if (user?.email) {
+        conditions.push(eq(ordersTable.customerEmail, user.email));
+      }
+
       const userOrders = await db
         .select({ id: ordersTable.id })
         .from(ordersTable)
-        .where(eq(ordersTable.userId, authUserId));
+        .where(or(...conditions));
+
       userOrderPrefixes = userOrders.map((o: { id: string }) => o.id.slice(0, 6).toUpperCase());
-    }
+    } catch {}
 
     const activeCoupons = allDiscounts.filter((d: any) => {
       if (!d.active) return false;
       const startsAtMs = d.startsAt ? new Date(d.startsAt).getTime() : 0;
       const expiresAtMs = d.expiresAt ? new Date(d.expiresAt).getTime() : null;
-      if (startsAtMs > now) return false;
+      // Allow 2-minute clock skew so freshly created/edited promo codes are immediately visible
+      if (startsAtMs > now + 120000) return false;
       if (expiresAtMs && expiresAtMs < now) return false;
       if (d.usageLimit && d.usageCount >= d.usageLimit) return false;
       if (typeof d.value === "number" && d.value <= 0) return false;
 
-      // Privacy: Store Credit coupons (CREDIT-*) only visible to the user who owns that order!
-      if (d.code.startsWith("CREDIT-")) {
-        if (!authUserId) return false; // Guest cannot see private store credits
-        const match = userOrderPrefixes.some((prefix) => d.code.startsWith(`CREDIT-${prefix}`));
+      // Privacy: Store Credit / Refund coupons (CREDIT-* / REFUND-*) only visible to the user who owns that order!
+      const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
+      if (isPersonalCredit) {
+        const match = userOrderPrefixes.some((prefix) =>
+          d.code.startsWith(`CREDIT-${prefix}`) || d.code.startsWith(`REFUND-${prefix}`)
+        );
         if (!match) return false;
       }
 
       return true;
     });
 
-    res.json(activeCoupons.map((d: any) => ({
-      code: d.code,
-      type: d.type,
-      value: d.value,
-      minimumSubtotalCents: d.minimumSubtotalCents,
-      firstOrderOnly: d.firstOrderOnly,
-      expiresAt: asIso(d.expiresAt),
-    })));
+    res.json(activeCoupons.map((d: any) => {
+      const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
+      return {
+        code: d.code,
+        type: d.type,
+        value: d.value,
+        minimumSubtotalCents: d.minimumSubtotalCents,
+        firstOrderOnly: d.firstOrderOnly,
+        expiresAt: asIso(d.expiresAt),
+        isRefundCredit: isPersonalCredit,
+      };
+    }));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch coupons." });
   }

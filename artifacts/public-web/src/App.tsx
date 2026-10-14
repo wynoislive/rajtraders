@@ -497,6 +497,20 @@ export default function App() {
           setResetTokenStatus('idle');
         }
       }
+
+      // Handle /discounts, /coupons, /offers direct URLs
+      const isDiscountsPath = ['/discounts', '/coupons', '/offers'].includes(window.location.pathname.toLowerCase().replace(/\/+$/, ''));
+      if (isDiscountsPath) {
+        window.history.replaceState({}, '', '/');
+        const storedToken = localStorage.getItem('raj_auth_token');
+        if (storedToken) {
+          fetchCoupons();
+          setShowCouponsDrawer(true);
+        } else {
+          setShowAuthModal(true);
+          showToast('Please sign in to view your available coupons & refund credits.', 'info');
+        }
+      }
     }
   }, []);
 
@@ -1386,7 +1400,15 @@ export default function App() {
 
               {/* Offers / Coupons Button */}
               <button
-                onClick={() => { fetchCoupons(); setShowCouponsDrawer(true); }}
+                onClick={() => {
+                  if (token) {
+                    fetchCoupons();
+                    setShowCouponsDrawer(true);
+                  } else {
+                    setShowAuthModal(true);
+                    showToast('Please sign in to view your available coupons & refund credits.', 'info');
+                  }
+                }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#0E3D42] text-xs font-black transition shadow-sm"
                 title="View Available Coupons & Offers"
               >
@@ -2448,7 +2470,15 @@ export default function App() {
                   </div>
                 </div>
                 <button
-                  onClick={() => { fetchCoupons(); setShowCouponsDrawer(true); }}
+                  onClick={() => {
+                    if (token) {
+                      fetchCoupons();
+                      setShowCouponsDrawer(true);
+                    } else {
+                      setShowAuthModal(true);
+                      showToast('Please sign in to view your available coupons & refund credits.', 'info');
+                    }
+                  }}
                   className="w-full sm:w-auto px-6 py-3 bg-[#E2A93B] text-[#0E3D42] font-black text-xs rounded-2xl shadow hover:bg-[#d69829] transition flex items-center justify-center gap-2 whitespace-nowrap active:scale-95 shrink-0"
                 >
                   <Tag size={15} /> View Coupons & Offers

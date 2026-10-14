@@ -28,6 +28,9 @@ interface StorefrontApi {
     @POST("v1/discounts/validate")
     suspend fun validateDiscount(@Body body: DiscountRequest): DiscountValidation
 
+    @GET("v1/discounts/active")
+    suspend fun getActiveCoupons(@Header("Authorization") token: String?): List<CustomerCoupon>
+
     // ─── Auth, Password Recovery & Account Deletion ─────────
 
     @POST("v1/auth/register")

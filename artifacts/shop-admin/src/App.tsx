@@ -3615,28 +3615,27 @@ function Discounts() {
     code: '',
     type: 'percentage' as 'percentage' | 'fixed',
     value: '10',
-    minSpend: '50',
+    minSpend: '0',
     active: true,
     expiresAt: '',
   });
 
-  const defaultDiscounts: DiscountItem[] = useMemo(
-    () => [
-      { id: 'disc_wel10', code: 'WELCOME10', type: 'percentage', value: 10, minSpendCents: 5000, active: true, usageCount: 42, expiresAt: '2026-12-31' },
-      { id: 'disc_fest20', code: 'FESTIVE20', type: 'percentage', value: 20, minSpendCents: 10000, active: true, usageCount: 19, expiresAt: '2026-11-15' },
-      { id: 'disc_flat500', code: 'FLAT500', type: 'fixed', value: 500, minSpendCents: 2000, active: false, usageCount: 8, expiresAt: '2026-10-01' },
-    ],
-    [],
-  );
-
-  const fetchDiscounts = () => {
+  const fetchDiscounts = async () => {
     setLoading(true);
     setError(false);
-    fetch(getApiUrl('/api/v1/admin/discounts'), { headers: getAuthHeaders() })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((items) => setData(Array.isArray(items) && items.length > 0 ? items : defaultDiscounts))
-      .catch(() => setData(defaultDiscounts))
-      .finally(() => setLoading(false));
+    try {
+      const r = await fetch(getApiUrl('/api/v1/admin/discounts'), { headers: getAuthHeaders() });
+      if (r.ok) {
+        const items = await r.json();
+        setData(Array.isArray(items) ? items : []);
+      } else {
+        setError(true);
+      }
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -3644,25 +3643,26 @@ function Discounts() {
   }, []);
 
   const list = useMemo(() => {
-    const source = data.length > 0 ? data : defaultDiscounts;
-    return source.filter((item) => `${item.code} ${item.type}`.toLowerCase().includes(search.toLowerCase()));
-  }, [data, defaultDiscounts, search]);
+    return data.filter((item) => `${item.code} ${item.type}`.toLowerCase().includes(search.toLowerCase()));
+  }, [data, search]);
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({ code: '', type: 'percentage', value: '10', minSpend: '50', active: true, expiresAt: '' });
+    setForm({ code: '', type: 'percentage', value: '10', minSpend: '0', active: true, expiresAt: '' });
     setDialog('create');
   };
 
   const openEdit = (item: DiscountItem) => {
     setEditingId(item.id);
+    const minSubtotal = (item as any).minimumSubtotalCents ?? item.minSpendCents ?? 0;
+    const isFixed = item.type === 'fixed';
     setForm({
       code: item.code,
-      type: (item.type === 'fixed' ? 'fixed' : 'percentage') as 'fixed' | 'percentage',
-      value: String(item.value),
-      minSpend: String(item.minSpendCents ? item.minSpendCents / 100 : 0),
+      type: (isFixed ? 'fixed' : 'percentage') as 'fixed' | 'percentage',
+      value: String(isFixed ? (Number(item.value) || 0) / 100 : item.value),
+      minSpend: String(minSubtotal ? minSubtotal / 100 : 0),
       active: item.active !== false,
-      expiresAt: item.expiresAt || '',
+      expiresAt: item.expiresAt ? item.expiresAt.split('T')[0] : '',
     });
     setDialog('edit');
   };
@@ -3682,16 +3682,13 @@ function Discounts() {
       });
       if (res.ok) {
         setNotice(`Promotion status updated to ${newActive ? 'Active' : 'Disabled'}!`);
+        await fetchDiscounts();
       } else {
-        setData((prev) =>
-          prev.map((d) => (d.id === id ? { ...d, active: !newActive } : d)),
-        );
+        await fetchDiscounts();
         alert('Failed to update promotion status on server.');
       }
     } catch {
-      setData((prev) =>
-        prev.map((d) => (d.id === id ? { ...d, active: !newActive } : d)),
-      );
+      await fetchDiscounts();
       alert('Network error updating promotion status.');
     }
   };
@@ -3703,8 +3700,8 @@ function Discounts() {
         headers: getAuthHeaders(),
       });
       if (res.ok) {
-        setData((prev) => prev.filter((item) => item.id !== id));
         setNotice('Promotion code deleted successfully!');
+        await fetchDiscounts();
       } else {
         alert('Failed to delete promotion code on server.');
       }
@@ -3719,16 +3716,20 @@ function Discounts() {
     e.preventDefault();
     if (!form.code.trim()) return;
 
+    const isFixed = form.type === 'fixed';
+    const numVal = Number(form.value) || 0;
+    const value = isFixed ? Math.round(numVal * 100) : numVal;
+    const minSpendCents = Math.round((Number(form.minSpend) || 0) * 100);
+
     const payload = {
-      id: editingId || `disc_${Date.now()}`,
       code: form.code.trim().toUpperCase(),
       type: form.type,
-      value: Number(form.value) || 0,
-      minimumSubtotalCents: Math.round((Number(form.minSpend) || 0) * 100),
-      minSpendCents: Math.round((Number(form.minSpend) || 0) * 100),
+      value: value,
+      minimumSubtotalCents: minSpendCents,
       active: form.active,
-      usageCount: 0,
-      expiresAt: form.expiresAt || null,
+      startsAt: new Date().toISOString(),
+      expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
+      firstOrderOnly: false,
     };
 
     try {
@@ -3744,14 +3745,9 @@ function Discounts() {
         alert(err.error || 'Failed to save discount code.');
         return;
       }
-      if (editingId) {
-        setData((prev) => prev.map((item) => (item.id === editingId ? { ...item, ...payload } : item)));
-        setNotice(`Promotion code "${payload.code}" updated!`);
-      } else {
-        setData((prev) => [payload, ...prev]);
-        setNotice(`New promotion code "${payload.code}" created & live!`);
-      }
+      setNotice(editingId ? `Promotion code "${payload.code}" updated successfully!` : `New promotion code "${payload.code}" created & live!`);
       setDialog(null);
+      await fetchDiscounts();
     } catch {
       alert('Network error while saving promotion code.');
     }
@@ -3814,16 +3810,18 @@ function Discounts() {
                 </div>
                 <div>
                   <div className="font-mono text-sm font-black tracking-wider text-[hsl(var(--foreground))]">{d.code}</div>
-                  <div className="text-[11px] text-[hsl(var(--muted-foreground))]">{d.expiresAt ? `Expires: ${d.expiresAt}` : 'Never expires'}</div>
+                  <div className="text-[11px] text-[hsl(var(--muted-foreground))]">
+                    {d.expiresAt ? `Expires: ${new Date(d.expiresAt).toLocaleDateString('en-IN')}` : 'Never expires'}
+                  </div>
                 </div>
               </div>
 
               <div className="text-xs font-extrabold text-[hsl(var(--foreground))]">
-                {d.type === 'percentage' ? `${d.value}% OFF Order` : `₹${d.value} OFF Order`}
+                {d.type === 'percentage' ? `${d.value}% OFF Order` : `${money(Number(d.value) || 0)} OFF Order`}
               </div>
 
               <div className="text-xs text-[hsl(var(--muted-foreground))] font-medium">
-                {d.minSpendCents ? `Min Order: ${money(d.minSpendCents)}` : 'No min spend'}
+                {((d as any).minimumSubtotalCents || d.minSpendCents) ? `Min Order: ${money((d as any).minimumSubtotalCents || d.minSpendCents || 0)}` : 'No min spend'}
               </div>
 
               <div className="text-xs font-mono text-[hsl(var(--muted-foreground))]">{d.usageCount || 0} used</div>
@@ -3927,7 +3925,17 @@ function Discounts() {
                   step="any"
                   value={form.minSpend}
                   onChange={(e) => setForm({ ...form, minSpend: e.target.value })}
-                  placeholder="50"
+                  placeholder="0"
+                  className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-bold outline-none focus:border-[hsl(var(--primary))]"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Expiry Date (Optional)</label>
+                <input
+                  type="date"
+                  value={form.expiresAt}
+                  onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
                   className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-bold outline-none focus:border-[hsl(var(--primary))]"
                 />
               </div>

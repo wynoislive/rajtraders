@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -54,6 +55,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import com.rajtraders.shop.data.CustomerAddress
+import com.rajtraders.shop.data.CustomerCoupon
 import com.rajtraders.shop.data.NotificationItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -245,7 +247,7 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
                 NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Outlined.Verified, null) }, label = { Text("Shop") })
                 NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Outlined.ShoppingBag, null) }, label = { Text("Bag") })
                 NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2; viewModel.fetchOrders() }, icon = { Icon(Icons.Outlined.CheckCircle, null) }, label = { Text("Orders") })
-                NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3 }, icon = { Icon(Icons.Outlined.Person, null) }, label = { Text("Account") })
+                NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3; viewModel.fetchCoupons() }, icon = { Icon(Icons.Outlined.Person, null) }, label = { Text("Account") })
             }
         },
     ) { padding ->
@@ -260,6 +262,13 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
     // PIN code check dialog overlay
     if (state.showPincodeDialog) {
         PincodeDialog(state, viewModel)
+    }
+
+    // Customer Available Coupons & Refund Credits Dialog overlay
+    if (state.showCouponsDialog) {
+        CouponsDialog(state, viewModel, onApplyCoupon = { code ->
+            viewModel.applyCoupon(code)
+        })
     }
 
     // Auth dialog overlay
@@ -434,8 +443,17 @@ private fun PincodeDialog(state: StorefrontUiState, viewModel: StorefrontViewMod
                 Spacer(Modifier.height(10.dp))
                 Text("Popular Locations:", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 Spacer(Modifier.height(4.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("482004" to "Jabalpur", "400001" to "Mumbai", "110001" to "Delhi", "560001" to "Bengaluru").forEach { (pin, name) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(
+                        "484551" to "Birsinghpur Pali",
+                        "484661" to "Nowrozabad",
+                        "482001" to "Jabalpur",
+                        "400001" to "Mumbai",
+                        "110001" to "Delhi"
+                    ).forEach { (pin, name) ->
                         FilterChip(
                             selected = pincodeInput == pin,
                             onClick = { pincodeInput = pin; viewModel.checkPincode(pin) },
@@ -984,7 +1002,14 @@ private fun TotpSetupDialog(state: StorefrontUiState, viewModel: StorefrontViewM
 
 @Composable
 private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, viewModel: StorefrontViewModel) {
+    val context = LocalContext.current
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(state.authToken) {
+        if (!state.authToken.isNullOrBlank()) {
+            viewModel.fetchCoupons()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Account", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -1141,6 +1166,142 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                     HorizontalDivider(color = RajTeal.copy(alpha = 0.15f))
                     Spacer(Modifier.height(14.dp))
 
+                    // ─── Available Coupons & Personalized Refund Credits ────
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Coupons & Refund Credits", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                            Text("Active promo codes & personal store credits", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        }
+                        IconButton(onClick = { viewModel.fetchCoupons() }) {
+                            Icon(Icons.Outlined.CheckCircle, contentDescription = "Refresh coupons", tint = RajTeal, modifier = Modifier.size(20.dp))
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+                    if (state.isLoadingCoupons) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = RajTeal)
+                        }
+                    } else if (state.availableCoupons.isEmpty()) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = RajCanvas,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                "No active coupons or refund credits on your account right now.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            state.availableCoupons.forEach { coupon ->
+                                val isRefund = coupon.isRefundCredit || coupon.code.startsWith("CREDIT-") || coupon.code.startsWith("REFUND-")
+                                val badgeBg = if (isRefund) Color(0xFFD97706) else RajTeal
+                                val offerText = if (coupon.type == "percentage") "${coupon.value}% OFF" else "₹${coupon.value / 100} OFF"
+
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = if (isRefund) Color(0xFFFFFBEB) else RajCanvas,
+                                    shape = RoundedCornerShape(10.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isRefund) Color(0xFFFDE68A) else Color.Transparent)
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = badgeBg.copy(alpha = 0.15f)
+                                                ) {
+                                                    Text(
+                                                        if (isRefund) "REFUND CREDIT" else "PROMO CODE",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = badgeBg,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(
+                                                    coupon.code,
+                                                    fontWeight = FontWeight.Bold,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                    color = if (isRefund) Color(0xFF92400E) else RajTeal
+                                                )
+                                            }
+                                            Text(
+                                                offerText,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = if (isRefund) Color(0xFFB45309) else RajTeal,
+                                                style = MaterialTheme.typography.titleSmall
+                                            )
+                                        }
+
+                                        Spacer(Modifier.height(4.dp))
+                                        val minSpendText = if (coupon.minimumSubtotalCents > 0) "Min. order ₹${coupon.minimumSubtotalCents / 100}" else "No min. spend"
+                                        val firstOrderText = if (coupon.firstOrderOnly) " · First order only" else ""
+                                        val expiryText = coupon.expiresAt?.take(10)?.let { " · Expires $it" } ?: ""
+                                        Text(
+                                            "$minSpendText$firstOrderText$expiryText",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.DarkGray
+                                        )
+
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                                    if (clipboard != null) {
+                                                        val clip = android.content.ClipData.newPlainText("Coupon Code", coupon.code)
+                                                        clipboard.setPrimaryClip(clip)
+                                                        android.widget.Toast.makeText(context, "Code ${coupon.code} copied!", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.weight(1f).height(34.dp),
+                                                contentPadding = PaddingValues(horizontal = 6.dp)
+                                            ) {
+                                                Text("Copy Code", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            Button(
+                                                onClick = {
+                                                    viewModel.applyCoupon(coupon.code)
+                                                    android.widget.Toast.makeText(context, "Applied ${coupon.code} to bag!", android.widget.Toast.LENGTH_SHORT).show()
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = if (isRefund) Color(0xFFD97706) else RajTeal),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.weight(1f).height(34.dp),
+                                                contentPadding = PaddingValues(horizontal = 6.dp)
+                                            ) {
+                                                Text("Apply to Bag", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = RajTeal.copy(alpha = 0.15f))
+                    Spacer(Modifier.height(14.dp))
+
                     // ─── Customer Saved Addresses ───────────────────────────
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1269,7 +1430,6 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
         }
 
         // ─── Play Store Policy, Terms & Legal Links (Visible to ALL users) ───
-        val context = LocalContext.current
         Spacer(Modifier.height(16.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -1614,7 +1774,10 @@ private fun ProductCard(product: Product, onAdd: () -> Unit, onShare: () -> Unit
 @Composable
 private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewModel: StorefrontViewModel, onNavigateToOrders: () -> Unit) {
     val context = LocalContext.current
-    var code by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf(state.discount?.code ?: "") }
+    androidx.compose.runtime.LaunchedEffect(state.discount?.code) {
+        state.discount?.code?.let { code = it }
+    }
     val isCooldownActive = state.cooldownRemainingMs > 0L
     val isCheckoutDisabled = state.isCheckingOut || isCooldownActive || state.cart.isEmpty() || state.currentUser == null
 
@@ -1703,12 +1866,79 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
                 Text(money(viewModel.finalPayableCents()), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = RajTeal)
             }
 
-            Spacer(Modifier.height(20.dp))
-            OutlinedTextField(value = code, onValueChange = { code = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Discount code") }, singleLine = true, enabled = !state.isCheckingOut)
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = { viewModel.validateDiscount(code, state.claim?.claimed == true) }, enabled = code.isNotBlank() && !state.isCheckingOut, modifier = Modifier.fillMaxWidth()) { Text("Apply code") }
-            state.discount?.let { result ->
-                Text(if (result.valid) "${result.message}  −${money(result.discountCents)}" else result.message, modifier = Modifier.padding(top = 8.dp), color = if (result.valid) RajTeal else Color(0xFFB84A3D))
+            Spacer(Modifier.height(16.dp))
+
+            // Coupons & Vouchers Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Coupons & Offers", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                TextButton(onClick = {
+                    if (state.currentUser != null) {
+                        viewModel.openCouponsDialog()
+                    } else {
+                        viewModel.showAuth(false)
+                    }
+                }) {
+                    Text(
+                        if (state.currentUser != null) {
+                            if (state.availableCoupons.isNotEmpty()) "🏷️ View Available (${state.availableCoupons.size})" else "🏷️ View Offers"
+                        } else "Sign in for coupons",
+                        color = RajTeal,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+
+            if (state.discount?.valid == true) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF147A46).copy(alpha = 0.1f),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF147A46).copy(alpha = 0.3f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Coupon Applied: ${state.discount?.code}", fontWeight = FontWeight.Bold, color = Color(0xFF147A46), style = MaterialTheme.typography.bodyMedium)
+                            Text("You saved ${money(state.discount?.discountCents ?: 0)}!", style = MaterialTheme.typography.bodySmall, color = Color(0xFF147A46))
+                        }
+                        TextButton(onClick = { viewModel.removeDiscount(); code = "" }) {
+                            Text("Remove", color = Color(0xFFB84A3D), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = code,
+                        onValueChange = { code = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Coupon or Refund code") },
+                        singleLine = true,
+                        enabled = !state.isCheckingOut
+                    )
+                    Button(
+                        onClick = { viewModel.validateDiscount(code, state.orders.isEmpty()) },
+                        enabled = code.isNotBlank() && !state.isCheckingOut,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
+                        modifier = Modifier.height(54.dp)
+                    ) {
+                        Text("Apply", fontWeight = FontWeight.Bold)
+                    }
+                }
+                state.discount?.let { result ->
+                    if (!result.valid) {
+                        Text(result.message, modifier = Modifier.padding(top = 4.dp), color = Color(0xFFB84A3D), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
 
             Spacer(Modifier.height(20.dp))
@@ -2489,6 +2719,163 @@ private fun LegalDialog(state: StorefrontUiState, viewModel: StorefrontViewModel
         dismissButton = {
             TextButton(onClick = { viewModel.dismissLegalDialog() }) {
                 Text("Close", color = RajTeal)
+            }
+        }
+    )
+}
+
+// ─── Available Coupons & Refund Credits Dialog ──────────────
+
+@Composable
+private fun CouponsDialog(
+    state: StorefrontUiState,
+    viewModel: StorefrontViewModel,
+    onApplyCoupon: (String) -> Unit
+) {
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = { viewModel.closeCouponsDialog() },
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = RajTeal, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Available Coupons", fontWeight = FontWeight.Bold, color = RajTeal)
+                }
+                IconButton(onClick = { viewModel.fetchCoupons() }) {
+                    Icon(Icons.Outlined.CheckCircle, contentDescription = "Refresh", tint = RajTeal, modifier = Modifier.size(18.dp))
+                }
+            }
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                if (state.isLoadingCoupons) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = RajTeal)
+                    }
+                } else if (state.availableCoupons.isEmpty()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = RajCanvas,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("No Coupons Available", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "There are no active public promotions or refund credits linked to your account right now.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        state.availableCoupons.forEach { coupon ->
+                            val isRefund = coupon.isRefundCredit || coupon.code.startsWith("CREDIT-") || coupon.code.startsWith("REFUND-")
+                            val badgeBg = if (isRefund) Color(0xFFD97706) else RajTeal
+                            val offerText = if (coupon.type == "percentage") "${coupon.value}% OFF" else "₹${coupon.value / 100} OFF"
+
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = if (isRefund) Color(0xFFFFFBEB) else RajCanvas,
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (isRefund) Color(0xFFFDE68A) else Color.Transparent)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = badgeBg.copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                if (isRefund) "REFUND CREDIT" else "PROMO",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = badgeBg,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                        Text(
+                                            offerText,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = if (isRefund) Color(0xFFB45309) else RajTeal,
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                    }
+
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        coupon.code,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        color = if (isRefund) Color(0xFF92400E) else RajTeal
+                                    )
+
+                                    val minSpendText = if (coupon.minimumSubtotalCents > 0) "Min spend ₹${coupon.minimumSubtotalCents / 100}" else "No min spend"
+                                    val firstOrderText = if (coupon.firstOrderOnly) " · 1st Order Only" else ""
+                                    val expiryText = coupon.expiresAt?.take(10)?.let { " · Exp: $it" } ?: ""
+                                    Text(
+                                        "$minSpendText$firstOrderText$expiryText",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.DarkGray
+                                    )
+
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                                if (clipboard != null) {
+                                                    val clip = android.content.ClipData.newPlainText("Coupon Code", coupon.code)
+                                                    clipboard.setPrimaryClip(clip)
+                                                    android.widget.Toast.makeText(context, "Code ${coupon.code} copied!", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.weight(1f).height(34.dp),
+                                            contentPadding = PaddingValues(horizontal = 4.dp)
+                                        ) {
+                                            Text("Copy", style = MaterialTheme.typography.labelSmall)
+                                        }
+
+                                        Button(
+                                            onClick = { onApplyCoupon(coupon.code) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = if (isRefund) Color(0xFFD97706) else RajTeal),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.weight(1f).height(34.dp),
+                                            contentPadding = PaddingValues(horizontal = 4.dp)
+                                        ) {
+                                            Text("1-Tap Apply", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { viewModel.closeCouponsDialog() },
+                colors = ButtonDefaults.buttonColors(containerColor = RajTeal)
+            ) {
+                Text("Close")
             }
         }
     )

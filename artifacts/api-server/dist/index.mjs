@@ -116050,12 +116050,12 @@ var CreateDiscountBody = objectType({
   "code": stringType().min(createDiscountBodyCodeMin),
   "type": enumType(["percentage", "fixed"]),
   "value": numberType().min(createDiscountBodyValueMin),
-  "minimumSubtotalCents": numberType().min(createDiscountBodyMinimumSubtotalCentsMin),
+  "minimumSubtotalCents": numberType().min(createDiscountBodyMinimumSubtotalCentsMin).optional(),
   "usageLimit": numberType().min(createDiscountBodyUsageLimitMin).nullish(),
-  "startsAt": stringType(),
+  "startsAt": stringType().nullish(),
   "expiresAt": stringType().nullish(),
   "active": booleanType().optional(),
-  "firstOrderOnly": booleanType()
+  "firstOrderOnly": booleanType().optional()
 });
 var createDiscountResponseValueMin = 0;
 var createDiscountResponseMinimumSubtotalCentsMin = 0;
@@ -116081,10 +116081,12 @@ var updateDiscountBodyValueMin = 0;
 var updateDiscountBodyMinimumSubtotalCentsMin = 0;
 var updateDiscountBodyUsageLimitMin = 0;
 var UpdateDiscountBody = objectType({
+  "code": stringType().min(1).optional(),
+  "type": enumType(["percentage", "fixed"]).optional(),
   "value": numberType().min(updateDiscountBodyValueMin).optional(),
   "minimumSubtotalCents": numberType().min(updateDiscountBodyMinimumSubtotalCentsMin).optional(),
   "usageLimit": numberType().min(updateDiscountBodyUsageLimitMin).nullish(),
-  "startsAt": stringType().optional(),
+  "startsAt": stringType().nullish(),
   "expiresAt": stringType().nullish(),
   "active": booleanType().optional(),
   "firstOrderOnly": booleanType().optional()
@@ -129916,42 +129918,58 @@ router3.post("/v1/registrations/claim", async (req, res) => {
 });
 router3.get("/v1/discounts/active", async (req, res) => {
   try {
+    const authHeader = req.headers.authorization;
+    const authUserId = authHeader ? await getUserIdFromToken(authHeader) : null;
+    if (!authUserId) {
+      res.json([]);
+      return;
+    }
     let allDiscounts = await db.select().from(discountsTable);
     if (allDiscounts.length === 0) {
       await seedStoreData();
       allDiscounts = await db.select().from(discountsTable);
     }
     const now = Date.now();
-    const authHeader = req.headers.authorization;
-    const authUserId = authHeader ? await getUserIdFromToken(authHeader) : null;
     let userOrderPrefixes = [];
-    if (authUserId) {
-      const userOrders = await db.select({ id: ordersTable.id }).from(ordersTable).where(eq(ordersTable.userId, authUserId));
+    try {
+      const [user] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, authUserId));
+      const conditions = [eq(ordersTable.userId, authUserId)];
+      if (user?.email) {
+        conditions.push(eq(ordersTable.customerEmail, user.email));
+      }
+      const userOrders = await db.select({ id: ordersTable.id }).from(ordersTable).where(or(...conditions));
       userOrderPrefixes = userOrders.map((o) => o.id.slice(0, 6).toUpperCase());
+    } catch {
     }
     const activeCoupons = allDiscounts.filter((d) => {
       if (!d.active) return false;
       const startsAtMs = d.startsAt ? new Date(d.startsAt).getTime() : 0;
       const expiresAtMs = d.expiresAt ? new Date(d.expiresAt).getTime() : null;
-      if (startsAtMs > now) return false;
+      if (startsAtMs > now + 12e4) return false;
       if (expiresAtMs && expiresAtMs < now) return false;
       if (d.usageLimit && d.usageCount >= d.usageLimit) return false;
       if (typeof d.value === "number" && d.value <= 0) return false;
-      if (d.code.startsWith("CREDIT-")) {
-        if (!authUserId) return false;
-        const match2 = userOrderPrefixes.some((prefix) => d.code.startsWith(`CREDIT-${prefix}`));
+      const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
+      if (isPersonalCredit) {
+        const match2 = userOrderPrefixes.some(
+          (prefix) => d.code.startsWith(`CREDIT-${prefix}`) || d.code.startsWith(`REFUND-${prefix}`)
+        );
         if (!match2) return false;
       }
       return true;
     });
-    res.json(activeCoupons.map((d) => ({
-      code: d.code,
-      type: d.type,
-      value: d.value,
-      minimumSubtotalCents: d.minimumSubtotalCents,
-      firstOrderOnly: d.firstOrderOnly,
-      expiresAt: asIso(d.expiresAt)
-    })));
+    res.json(activeCoupons.map((d) => {
+      const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
+      return {
+        code: d.code,
+        type: d.type,
+        value: d.value,
+        minimumSubtotalCents: d.minimumSubtotalCents,
+        firstOrderOnly: d.firstOrderOnly,
+        expiresAt: asIso(d.expiresAt),
+        isRefundCredit: isPersonalCredit
+      };
+    }));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch coupons." });
   }
@@ -131114,23 +131132,20 @@ router5.post("/v1/admin/discounts", requirePermission("discounts"), async (req, 
       usageLimit: payload.usageLimit ?? 100,
       usageCount: 0,
       active: payload.active ?? true,
+      firstOrderOnly: payload.firstOrderOnly ?? false,
       startsAt: payload.startsAt ? new Date(payload.startsAt) : /* @__PURE__ */ new Date(),
       expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null
     }).returning();
+    logAuditEvent(req, {
+      action: "DISCOUNT_CREATED",
+      resource: "discounts",
+      resourceId: inserted.id,
+      detail: `Created promotion code ${inserted.code} (${inserted.type}: ${inserted.value})`
+    });
     res.status(201).json(CreateDiscountResponse.parse(discountResponse(inserted)));
   } catch (err) {
-    res.status(201).json({
-      id,
-      code: payload.code.trim().toUpperCase(),
-      type: payload.type,
-      value: payload.value,
-      minimumSubtotalCents: payload.minimumSubtotalCents ?? 0,
-      usageLimit: payload.usageLimit ?? 100,
-      usageCount: 0,
-      active: payload.active ?? true,
-      startsAt: payload.startsAt ?? (/* @__PURE__ */ new Date()).toISOString(),
-      expiresAt: payload.expiresAt ?? null
-    });
+    req.log.error({ err }, "Failed to create discount");
+    res.status(400).json({ error: err.detail || err.message || "Failed to create discount code." });
   }
 });
 router5.patch("/v1/admin/discounts/:discountId", requirePermission("discounts"), async (req, res) => {
@@ -131147,33 +131162,30 @@ router5.patch("/v1/admin/discounts/:discountId", requirePermission("discounts"),
   const update = body.data;
   try {
     const [updated] = await db.update(discountsTable).set({
+      ...update.code ? { code: update.code.trim().toUpperCase() } : {},
+      ...update.type ? { type: update.type } : {},
       ...update.value === void 0 ? {} : { value: update.value },
       ...update.active === void 0 ? {} : { active: update.active },
       ...update.firstOrderOnly === void 0 ? {} : { firstOrderOnly: update.firstOrderOnly },
       ...update.minimumSubtotalCents === void 0 ? {} : { minimumSubtotalCents: Math.round(update.minimumSubtotalCents) },
       ...update.usageLimit === void 0 ? {} : { usageLimit: update.usageLimit == null ? null : Math.round(update.usageLimit) },
-      ...update.startsAt === void 0 ? {} : { startsAt: new Date(update.startsAt) },
-      ...update.expiresAt === void 0 ? {} : { expiresAt: update.expiresAt ? new Date(update.expiresAt) : null }
+      ...update.startsAt ? { startsAt: new Date(update.startsAt) } : {},
+      ...update.expiresAt !== void 0 ? { expiresAt: update.expiresAt ? new Date(update.expiresAt) : null } : {}
     }).where(eq(discountsTable.id, params.data.discountId)).returning();
     if (!updated) {
       res.status(404).json({ error: "Discount not found." });
       return;
     }
+    logAuditEvent(req, {
+      action: "DISCOUNT_UPDATED",
+      resource: "discounts",
+      resourceId: updated.id,
+      detail: `Updated discount ${updated.code} (${updated.type}: ${updated.value}, active: ${updated.active})`
+    });
     res.json(UpdateDiscountResponse.parse(discountResponse(updated)));
   } catch (err) {
-    res.json({
-      id: params.data.discountId,
-      code: "UPDATED",
-      type: "percentage",
-      value: update.value ?? 10,
-      minimumSubtotalCents: update.minimumSubtotalCents ?? 0,
-      usageLimit: update.usageLimit ?? null,
-      usageCount: 0,
-      startsAt: update.startsAt || (/* @__PURE__ */ new Date()).toISOString(),
-      expiresAt: update.expiresAt || null,
-      active: update.active ?? true,
-      firstOrderOnly: update.firstOrderOnly ?? false
-    });
+    req.log.error({ err, discountId: params.data.discountId }, "Failed to update discount");
+    res.status(400).json({ error: err.detail || err.message || "Failed to update discount code." });
   }
 });
 router5.delete("/v1/admin/discounts/:discountId", requirePermission("discounts"), async (req, res) => {
@@ -132373,6 +132385,28 @@ router6.get("/shop-info", async (_req, res) => {
     res.status(500).json({ error: "Failed to load shop info." });
   }
 });
+function resolveCityForPincode(pin) {
+  const clean = pin.trim();
+  if (clean === "484551") return "Birsinghpur Pali";
+  if (clean === "484661") return "Nowrozabad";
+  if (clean === "484660") return "Chandia";
+  if (clean.startsWith("482")) return "Jabalpur";
+  if (clean.startsWith("484")) return "Shahdol / Umaria";
+  if (clean.startsWith("40")) return "Mumbai";
+  if (clean.startsWith("411")) return "Pune";
+  if (clean.startsWith("11")) return "New Delhi";
+  if (clean.startsWith("56")) return "Bengaluru";
+  if (clean.startsWith("70")) return "Kolkata";
+  if (clean.startsWith("60")) return "Chennai";
+  if (clean.startsWith("50")) return "Hyderabad";
+  if (clean.startsWith("38")) return "Ahmedabad";
+  if (clean.startsWith("302")) return "Jaipur";
+  if (clean.startsWith("462")) return "Bhopal";
+  if (clean.startsWith("452")) return "Indore";
+  if (clean.startsWith("474")) return "Gwalior";
+  if (clean.startsWith("48")) return "Madhya Pradesh";
+  return "India";
+}
 router6.post("/check-pincode", async (req, res) => {
   const { pincode } = req.body;
   if (!pincode || typeof pincode !== "string" || !/^[1-9][0-9]{5}$/.test(pincode.trim())) {
@@ -132382,7 +132416,8 @@ router6.post("/check-pincode", async (req, res) => {
   const cleanPin = pincode.trim();
   const settings = await getShopSettings();
   const allowed = isPincodeServiceable(cleanPin, settings.allowedPincodesJson);
-  let allowedZones = "Pali Birsinghpur (484551)";
+  const resolvedCity = resolveCityForPincode(cleanPin);
+  let allowedZones = "Birsinghpur Pali (484551)";
   try {
     const list = JSON.parse(settings.allowedPincodesJson || "[]");
     if (Array.isArray(list) && list.length > 0) {
@@ -132396,7 +132431,8 @@ router6.post("/check-pincode", async (req, res) => {
       allowed: false,
       isStoreOpen,
       pincode: cleanPin,
-      message: `Sorry, delivery is currently not serviceable for PIN code ${cleanPin}. We deliver exclusively to: ${allowedZones}.`
+      city: resolvedCity,
+      message: `Sorry, delivery is currently not serviceable for PIN code ${cleanPin} (${resolvedCity}). We deliver exclusively to: ${allowedZones}.`
     });
     return;
   }
@@ -132404,9 +132440,10 @@ router6.post("/check-pincode", async (req, res) => {
     allowed: isStoreOpen,
     isStoreOpen,
     pincode: cleanPin,
+    city: resolvedCity,
     estimatedDays: "Same Day / Scheduled Slot",
     isExpressAvailable: true,
-    message: !isStoreOpen ? "Store is currently closed for new orders. Catalog browsing is active." : `Great news! PIN code ${cleanPin} is fully serviceable for fast delivery in ${allowedZones}.`
+    message: !isStoreOpen ? "Store is currently closed for new orders. Catalog browsing is active." : `Great news! PIN code ${cleanPin} (${resolvedCity}) is fully serviceable for fast delivery in ${allowedZones}.`
   });
 });
 router6.post("/create-order", async (req, res) => {

@@ -49,6 +49,16 @@ data class DiscountValidation(
     val message: String,
 )
 
+data class CustomerCoupon(
+    val code: String,
+    val type: String = "percentage",
+    val value: Double = 0.0,
+    val minimumSubtotalCents: Int = 0,
+    val firstOrderOnly: Boolean = false,
+    val expiresAt: String? = null,
+    val isRefundCredit: Boolean = false,
+)
+
 data class EmailRequest(val email: String)
 
 data class DiscountRequest(

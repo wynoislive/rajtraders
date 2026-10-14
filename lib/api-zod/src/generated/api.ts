@@ -406,12 +406,12 @@ export const CreateDiscountBody = zod.object({
   "code": zod.string().min(createDiscountBodyCodeMin),
   "type": zod.enum(['percentage', 'fixed']),
   "value": zod.number().min(createDiscountBodyValueMin),
-  "minimumSubtotalCents": zod.number().min(createDiscountBodyMinimumSubtotalCentsMin),
+  "minimumSubtotalCents": zod.number().min(createDiscountBodyMinimumSubtotalCentsMin).optional(),
   "usageLimit": zod.number().min(createDiscountBodyUsageLimitMin).nullish(),
-  "startsAt": zod.string(),
+  "startsAt": zod.string().nullish(),
   "expiresAt": zod.string().nullish(),
   "active": zod.boolean().optional(),
-  "firstOrderOnly": zod.boolean()
+  "firstOrderOnly": zod.boolean().optional()
 })
 
 export const createDiscountResponseValueMin = 0;
@@ -455,10 +455,12 @@ export const updateDiscountBodyUsageLimitMin = 0;
 
 
 export const UpdateDiscountBody = zod.object({
+  "code": zod.string().min(1).optional(),
+  "type": zod.enum(['percentage', 'fixed']).optional(),
   "value": zod.number().min(updateDiscountBodyValueMin).optional(),
   "minimumSubtotalCents": zod.number().min(updateDiscountBodyMinimumSubtotalCentsMin).optional(),
   "usageLimit": zod.number().min(updateDiscountBodyUsageLimitMin).nullish(),
-  "startsAt": zod.string().optional(),
+  "startsAt": zod.string().nullish(),
   "expiresAt": zod.string().nullish(),
   "active": zod.boolean().optional(),
   "firstOrderOnly": zod.boolean().optional()

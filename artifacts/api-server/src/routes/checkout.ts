@@ -158,6 +158,29 @@ router.get("/shop-info", async (_req: Request, res: Response) => {
   }
 });
 
+function resolveCityForPincode(pin: string): string {
+  const clean = pin.trim();
+  if (clean === "484551") return "Birsinghpur Pali";
+  if (clean === "484661") return "Nowrozabad";
+  if (clean === "484660") return "Chandia";
+  if (clean.startsWith("482")) return "Jabalpur";
+  if (clean.startsWith("484")) return "Shahdol / Umaria";
+  if (clean.startsWith("40")) return "Mumbai";
+  if (clean.startsWith("411")) return "Pune";
+  if (clean.startsWith("11")) return "New Delhi";
+  if (clean.startsWith("56")) return "Bengaluru";
+  if (clean.startsWith("70")) return "Kolkata";
+  if (clean.startsWith("60")) return "Chennai";
+  if (clean.startsWith("50")) return "Hyderabad";
+  if (clean.startsWith("38")) return "Ahmedabad";
+  if (clean.startsWith("302")) return "Jaipur";
+  if (clean.startsWith("462")) return "Bhopal";
+  if (clean.startsWith("452")) return "Indore";
+  if (clean.startsWith("474")) return "Gwalior";
+  if (clean.startsWith("48")) return "Madhya Pradesh";
+  return "India";
+}
+
 // 0c. Validate PIN code delivery availability
 router.post("/check-pincode", async (req: Request, res: Response) => {
   const { pincode } = req.body;
@@ -169,8 +192,9 @@ router.post("/check-pincode", async (req: Request, res: Response) => {
   const cleanPin = pincode.trim();
   const settings = await getShopSettings();
   const allowed = isPincodeServiceable(cleanPin, settings.allowedPincodesJson);
+  const resolvedCity = resolveCityForPincode(cleanPin);
 
-  let allowedZones = "Pali Birsinghpur (484551)";
+  let allowedZones = "Birsinghpur Pali (484551)";
   try {
     const list = JSON.parse(settings.allowedPincodesJson || "[]");
     if (Array.isArray(list) && list.length > 0) {
@@ -184,7 +208,8 @@ router.post("/check-pincode", async (req: Request, res: Response) => {
       allowed: false,
       isStoreOpen,
       pincode: cleanPin,
-      message: `Sorry, delivery is currently not serviceable for PIN code ${cleanPin}. We deliver exclusively to: ${allowedZones}.`,
+      city: resolvedCity,
+      message: `Sorry, delivery is currently not serviceable for PIN code ${cleanPin} (${resolvedCity}). We deliver exclusively to: ${allowedZones}.`,
     });
     return;
   }
@@ -193,11 +218,12 @@ router.post("/check-pincode", async (req: Request, res: Response) => {
     allowed: isStoreOpen,
     isStoreOpen,
     pincode: cleanPin,
+    city: resolvedCity,
     estimatedDays: "Same Day / Scheduled Slot",
     isExpressAvailable: true,
     message: !isStoreOpen
       ? "Store is currently closed for new orders. Catalog browsing is active."
-      : `Great news! PIN code ${cleanPin} is fully serviceable for fast delivery in ${allowedZones}.`,
+      : `Great news! PIN code ${cleanPin} (${resolvedCity}) is fully serviceable for fast delivery in ${allowedZones}.`,
   });
 });
 

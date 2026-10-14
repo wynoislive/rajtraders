@@ -101,13 +101,18 @@ data class StorefrontUiState(
     val totpError: String? = null,
     val totpNotice: String? = null,
     // PIN Code Delivery & Location States
-    val selectedPincode: String = "482004",
-    val selectedCity: String = "Jabalpur",
+    val selectedPincode: String = "484551",
+    val selectedCity: String = "Birsinghpur Pali",
     val showPincodeDialog: Boolean = false,
     val pincodeCheckResult: com.rajtraders.shop.data.PincodeCheckResponse? = null,
     val isCheckingPincode: Boolean = false,
     val pincodeError: String? = null,
     val isPincodeFilterActive: Boolean = false,
+    // Available Coupons & Personalized Refund Credits
+    val availableCoupons: List<com.rajtraders.shop.data.CustomerCoupon> = emptyList(),
+    val isLoadingCoupons: Boolean = false,
+    val showCouponsDialog: Boolean = false,
+    val couponNotice: String? = null,
     // Saved Addresses States
     val savedAddresses: List<com.rajtraders.shop.data.CustomerAddress> = emptyList(),
     val isLoadingAddresses: Boolean = false,
@@ -232,6 +237,51 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
         }
     }
 
+    fun removeDiscount() {
+        _uiState.update { it.copy(discount = null) }
+    }
+
+    // ─── Available Coupons & Refund Credits ─────────────────────
+
+    fun fetchCoupons() {
+        val token = _uiState.value.authToken
+        if (token.isNullOrBlank()) {
+            _uiState.update { it.copy(availableCoupons = emptyList(), isLoadingCoupons = false) }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingCoupons = true, couponNotice = null) }
+            runCatching {
+                repository.getActiveCoupons(token)
+            }.onSuccess { coupons ->
+                _uiState.update {
+                    it.copy(
+                        isLoadingCoupons = false,
+                        availableCoupons = coupons,
+                        couponNotice = if (coupons.isEmpty()) "No coupons currently available." else null
+                    )
+                }
+            }.onFailure { err ->
+                _uiState.update { it.copy(isLoadingCoupons = false, couponNotice = err.message) }
+            }
+        }
+    }
+
+    fun openCouponsDialog() {
+        _uiState.update { it.copy(showCouponsDialog = true) }
+        fetchCoupons()
+    }
+
+    fun closeCouponsDialog() {
+        _uiState.update { it.copy(showCouponsDialog = false) }
+    }
+
+    fun applyCoupon(code: String) {
+        val isFirst = _uiState.value.orders.isEmpty()
+        validateDiscount(code, isFirst)
+        closeCouponsDialog()
+    }
+
     fun cartTotalCents() = _uiState.value.cart.sumOf { it.product.priceCents * it.quantity }
 
     fun finalPayableCents(): Int {
@@ -289,6 +339,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                         )
                     }
                     fetchOrders()
+                    fetchCoupons()
                 } else {
                     _uiState.update { it.copy(isAuthenticating = false, authError = "Registration failed.") }
                 }
@@ -341,6 +392,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                     fetchOrders()
                     fetchAddresses()
                     fetchNotifications()
+                    fetchCoupons()
                 } else {
                     _uiState.update { it.copy(isAuthenticating = false, authError = "Authentication failed.") }
                 }
@@ -375,6 +427,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                 fetchOrders()
                 fetchAddresses()
                 fetchNotifications()
+                fetchCoupons()
             }.onFailure { err ->
                 _uiState.update {
                     it.copy(
@@ -428,6 +481,8 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                 selectedAddressId = null,
                 authSuccess = null,
                 lockdownWarning = null,
+                availableCoupons = emptyList(),
+                discount = null,
             )
         }
     }
@@ -834,6 +889,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                     )
                 }
                 fetchOrders()
+                fetchCoupons()
             }.onFailure { err ->
                 _uiState.update { it.copy(isAuthenticating = false, totpError = err.message ?: "Invalid 2FA code") }
             }
@@ -857,6 +913,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                     )
                 }
                 fetchOrders()
+                fetchCoupons()
             }.onFailure { err ->
                 _uiState.update { it.copy(isAuthenticating = false, totpError = err.message ?: "Invalid recovery code") }
             }

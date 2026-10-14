@@ -447,24 +447,21 @@ router.post("/v1/admin/discounts", requirePermission("discounts"), async (req, r
         usageLimit: payload.usageLimit ?? 100,
         usageCount: 0,
         active: payload.active ?? true,
+        firstOrderOnly: payload.firstOrderOnly ?? false,
         startsAt: payload.startsAt ? new Date(payload.startsAt) : new Date(),
         expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : null,
       })
       .returning();
-    res.status(201).json(CreateDiscountResponse.parse(discountResponse(inserted)));
-  } catch (err) {
-    res.status(201).json({
-      id,
-      code: payload.code.trim().toUpperCase(),
-      type: payload.type,
-      value: payload.value,
-      minimumSubtotalCents: payload.minimumSubtotalCents ?? 0,
-      usageLimit: payload.usageLimit ?? 100,
-      usageCount: 0,
-      active: payload.active ?? true,
-      startsAt: payload.startsAt ?? new Date().toISOString(),
-      expiresAt: payload.expiresAt ?? null,
+    logAuditEvent(req, {
+      action: "DISCOUNT_CREATED",
+      resource: "discounts",
+      resourceId: inserted.id,
+      detail: `Created promotion code ${inserted.code} (${inserted.type}: ${inserted.value})`,
     });
+    res.status(201).json(CreateDiscountResponse.parse(discountResponse(inserted)));
+  } catch (err: any) {
+    req.log.error({ err }, "Failed to create discount");
+    res.status(400).json({ error: err.detail || err.message || "Failed to create discount code." });
   }
 });
 
@@ -484,13 +481,15 @@ router.patch("/v1/admin/discounts/:discountId", requirePermission("discounts"), 
     const [updated] = await db
       .update(discountsTable)
       .set({
+        ...(update.code ? { code: update.code.trim().toUpperCase() } : {}),
+        ...(update.type ? { type: update.type } : {}),
         ...(update.value === undefined ? {} : { value: update.value }),
         ...(update.active === undefined ? {} : { active: update.active }),
         ...(update.firstOrderOnly === undefined ? {} : { firstOrderOnly: update.firstOrderOnly }),
         ...(update.minimumSubtotalCents === undefined ? {} : { minimumSubtotalCents: Math.round(update.minimumSubtotalCents) }),
         ...(update.usageLimit === undefined ? {} : { usageLimit: update.usageLimit == null ? null : Math.round(update.usageLimit) }),
-        ...(update.startsAt === undefined ? {} : { startsAt: new Date(update.startsAt) }),
-        ...(update.expiresAt === undefined ? {} : { expiresAt: update.expiresAt ? new Date(update.expiresAt) : null }),
+        ...(update.startsAt ? { startsAt: new Date(update.startsAt) } : {}),
+        ...(update.expiresAt !== undefined ? { expiresAt: update.expiresAt ? new Date(update.expiresAt) : null } : {}),
       })
       .where(eq(discountsTable.id, params.data.discountId))
       .returning();
@@ -498,21 +497,16 @@ router.patch("/v1/admin/discounts/:discountId", requirePermission("discounts"), 
       res.status(404).json({ error: "Discount not found." });
       return;
     }
-    res.json(UpdateDiscountResponse.parse(discountResponse(updated)));
-  } catch (err) {
-    res.json({
-      id: params.data.discountId,
-      code: "UPDATED",
-      type: "percentage",
-      value: update.value ?? 10,
-      minimumSubtotalCents: update.minimumSubtotalCents ?? 0,
-      usageLimit: update.usageLimit ?? null,
-      usageCount: 0,
-      startsAt: update.startsAt || new Date().toISOString(),
-      expiresAt: update.expiresAt || null,
-      active: update.active ?? true,
-      firstOrderOnly: update.firstOrderOnly ?? false
+    logAuditEvent(req, {
+      action: "DISCOUNT_UPDATED",
+      resource: "discounts",
+      resourceId: updated.id,
+      detail: `Updated discount ${updated.code} (${updated.type}: ${updated.value}, active: ${updated.active})`,
     });
+    res.json(UpdateDiscountResponse.parse(discountResponse(updated)));
+  } catch (err: any) {
+    req.log.error({ err, discountId: params.data.discountId }, "Failed to update discount");
+    res.status(400).json({ error: err.detail || err.message || "Failed to update discount code." });
   }
 });
 

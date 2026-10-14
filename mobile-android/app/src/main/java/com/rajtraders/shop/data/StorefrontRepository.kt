@@ -66,6 +66,12 @@ class StorefrontRepository(private val api: StorefrontApi) {
     suspend fun discount(code: String, subtotalCents: Int, isFirstOrder: Boolean) =
         api.validateDiscount(DiscountRequest(code, subtotalCents, isFirstOrder))
 
+    suspend fun getActiveCoupons(token: String?): List<CustomerCoupon> = try {
+        api.getActiveCoupons(token?.let { "Bearer $it" })
+    } catch (_: Exception) {
+        emptyList()
+    }
+
     // ─── Auth & Security ────────────────────────────────────
 
     suspend fun register(
@@ -113,25 +119,34 @@ class StorefrontRepository(private val api: StorefrontApi) {
             PincodeCheckResponse(allowed = false, message = "Please enter a valid 6-digit Indian PIN code.")
         } else {
             val city = when {
-                cleanPin.startsWith("482") || cleanPin.startsWith("48") -> "Jabalpur, MP"
-                cleanPin.startsWith("40") -> "Mumbai, MH"
-                cleanPin.startsWith("11") -> "New Delhi, DL"
-                cleanPin.startsWith("56") -> "Bengaluru, KA"
-                cleanPin.startsWith("70") -> "Kolkata, WB"
-                cleanPin.startsWith("60") -> "Chennai, TN"
-                cleanPin.startsWith("50") -> "Hyderabad, TS"
-                cleanPin.startsWith("38") -> "Ahmedabad, GJ"
-                cleanPin.startsWith("411") -> "Pune, MH"
-                cleanPin.startsWith("302") -> "Jaipur, RJ"
+                cleanPin == "484551" -> "Birsinghpur Pali"
+                cleanPin == "484661" -> "Nowrozabad"
+                cleanPin == "484660" -> "Chandia"
+                cleanPin.startsWith("482") -> "Jabalpur"
+                cleanPin.startsWith("484") -> "Shahdol / Umaria"
+                cleanPin.startsWith("40") -> "Mumbai"
+                cleanPin.startsWith("411") -> "Pune"
+                cleanPin.startsWith("11") -> "New Delhi"
+                cleanPin.startsWith("56") -> "Bengaluru"
+                cleanPin.startsWith("70") -> "Kolkata"
+                cleanPin.startsWith("60") -> "Chennai"
+                cleanPin.startsWith("50") -> "Hyderabad"
+                cleanPin.startsWith("38") -> "Ahmedabad"
+                cleanPin.startsWith("302") -> "Jaipur"
+                cleanPin.startsWith("462") -> "Bhopal"
+                cleanPin.startsWith("452") -> "Indore"
+                cleanPin.startsWith("474") -> "Gwalior"
+                cleanPin.startsWith("48") -> "Madhya Pradesh"
                 else -> "India"
             }
+            val allowed = cleanPin == "484551"
             PincodeCheckResponse(
-                allowed = true,
+                allowed = allowed,
                 pincode = cleanPin,
                 city = city,
-                estimatedDays = "1-2 Days",
-                isExpressAvailable = cleanPin.startsWith("482") || cleanPin.startsWith("40"),
-                message = "Delivery available to $cleanPin ($city)"
+                estimatedDays = if (allowed) "Same Day / Scheduled Slot" else null,
+                isExpressAvailable = allowed,
+                message = if (allowed) "Great news! PIN code $cleanPin ($city) is fully serviceable for fast delivery in Birsinghpur Pali (484551)." else "Sorry, delivery is currently not serviceable for PIN code $cleanPin ($city). We deliver exclusively to: Birsinghpur Pali (484551)."
             )
         }
     }
