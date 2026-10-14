@@ -3,6 +3,7 @@ import { useLocation, Link } from 'wouter';
 import type { Product } from '@workspace/api-client-react';
 import { SeoHead } from './components/SeoHead';
 import { LegalPage, type PolicyType } from './pages/LegalPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { CookieBanner } from './components/CookieBanner';
 import {
   ShoppingBag,
@@ -1134,13 +1135,49 @@ export default function App() {
   const gstTotalCents = cartTotalCents - taxableTotalCents;
   const cgstCents = Math.round(gstTotalCents / 2);
   const sgstCents = gstTotalCents - cgstCents;
-  // Canonical Legal & Compliance Routes (/privacy, /terms, /refund, /cookies)
-  if (['/privacy', '/terms', '/refund', '/cookies'].includes(location)) {
+  // Canonical Legal & Compliance Routes (/privacy, /terms, /refund, /cookies) + Aliases
+  const legalRouteMap: Record<string, PolicyType> = {
+    '/privacy': 'privacy',
+    '/privacy-policy': 'privacy',
+    '/terms': 'terms',
+    '/terms-of-service': 'terms',
+    '/terms-and-conditions': 'terms',
+    '/refund': 'refund',
+    '/refund-policy': 'refund',
+    '/cancellation-policy': 'refund',
+    '/return-policy': 'refund',
+    '/cookies': 'cookies',
+    '/cookie-policy': 'cookies',
+  };
+
+  const cleanLocationPath = location.split('?')[0].toLowerCase().replace(/\/+$/, '') || '/';
+  const matchedLegalType = legalRouteMap[cleanLocationPath];
+
+  if (matchedLegalType) {
     return (
       <div className="min-h-screen bg-[#F7F2EA] text-[#0E3D42] font-sans flex flex-col justify-between">
-        <LegalPage type={location.slice(1) as PolicyType} shopSettings={shopSettings} />
+        <LegalPage type={matchedLegalType} shopSettings={shopSettings} />
         <CookieBanner />
       </div>
+    );
+  }
+
+  // 404 Not Found Page handling for unmapped routes or non-existent product slugs
+  const isHomeOrCatalog = cleanLocationPath === '/';
+  const isProductRoute = cleanLocationPath.startsWith('/products/');
+  const isKnownRoute =
+    isHomeOrCatalog ||
+    isCartPage ||
+    isCheckoutPage ||
+    cleanLocationPath === '/account' ||
+    (isProductRoute && (productsLoading || Boolean(currentProduct)));
+
+  if (!isKnownRoute && !productsLoading) {
+    return (
+      <>
+        <NotFoundPage shopSettings={shopSettings} cartCount={cart.length} />
+        <CookieBanner />
+      </>
     );
   }
 

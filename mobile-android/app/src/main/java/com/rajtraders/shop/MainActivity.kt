@@ -1213,8 +1213,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
 
                 OutlinedButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://sundarvan.xyz/privacy"))
-                        context.startActivity(intent)
+                        viewModel.openLegalDialog("Privacy Policy", "https://sundarvan.xyz/privacy")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
@@ -1227,8 +1226,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://sundarvan.xyz/terms"))
-                        context.startActivity(intent)
+                        viewModel.openLegalDialog("Terms of Service", "https://sundarvan.xyz/terms")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
@@ -1241,8 +1239,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://sundarvan.xyz/refund-policy"))
-                        context.startActivity(intent)
+                        viewModel.openLegalDialog("Refund & Cancellation Policy", "https://sundarvan.xyz/refund")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
@@ -1646,8 +1643,8 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
             Spacer(Modifier.height(12.dp))
 
             Text("Shipping Address", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Text("Select saved address or enter delivery coordinates.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Spacer(Modifier.height(4.dp))
+            Text("Fresh delivery dispatched from our Birsingpur Pali bakery.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             Spacer(Modifier.height(10.dp))
 
             if (state.currentUser != null) {
@@ -1663,7 +1660,7 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
                             onClick = { viewModel.selectSavedAddress(addr) },
                             label = { Text(addr.label ?: "Address") },
                             leadingIcon = if (isSelected) {
-                                { Icon(Icons.Outlined.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                { Icon(Icons.Outlined.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp), tint = RajTeal) }
                             } else null
                         )
                     }
@@ -1673,7 +1670,9 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         modifier = Modifier.height(32.dp)
                     ) {
-                        Text("+ Add Address", style = MaterialTheme.typography.labelSmall)
+                        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(14.dp), tint = RajTeal)
+                        Spacer(Modifier.width(4.dp))
+                        Text("+ Add Address", style = MaterialTheme.typography.labelSmall, color = RajTeal)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -1683,56 +1682,26 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
                 value = state.shippingAddress,
                 onValueChange = { viewModel.setShippingAddress(it) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Street, City, Postal Code") },
+                label = { Text("Complete Delivery Address") },
+                placeholder = { Text("House / Flat No., Street, Colony, Landmark") },
                 singleLine = false,
                 minLines = 2,
+                maxLines = 4,
                 enabled = !state.isCheckingOut,
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            var latText by remember { mutableStateOf("") }
-            var lonText by remember { mutableStateOf("") }
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = latText,
-                    onValueChange = { latText = it },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Latitude") },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = lonText,
-                    onValueChange = { lonText = it },
-                    modifier = Modifier.weight(1f),
-                    label = { Text("Longitude") },
-                    singleLine = true,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    val lat = latText.toDoubleOrNull()
-                    val lon = lonText.toDoubleOrNull()
-                    if (lat != null && lon != null) {
-                        viewModel.setDeliveryCoordinates(lat, lon)
-                    }
+                leadingIcon = {
+                    Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = RajTeal)
                 },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = latText.toDoubleOrNull() != null && lonText.toDoubleOrNull() != null,
-            ) {
-                Icon(Icons.Outlined.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Validate Delivery Location")
-            }
+                supportingText = {
+                    Text("Delivering to Birsingpur Pali (PIN: ${state.selectedPincode})", style = MaterialTheme.typography.labelSmall, color = Color(0xFF147A46))
+                }
+            )
 
             if (state.isValidatingDelivery) {
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = RajTeal, strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
-                    Text("Checking delivery range...", style = MaterialTheme.typography.bodySmall, color = RajTeal)
+                    Text("Verifying address eligibility...", style = MaterialTheme.typography.bodySmall, color = RajTeal)
                 }
             }
 
@@ -2238,24 +2207,117 @@ private fun AddressDialog(state: StorefrontUiState, viewModel: StorefrontViewMod
 @Composable
 private fun LegalDialog(state: StorefrontUiState, viewModel: StorefrontViewModel) {
     val context = LocalContext.current
+    val title = state.activeLegalTitle ?: "Legal Policy"
+    val isRefund = title.contains("Refund", ignoreCase = true) || title.contains("Cancellation", ignoreCase = true)
+    val isPrivacy = title.contains("Privacy", ignoreCase = true)
+
     AlertDialog(
         onDismissRequest = { viewModel.dismissLegalDialog() },
-        title = { Text(state.activeLegalTitle ?: "Legal Policy", fontWeight = FontWeight.Bold, color = RajTeal) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    when {
+                        isRefund -> Icons.Outlined.CheckCircle
+                        isPrivacy -> Icons.Outlined.Security
+                        else -> Icons.Outlined.Policy
+                    },
+                    contentDescription = null,
+                    tint = RajTeal,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(title, fontWeight = FontWeight.Bold, color = RajTeal)
+            }
+        },
         text = {
-            Text("You are opening the official ${state.activeLegalTitle} on our secure portal (sundarvan.xyz). Tap 'Open in Browser' to read the complete compliance documentation.")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                when {
+                    isRefund -> {
+                        Text(
+                            "Raj Traders Refund & Cancellation Policy",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = RajTeal
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "• Pre-Dispatch Cancellation: 100% immediate refund if cancelled before order packing and dispatch from our Birsingpur Pali bakery.\n\n" +
+                            "• Food Safety Regulations: Under FSSAI and Indian food hygiene standards, delivered artisanal bakes cannot be returned once handed over.\n\n" +
+                            "• Damaged or Incorrect Orders: If an order arrives damaged or defective, notify us within 24 hours for a prompt replacement or 100% refund.\n\n" +
+                            "• Refund Settlement: Razorpay online payments are credited back to the original bank/UPI account within 3–5 business days.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.DarkGray
+                        )
+                    }
+                    isPrivacy -> {
+                        Text(
+                            "Customer Privacy Protection & Data Rights",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = RajTeal
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "• Data Handled: Customer name, phone number, and delivery address are collected exclusively to fulfill orders and send delivery notifications.\n\n" +
+                            "• Zero Data Reselling: Raj Traders does not sell, rent, or monetize customer data to third-party advertisers.\n\n" +
+                            "• Payment Security: Payment details are securely tokenized via PCI-DSS certified Razorpay. No card numbers or UPI PINs are stored on our servers.\n\n" +
+                            "• Right to Deletion: You can delete your account and personal history anytime via the 'Delete Account' button in your Account tab.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.DarkGray
+                        )
+                    }
+                    else -> {
+                        Text(
+                            "Terms of Service & Order Fulfillment",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = RajTeal
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "• Registered Entity: RAJ TRADERS (GSTIN: 23AAAAA0000A1Z5), Thana Rd, beside Nagar Palika, Pali Birsinghpur, MP 484551.\n\n" +
+                            "• Service Area: Fresh bakery goods and store supplies are delivered within Pali Birsinghpur (PIN: 484551).\n\n" +
+                            "• Order Acceptance: Orders are fulfilled according to daily batch availability.\n\n" +
+                            "• Customer Support: Official assistance available at support@sundarvan.xyz or via WhatsApp during store hours (7:00 AM – 10:00 PM).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.DarkGray
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = RajTeal.copy(alpha = 0.08f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Official canonical URL: ${state.activeLegalUrl ?: "https://sundarvan.xyz/refund"}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RajTeal,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
         },
         confirmButton = {
             Button(
                 onClick = {
                     state.activeLegalUrl?.let { url ->
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        context.startActivity(intent)
+                        runCatching {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            context.startActivity(intent)
+                        }
                     }
                     viewModel.dismissLegalDialog()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = RajTeal)
             ) {
-                Text("Open in Browser")
+                Text("Open Web Page")
             }
         },
         dismissButton = {
