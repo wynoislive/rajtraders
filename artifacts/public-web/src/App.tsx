@@ -502,14 +502,8 @@ export default function App() {
       const isDiscountsPath = ['/discounts', '/coupons', '/offers'].includes(window.location.pathname.toLowerCase().replace(/\/+$/, ''));
       if (isDiscountsPath) {
         window.history.replaceState({}, '', '/');
-        const storedToken = localStorage.getItem('raj_auth_token');
-        if (storedToken) {
-          fetchCoupons();
-          setShowCouponsDrawer(true);
-        } else {
-          setShowAuthModal(true);
-          showToast('Please sign in to view your available coupons & refund credits.', 'info');
-        }
+        fetchCoupons();
+        setShowCouponsDrawer(true);
       }
     }
   }, []);
@@ -705,7 +699,8 @@ export default function App() {
     setCouponsLoading(true);
     try {
       const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const activeToken = token || localStorage.getItem('raj_token') || localStorage.getItem('raj_auth_token');
+      if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
       const res = await fetch(getApiUrl('/api/v1/discounts/active'), { headers });
       if (res.ok) {
         const data = await res.json();
@@ -938,13 +933,14 @@ export default function App() {
     }
   };
 
-  const handleApplyDiscount = async () => {
-    if (!discountCode.trim()) return;
+  const handleApplyDiscount = async (codeOverride?: string) => {
+    const codeToApply = (codeOverride || discountCode).trim();
+    if (!codeToApply) return;
     try {
       const res = await fetch(getApiUrl('/api/v1/discounts/validate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: discountCode.trim(), subtotalCents: cartTotalCents, isFirstOrder: true }),
+        body: JSON.stringify({ code: codeToApply, subtotalCents: cartTotalCents, isFirstOrder: orders.length === 0 }),
       });
       const data = await res.json();
       setDiscountResult(data);
@@ -1401,13 +1397,8 @@ export default function App() {
               {/* Offers / Coupons Button */}
               <button
                 onClick={() => {
-                  if (token) {
-                    fetchCoupons();
-                    setShowCouponsDrawer(true);
-                  } else {
-                    setShowAuthModal(true);
-                    showToast('Please sign in to view your available coupons & refund credits.', 'info');
-                  }
+                  fetchCoupons();
+                  setShowCouponsDrawer(true);
                 }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#0E3D42] text-xs font-black transition shadow-sm"
                 title="View Available Coupons & Offers"
@@ -2471,13 +2462,8 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => {
-                    if (token) {
-                      fetchCoupons();
-                      setShowCouponsDrawer(true);
-                    } else {
-                      setShowAuthModal(true);
-                      showToast('Please sign in to view your available coupons & refund credits.', 'info');
-                    }
+                    fetchCoupons();
+                    setShowCouponsDrawer(true);
                   }}
                   className="w-full sm:w-auto px-6 py-3 bg-[#E2A93B] text-[#0E3D42] font-black text-xs rounded-2xl shadow hover:bg-[#d69829] transition flex items-center justify-center gap-2 whitespace-nowrap active:scale-95 shrink-0"
                 >
@@ -2778,8 +2764,7 @@ export default function App() {
                         onClick={() => {
                           setDiscountCode(coupon.code);
                           setShowCouponsDrawer(false);
-                          handleApplyDiscount();
-                          showToast(`Coupon ${coupon.code} copied!`, 'info');
+                          handleApplyDiscount(coupon.code);
                         }}
                         className="px-3 py-1.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 transition"
                       >

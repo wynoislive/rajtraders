@@ -129543,10 +129543,17 @@ router3.post("/v1/registrations/claim", async (req, res) => {
 router3.get("/v1/discounts/active", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const authUserId = authHeader ? await getUserIdFromToken(authHeader) : null;
-    if (!authUserId) {
-      res.json([]);
-      return;
+    let authUserId = null;
+    if (authHeader) {
+      authUserId = await getUserIdFromToken(authHeader);
+      if (!authUserId) {
+        const clean = authHeader.replace(/^Bearer\s+/i, "").trim();
+        try {
+          const [u] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, clean)).limit(1);
+          if (u) authUserId = u.id;
+        } catch {
+        }
+      }
     }
     let allDiscounts = await db.select().from(discountsTable);
     if (allDiscounts.length === 0) {
@@ -129555,15 +129562,17 @@ router3.get("/v1/discounts/active", async (req, res) => {
     }
     const now = Date.now();
     let userOrderPrefixes = [];
-    try {
-      const [user] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, authUserId));
-      const conditions = [eq(ordersTable.userId, authUserId)];
-      if (user?.email) {
-        conditions.push(eq(ordersTable.customerEmail, user.email));
+    if (authUserId) {
+      try {
+        const [user] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, authUserId));
+        const conditions = [eq(ordersTable.userId, authUserId)];
+        if (user?.email) {
+          conditions.push(eq(ordersTable.customerEmail, user.email));
+        }
+        const userOrders = await db.select({ id: ordersTable.id }).from(ordersTable).where(or(...conditions));
+        userOrderPrefixes = userOrders.map((o) => o.id.slice(0, 6).toUpperCase());
+      } catch {
       }
-      const userOrders = await db.select({ id: ordersTable.id }).from(ordersTable).where(or(...conditions));
-      userOrderPrefixes = userOrders.map((o) => o.id.slice(0, 6).toUpperCase());
-    } catch {
     }
     const activeCoupons = allDiscounts.filter((d) => {
       if (!d.active) return false;
@@ -129575,6 +129584,7 @@ router3.get("/v1/discounts/active", async (req, res) => {
       if (typeof d.value === "number" && d.value <= 0) return false;
       const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
       if (isPersonalCredit) {
+        if (!authUserId) return false;
         const match2 = userOrderPrefixes.some(
           (prefix) => d.code.startsWith(`CREDIT-${prefix}`) || d.code.startsWith(`REFUND-${prefix}`)
         );

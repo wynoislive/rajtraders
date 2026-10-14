@@ -77,8 +77,14 @@ data class StorefrontUiState(
     val isDeletingAccount: Boolean = false,
     val accountDeletionNotice: String? = null,
     val lockdownWarning: String? = null,
-    // Shipping & Delivery States
+    // Shipping & Delivery States (Structured Address)
     val shippingAddress: String = "",
+    val addressHouseNo: String = "",
+    val addressStreetArea: String = "",
+    val addressLandmark: String = "",
+    val addressLabel: String = "Home",
+    val receiverName: String = "",
+    val receiverPhone: String = "",
     val deliveryLatitude: Double? = null,
     val deliveryLongitude: Double? = null,
     val deliveryValidation: DeliveryValidationResponse? = null,
@@ -244,13 +250,9 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     // ─── Available Coupons & Refund Credits ─────────────────────
 
     fun fetchCoupons() {
-        val token = _uiState.value.authToken
-        if (token.isNullOrBlank()) {
-            _uiState.update { it.copy(availableCoupons = emptyList(), isLoadingCoupons = false) }
-            return
-        }
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingCoupons = true, couponNotice = null) }
+            val token = _uiState.value.authToken
             runCatching {
                 repository.getActiveCoupons(token)
             }.onSuccess { coupons ->
@@ -258,7 +260,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                     it.copy(
                         isLoadingCoupons = false,
                         availableCoupons = coupons,
-                        couponNotice = if (coupons.isEmpty()) "No coupons currently available." else null
+                        couponNotice = if (coupons.isEmpty()) "No active coupons right now." else null
                     )
                 }
             }.onFailure { err ->
@@ -620,8 +622,51 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
         }
     }
 
+    fun formatFullAddress(state: StorefrontUiState): String {
+        val parts = mutableListOf<String>()
+        if (state.addressHouseNo.isNotBlank()) parts.add(state.addressHouseNo.trim())
+        if (state.addressStreetArea.isNotBlank()) parts.add(state.addressStreetArea.trim())
+        if (state.addressLandmark.isNotBlank()) parts.add("Landmark: ${state.addressLandmark.trim()}")
+        parts.add("${state.selectedCity}, MP - ${state.selectedPincode}")
+        return parts.joinToString(", ")
+    }
+
+    fun setAddressHouseNo(houseNo: String) {
+        _uiState.update { current ->
+            val updated = current.copy(addressHouseNo = houseNo)
+            updated.copy(shippingAddress = formatFullAddress(updated))
+        }
+    }
+
+    fun setAddressStreetArea(streetArea: String) {
+        _uiState.update { current ->
+            val updated = current.copy(addressStreetArea = streetArea)
+            updated.copy(shippingAddress = formatFullAddress(updated))
+        }
+    }
+
+    fun setAddressLandmark(landmark: String) {
+        _uiState.update { current ->
+            val updated = current.copy(addressLandmark = landmark)
+            updated.copy(shippingAddress = formatFullAddress(updated))
+        }
+    }
+
+    fun setAddressLabel(label: String) {
+        _uiState.update { it.copy(addressLabel = label) }
+    }
+
+    fun setReceiverDetails(name: String, phone: String) {
+        _uiState.update { it.copy(receiverName = name, receiverPhone = phone) }
+    }
+
     fun setShippingAddress(address: String) {
-        _uiState.update { it.copy(shippingAddress = address) }
+        _uiState.update { current ->
+            current.copy(
+                shippingAddress = address,
+                addressStreetArea = if (current.addressStreetArea.isBlank()) address else current.addressStreetArea
+            )
+        }
     }
 
     fun setDeliveryCoordinates(lat: Double, lon: Double) {
@@ -654,8 +699,14 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
             return
         }
 
-        if (state.shippingAddress.isBlank() || state.shippingAddress.length < 5) {
-            _uiState.update { it.copy(checkoutError = "Please enter a valid shipping address.") }
+        val effectiveAddress = if (state.shippingAddress.isNotBlank()) {
+            state.shippingAddress
+        } else if (state.addressHouseNo.isNotBlank() && state.addressStreetArea.isNotBlank()) {
+            formatFullAddress(state)
+        } else ""
+
+        if (effectiveAddress.isBlank() || effectiveAddress.length < 5) {
+            _uiState.update { it.copy(checkoutError = "Please enter house/flat no. and street/colony for delivery.") }
             return
         }
 
@@ -703,7 +754,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                     userId = user.id,
                     customerName = "${user.firstName} ${user.lastName}",
                     customerMobile = user.mobileNumber,
-                    shippingAddress = _uiState.value.shippingAddress,
+                    shippingAddress = effectiveAddress,
                     deliveryLatitude = _uiState.value.deliveryLatitude,
                     deliveryLongitude = _uiState.value.deliveryLongitude,
                     pincode = _uiState.value.selectedPincode,
@@ -995,11 +1046,15 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     }
 
     fun selectSavedAddress(address: com.rajtraders.shop.data.CustomerAddress) {
-        val formatted = "${address.houseNumber?.let { "$it, " } ?: ""}${address.fullAddress}, ${address.city} ${address.pincode}"
+        val formatted = "${address.houseNumber?.takeIf { it.isNotBlank() }?.let { "$it, " } ?: ""}${address.fullAddress}, ${address.city} ${address.pincode}"
         _uiState.update {
             it.copy(
                 selectedAddressId = address.id,
                 shippingAddress = formatted,
+                addressHouseNo = address.houseNumber ?: "",
+                addressStreetArea = address.fullAddress,
+                addressLandmark = address.landmark ?: "",
+                addressLabel = address.label ?: "Home",
                 selectedPincode = address.pincode,
                 selectedCity = address.city,
             )

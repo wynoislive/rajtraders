@@ -284,16 +284,22 @@ router.post("/v1/registrations/claim", async (req, res): Promise<void> => {
   );
 });
 
-// Public endpoint: list active, non-expired coupons for customer browsing
-// Authenticated customer endpoint: list active coupons and private refund credits
+// Public & Authenticated endpoint: list active, non-expired coupons for customer browsing
+// Public store promotions (e.g. WELCOME25, PARTY15) are always visible.
+// Private store credits / refund vouchers (CREDIT-* / REFUND-*) are strictly gated to authenticated order owners.
 router.get("/v1/discounts/active", async (req, res): Promise<void> => {
   try {
-    // Check if customer is authenticated (per policy: require login everywhere to view coupons)
     const authHeader = req.headers.authorization;
-    const authUserId = authHeader ? await getUserIdFromToken(authHeader) : null;
-    if (!authUserId) {
-      res.json([]);
-      return;
+    let authUserId: string | null = null;
+    if (authHeader) {
+      authUserId = await getUserIdFromToken(authHeader);
+      if (!authUserId) {
+        const clean = authHeader.replace(/^Bearer\s+/i, "").trim();
+        try {
+          const [u] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, clean)).limit(1);
+          if (u) authUserId = u.id;
+        } catch {}
+      }
     }
 
     let allDiscounts = await db.select().from(discountsTable);
@@ -303,26 +309,28 @@ router.get("/v1/discounts/active", async (req, res): Promise<void> => {
     }
     const now = Date.now();
 
-    // Look up customer orders matching userId or email
+    // Look up customer orders matching userId or email if authenticated
     let userOrderPrefixes: string[] = [];
-    try {
-      const [user] = await db
-        .select({ email: usersTable.email })
-        .from(usersTable)
-        .where(eq(usersTable.id, authUserId));
+    if (authUserId) {
+      try {
+        const [user] = await db
+          .select({ email: usersTable.email })
+          .from(usersTable)
+          .where(eq(usersTable.id, authUserId));
 
-      const conditions = [eq(ordersTable.userId, authUserId)];
-      if (user?.email) {
-        conditions.push(eq(ordersTable.customerEmail, user.email));
-      }
+        const conditions = [eq(ordersTable.userId, authUserId)];
+        if (user?.email) {
+          conditions.push(eq(ordersTable.customerEmail, user.email));
+        }
 
-      const userOrders = await db
-        .select({ id: ordersTable.id })
-        .from(ordersTable)
-        .where(or(...conditions));
+        const userOrders = await db
+          .select({ id: ordersTable.id })
+          .from(ordersTable)
+          .where(or(...conditions));
 
-      userOrderPrefixes = userOrders.map((o: { id: string }) => o.id.slice(0, 6).toUpperCase());
-    } catch {}
+        userOrderPrefixes = userOrders.map((o: { id: string }) => o.id.slice(0, 6).toUpperCase());
+      } catch {}
+    }
 
     const activeCoupons = allDiscounts.filter((d: any) => {
       if (!d.active) return false;
@@ -337,6 +345,7 @@ router.get("/v1/discounts/active", async (req, res): Promise<void> => {
       // Privacy: Store Credit / Refund coupons (CREDIT-* / REFUND-*) only visible to the user who owns that order!
       const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
       if (isPersonalCredit) {
+        if (!authUserId) return false; // Guest users never see private store credits
         const match = userOrderPrefixes.some((prefix) =>
           d.code.startsWith(`CREDIT-${prefix}`) || d.code.startsWith(`REFUND-${prefix}`)
         );

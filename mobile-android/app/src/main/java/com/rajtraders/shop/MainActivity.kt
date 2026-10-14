@@ -17,9 +17,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -28,6 +37,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -243,17 +254,104 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Outlined.Verified, null) }, label = { Text("Shop") })
-                NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Outlined.ShoppingBag, null) }, label = { Text("Bag") })
-                NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2; viewModel.fetchOrders() }, icon = { Icon(Icons.Outlined.CheckCircle, null) }, label = { Text("Orders") })
-                NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3; viewModel.fetchCoupons() }, icon = { Icon(Icons.Outlined.Person, null) }, label = { Text("Account") })
+            Column {
+                // Persistent Cart Bubble Bar when items exist in cart and user is browsing outside the Bag tab
+                AnimatedVisibility(
+                    visible = state.cart.isNotEmpty() && selectedTab != 1,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                            .clickable { selectedTab = 1 },
+                        shape = RoundedCornerShape(16.dp),
+                        color = RajTeal,
+                        shadowElevation = 8.dp,
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.ShoppingBag,
+                                        contentDescription = null,
+                                        tint = RajSaffron,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    val totalItems = state.cart.sumOf { it.quantity }
+                                    Text(
+                                        text = "$totalItems ${if (totalItems == 1) "item" else "items"}  •  ${money(viewModel.cartTotalCents())}",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = "View Cart  •  Direct Checkout →",
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = RajSaffron,
+                                modifier = Modifier.clickable { selectedTab = 1 }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "View Bag",
+                                        color = RajTeal,
+                                        fontWeight = FontWeight.Black,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        Icons.AutoMirrored.Outlined.ArrowForward,
+                                        contentDescription = null,
+                                        tint = RajTeal,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                NavigationBar(containerColor = Color.White) {
+                    NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Outlined.Verified, null) }, label = { Text("Shop") })
+                    NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Outlined.ShoppingBag, null) }, label = { Text("Bag") })
+                    NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2; viewModel.fetchOrders() }, icon = { Icon(Icons.Outlined.CheckCircle, null) }, label = { Text("Orders") })
+                    NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3; viewModel.fetchCoupons() }, icon = { Icon(Icons.Outlined.Person, null) }, label = { Text("Account") })
+                }
             }
         },
     ) { padding ->
         when (selectedTab) {
             0 -> CatalogScreen(state, padding, viewModel)
-            1 -> CartScreen(state, padding, viewModel, onNavigateToOrders = { selectedTab = 2; viewModel.fetchOrders() })
+            1 -> CartScreen(
+                state = state,
+                padding = padding,
+                viewModel = viewModel,
+                onNavigateToOrders = { selectedTab = 2; viewModel.fetchOrders() },
+                onBrowseMore = { selectedTab = 0 }
+            )
             2 -> OrdersScreen(state, padding, viewModel)
             else -> AccountScreen(state, padding, viewModel)
         }
@@ -1772,7 +1870,13 @@ private fun ProductCard(product: Product, onAdd: () -> Unit, onShare: () -> Unit
 // ─── Cart / Checkout Screen ─────────────────────────────────
 
 @Composable
-private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewModel: StorefrontViewModel, onNavigateToOrders: () -> Unit) {
+private fun CartScreen(
+    state: StorefrontUiState,
+    padding: PaddingValues,
+    viewModel: StorefrontViewModel,
+    onNavigateToOrders: () -> Unit,
+    onBrowseMore: () -> Unit = {}
+) {
     val context = LocalContext.current
     var code by remember { mutableStateOf(state.discount?.code ?: "") }
     androidx.compose.runtime.LaunchedEffect(state.discount?.code) {
@@ -1840,7 +1944,157 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
                     IconButton(onClick = { viewModel.addToCart(line.product) }, enabled = !state.isCheckingOut) { Icon(Icons.Outlined.Add, "Add one") }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+
+            Spacer(Modifier.height(8.dp))
+
+            // Add More Items Button
+            OutlinedButton(
+                onClick = onBrowseMore,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, RajTeal.copy(alpha = 0.45f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = RajTeal)
+            ) {
+                Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("+ Add more items from menu", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+            }
+
+            // Frequently Bought Together Recommendations Carousel
+            val recommendedProducts = remember(state.products, state.cart) {
+                val cartIds = state.cart.map { it.product.id }.toSet()
+                state.products.filter { it.id !in cartIds }.take(8)
+            }
+
+            if (recommendedProducts.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, RajTeal.copy(alpha = 0.12f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    "Frequently Bought Together",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = RajTeal
+                                )
+                                Text(
+                                    "Customers also ordered these bakery favourites",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.Gray
+                                )
+                            }
+                            Text(
+                                "POPULAR",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Black,
+                                color = RajSaffron,
+                                modifier = Modifier
+                                    .background(RajSaffron.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp)
+                        ) {
+                            items(recommendedProducts, key = { it.id }) { rec ->
+                                Card(
+                                    modifier = Modifier.width(140.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = RajCanvas.copy(alpha = 0.5f)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5DFD5))
+                                ) {
+                                    Column(Modifier.padding(8.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(90.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                        ) {
+                                            AsyncImage(
+                                                model = rec.imageUrl,
+                                                contentDescription = rec.name,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            rec.category?.let { cat ->
+                                                Surface(
+                                                    color = Color.Black.copy(alpha = 0.6f),
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    modifier = Modifier
+                                                        .align(Alignment.TopStart)
+                                                        .padding(4.dp)
+                                                ) {
+                                                    Text(
+                                                        cat.uppercase(),
+                                                        color = Color.White,
+                                                        fontSize = 8.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(6.dp))
+
+                                        Text(
+                                            rec.name,
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+
+                                        Spacer(Modifier.height(4.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                money(rec.priceCents),
+                                                fontWeight = FontWeight.Bold,
+                                                color = RajTeal,
+                                                style = MaterialTheme.typography.labelMedium
+                                            )
+
+                                            Button(
+                                                onClick = { viewModel.addToCart(rec) },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = RajTeal),
+                                                modifier = Modifier.height(28.dp)
+                                            ) {
+                                                Text("+ Add", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
             HorizontalDivider(color = RajTeal.copy(alpha = 0.2f))
             Spacer(Modifier.height(12.dp))
 
@@ -1876,16 +2130,10 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
             ) {
                 Text("Coupons & Offers", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                 TextButton(onClick = {
-                    if (state.currentUser != null) {
-                        viewModel.openCouponsDialog()
-                    } else {
-                        viewModel.showAuth(false)
-                    }
+                    viewModel.openCouponsDialog()
                 }) {
                     Text(
-                        if (state.currentUser != null) {
-                            if (state.availableCoupons.isNotEmpty()) "🏷️ View Available (${state.availableCoupons.size})" else "🏷️ View Offers"
-                        } else "Sign in for coupons",
+                        if (state.availableCoupons.isNotEmpty()) "🏷️ View Available (${state.availableCoupons.size})" else "🏷️ View Offers",
                         color = RajTeal,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.labelSmall
@@ -2071,23 +2319,140 @@ private fun CartScreen(state: StorefrontUiState, padding: PaddingValues, viewMod
 
             Spacer(Modifier.height(8.dp))
 
-            OutlinedTextField(
-                value = state.shippingAddress,
-                onValueChange = { viewModel.setShippingAddress(it) },
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Complete Delivery Address") },
-                placeholder = { Text("House / Flat No., Street, Colony, Landmark") },
-                singleLine = false,
-                minLines = 2,
-                maxLines = 4,
-                enabled = !state.isCheckingOut,
-                leadingIcon = {
-                    Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = RajTeal)
-                },
-                supportingText = {
-                    Text("Delivering to Birsingpur Pali (PIN: ${state.selectedPincode})", style = MaterialTheme.typography.labelSmall, color = Color(0xFF147A46))
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RajTeal.copy(alpha = 0.15f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "Delivery Address Details",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = RajTeal
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = RajTeal, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Birsingpur Pali", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = RajTeal)
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Address Tag / Type Chips (Home, Work, Other)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        listOf("Home", "Work", "Other").forEach { tag ->
+                            val isSelected = state.addressLabel.equals(tag, ignoreCase = true)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { viewModel.setAddressLabel(tag) },
+                                label = { Text(tag, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall) },
+                                leadingIcon = if (isSelected) {
+                                    { Icon(Icons.Outlined.CheckCircle, contentDescription = null, modifier = Modifier.size(14.dp), tint = RajTeal) }
+                                } else null
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // House / Flat / Building / Shop No. (Required)
+                    OutlinedTextField(
+                        value = state.addressHouseNo,
+                        onValueChange = { viewModel.setAddressHouseNo(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("House / Flat / Shop / Building No. *") },
+                        placeholder = { Text("e.g. Shop No. 14 / House 28, Ward 4") },
+                        singleLine = true,
+                        enabled = !state.isCheckingOut,
+                        shape = RoundedCornerShape(10.dp),
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Street / Area / Colony / Ward (Required)
+                    OutlinedTextField(
+                        value = state.addressStreetArea,
+                        onValueChange = { viewModel.setAddressStreetArea(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Street / Colony / Area / Ward *") },
+                        placeholder = { Text("e.g. Main Market, Thana Road, Near Bus Stand") },
+                        singleLine = true,
+                        enabled = !state.isCheckingOut,
+                        shape = RoundedCornerShape(10.dp),
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Landmark (Optional)
+                    OutlinedTextField(
+                        value = state.addressLandmark,
+                        onValueChange = { viewModel.setAddressLandmark(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Landmark (Optional)") },
+                        placeholder = { Text("e.g. Beside Nagar Palika / Opp Civil Hospital") },
+                        singleLine = true,
+                        enabled = !state.isCheckingOut,
+                        shape = RoundedCornerShape(10.dp),
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // City & State Confirmation with Serviceable PIN Badge
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF147A46).copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF147A46).copy(alpha = 0.2f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF147A46), modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "${state.selectedCity}, Madhya Pradesh",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color(0xFF147A46)
+                                )
+                            }
+                            Text(
+                                "PIN: ${state.selectedPincode}",
+                                fontWeight = FontWeight.Black,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF147A46)
+                            )
+                        }
+                    }
+
+                    // Contact Details if available
+                    state.currentUser?.let { u ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Receiver: ${u.firstName} ${u.lastName} · ${u.mobileNumber}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.DarkGray,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
-            )
+            }
 
             if (state.isValidatingDelivery) {
                 Spacer(Modifier.height(8.dp))
@@ -2780,7 +3145,11 @@ private fun CouponsDialog(
                         state.availableCoupons.forEach { coupon ->
                             val isRefund = coupon.isRefundCredit || coupon.code.startsWith("CREDIT-") || coupon.code.startsWith("REFUND-")
                             val badgeBg = if (isRefund) Color(0xFFD97706) else RajTeal
-                            val offerText = if (coupon.type == "percentage") "${coupon.value}% OFF" else "₹${coupon.value / 100} OFF"
+                            val offerText = if (coupon.type == "percentage") {
+                                "${coupon.value.toInt()}% OFF"
+                            } else {
+                                if (coupon.value >= 100.0) money(coupon.value.toInt()) + " OFF" else "₹${coupon.value.toInt()} OFF"
+                            }
 
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
