@@ -1124,7 +1124,7 @@ router.post("/v1/admin/orders/:id/approve-cancellation", requirePermission("orde
         link: "/account",
         isRead: false,
         createdAt: new Date(),
-      }).catch((notifErr) => {
+      }).catch((notifErr: unknown) => {
         req.log.warn({ notifErr, orderId: id }, "Failed creating in-app customer notification");
       });
     }
@@ -1137,7 +1137,7 @@ router.post("/v1/admin/orders/:id/approve-cancellation", requirePermission("orde
         order.id,
         order.totalCents,
         preferredMethod,
-        preferredMethod === "wallet" ? refundId : undefined,
+        preferredMethod === "wallet" ? (refundId || undefined) : undefined,
       ).catch((mailErr) => {
         req.log.warn({ mailErr, orderId: id }, "Failed sending refund confirmation email");
       });
@@ -1357,7 +1357,7 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
         link: "/account",
         isRead: false,
         createdAt: new Date(),
-      }).catch((notifErr) => {
+      }).catch((notifErr: unknown) => {
         req.log.warn({ notifErr, orderId: id }, "Failed creating in-app customer notification on decline");
       });
     }
@@ -1371,7 +1371,7 @@ router.post("/v1/admin/orders/:id/decline", requirePermission("orders"), async (
           order.id,
           refundIssuedCents,
           refundAction === "store_credit" ? "wallet" : "original",
-          refundAction === "store_credit" ? refundId : undefined,
+          refundAction === "store_credit" ? (refundId || undefined) : undefined,
           reason ? `Order cancelled by store: ${reason}` : undefined,
         ).catch((mailErr) => {
           req.log.warn({ mailErr, orderId: id }, "Failed sending decline refund confirmation email");
@@ -1573,7 +1573,7 @@ router.post("/v1/admin/orders/:id/refund", requirePermission("orders"), async (r
         link: "/account",
         isRead: false,
         createdAt: new Date(),
-      }).catch((notifErr) => {
+      }).catch((notifErr: unknown) => {
         req.log.warn({ notifErr, orderId: id }, "Failed creating in-app customer notification on manual refund");
       });
     }

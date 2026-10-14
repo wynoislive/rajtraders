@@ -1023,25 +1023,93 @@ export default function App() {
       }
 
       if (orderData.razorpayOrderId) {
-        const verifyRes = await fetch(getApiUrl('/api/v1/checkout/verify-payment'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            idempotencyKey: orderData.idempotencyKey,
-            razorpayOrderId: orderData.razorpayOrderId,
-            razorpayPaymentId: `pay_web_${Date.now()}`,
-          }),
-        });
-        const receiptData = await verifyRes.json();
-        setReceipt(receiptData);
-        setCart([]);
-        setLocation('/');
-        showToast('Order placed successfully! Tax invoice sent to your email.', 'success');
-        if (token) {
-          fetch(getApiUrl('/api/v1/auth/orders'), { headers: { Authorization: `Bearer ${token}` } })
-            .then(r => r.ok ? r.json() : [])
-            .then(data => { if (Array.isArray(data)) setCustomerOrders(data); });
+        const isLiveKey = Boolean(orderData.keyId && !orderData.keyId.includes('sandbox'));
+
+        const completeOrder = async (payId: string, sig?: string) => {
+          try {
+            const verifyRes = await fetch(getApiUrl('/api/v1/checkout/verify-payment'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                idempotencyKey: orderData.idempotencyKey,
+                razorpayOrderId: orderData.razorpayOrderId,
+                razorpayPaymentId: payId,
+                ...(sig ? { razorpaySignature: sig } : {}),
+              }),
+            });
+            const receiptData = await verifyRes.json();
+            if (!verifyRes.ok) {
+              showToast(receiptData.error || 'Payment verification failed.', 'error');
+              return;
+            }
+            setReceipt(receiptData);
+            setCart([]);
+            setLocation('/');
+            showToast('Order placed successfully! Tax invoice sent to your email.', 'success');
+            if (token) {
+              fetch(getApiUrl('/api/v1/auth/orders'), { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.ok ? r.json() : [])
+                .then(data => { if (Array.isArray(data)) setCustomerOrders(data); });
+            }
+          } finally {
+            setIsCheckingOut(false);
+          }
+        };
+
+        if (isLiveKey && typeof window !== 'undefined') {
+          try {
+            if (!(window as any).Razorpay) {
+              await new Promise<void>((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load Razorpay SDK'));
+                document.body.appendChild(script);
+              });
+            }
+
+            const options = {
+              key: orderData.keyId,
+              amount: orderData.amountCents,
+              currency: orderData.currency || 'INR',
+              name: 'RAJ TRADERS',
+              description: 'Bakery & Cake Order',
+              image: 'https://sundarvan.xyz/RAJTRADERS-LOGO.png',
+              order_id: orderData.razorpayOrderId,
+              handler: function (response: any) {
+                completeOrder(response.razorpay_payment_id, response.razorpay_signature);
+              },
+              prefill: {
+                name: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : '',
+                email: user?.email || '',
+                contact: user?.mobileNumber || '',
+              },
+              theme: {
+                color: '#0E3D42',
+              },
+              modal: {
+                ondismiss: function () {
+                  showToast('Payment window closed. You can retry checkout anytime.', 'info');
+                  setIsCheckingOut(false);
+                },
+              },
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.on('payment.failed', function (resp: any) {
+              showToast(resp.error?.description || 'Payment failed. Please retry with UPI/Card.', 'error');
+              setIsCheckingOut(false);
+            });
+            rzp.open();
+            return;
+          } catch (sdkErr) {
+            console.warn('Razorpay SDK load fallback:', sdkErr);
+          }
         }
+
+        // Sandbox / Test fallback simulation
+        await completeOrder(`pay_web_${Date.now()}`);
+        return;
       } else {
         showToast(orderData.error || 'Failed to place order.', 'error');
       }

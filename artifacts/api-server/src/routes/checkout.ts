@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db, ordersTable, productsTable, discountsTable, shopSettingsTable, customerCartsTable } from "@workspace/db";
 import { eq, inArray, sql } from "drizzle-orm";
-import { createHmac, randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { calculateHaversineDistanceKm } from "../utils/geo";
 import { getUserIdFromToken } from "./customer-auth";
 import { computeDiscount } from "../utils/discounts";
@@ -14,12 +14,14 @@ import { getRedisClient } from "../lib/redis";
 
 const router: Router = Router();
 
-// Helper: fetch Razorpay credentials from DB (admin-configurable, NOT hardcoded)
-async function getRazorpayCredentials(): Promise<{ keyId: string; keySecret: string }> {
+// Helper: fetch Razorpay credentials from DB & ENV (admin-configurable, NOT hardcoded)
+async function getRazorpayCredentials(): Promise<{ keyId: string; keySecret: string; webhookSecret: string }> {
   const settings = (await db.select().from(shopSettingsTable).where(eq(shopSettingsTable.id, "default_shop")).limit(1))[0];
+  const keySecret = settings?.razorpayKeySecret || process.env.RAZORPAY_KEY_SECRET || "sandbox_secret";
   return {
-    keyId: settings?.razorpayKeyId || "rzp_test_sandbox123456",
-    keySecret: settings?.razorpayKeySecret || "sandbox_secret",
+    keyId: settings?.razorpayKeyId || process.env.RAZORPAY_KEY_ID || "rzp_test_sandbox123456",
+    keySecret,
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || keySecret,
   };
 }
 
@@ -876,6 +878,189 @@ router.post("/orders/:id/cancel-request", async (req: Request, res: Response) =>
   } catch (err: unknown) {
     req.log.error({ err, orderId: id }, "Error submitting cancellation request");
     res.status(500).json({ error: "Failed to submit cancellation request." });
+  }
+});
+
+// 6. Razorpay Production Webhook (Asynchronous Payment & Refund Fulfillment)
+// Generated with: razorpay-webhooks skill
+// https://github.com/hookdeck/webhook-skills
+router.post("/webhook", async (req: Request, res: Response) => {
+  const signature = req.headers["x-razorpay-signature"] as string | undefined;
+
+  if (!signature) {
+    req.log.warn("Razorpay webhook received without X-Razorpay-Signature header");
+    res.status(400).json({ error: "Missing webhook signature header" });
+    return;
+  }
+
+  const { webhookSecret } = await getRazorpayCredentials();
+
+  // Validate raw body HMAC signature with timing-safe comparison
+  const rawBody = (req as any).rawBody || Buffer.from(JSON.stringify(req.body));
+  const expectedSignature = createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+
+  let isValid = false;
+  try {
+    const signatureBuffer = Buffer.from(signature, "utf-8");
+    const expectedBuffer = Buffer.from(expectedSignature, "utf-8");
+    if (signatureBuffer.length === expectedBuffer.length) {
+      isValid = timingSafeEqual(signatureBuffer, expectedBuffer);
+    }
+  } catch (err) {
+    isValid = false;
+  }
+
+  if (!isValid) {
+    req.log.error({ signature }, "Invalid Razorpay webhook signature");
+    res.status(400).json({ error: "Invalid webhook signature" });
+    return;
+  }
+
+  const event = req.body?.event;
+  const payload = req.body?.payload;
+
+  req.log.info({ event, id: req.body?.id }, "Verified Razorpay webhook event received");
+
+  try {
+    if (event === "order.paid" || event === "payment.captured") {
+      const paymentEntity = payload?.payment?.entity;
+      const orderEntity = payload?.order?.entity;
+      const razorpayOrderId = paymentEntity?.order_id || orderEntity?.id;
+      const razorpayPaymentId = paymentEntity?.id;
+
+      if (razorpayOrderId) {
+        const [order] = await db
+          .select()
+          .from(ordersTable)
+          .where(eq(ordersTable.razorpayOrderId, razorpayOrderId))
+          .limit(1);
+
+        if (order) {
+          if (order.status !== "paid") {
+            await db
+              .update(ordersTable)
+              .set({
+                status: "paid",
+                razorpayPaymentId: razorpayPaymentId || order.razorpayPaymentId,
+                updatedAt: new Date(),
+              })
+              .where(eq(ordersTable.id, order.id));
+
+            // Commit inventory
+            try {
+              const orderItems = JSON.parse(order.itemsJson);
+              const itemsToCommit = orderItems.map((item: any) => ({
+                productId: item.id || item.productId,
+                quantity: item.quantity,
+              }));
+              await commitInventoryReservation(order.id, itemsToCommit);
+            } catch (invErr) {
+              req.log.error({ invErr, orderId: order.id }, "Failed committing inventory in webhook");
+            }
+
+            // Clear persistent customer cart
+            if (order.userId) {
+              try {
+                await db.delete(customerCartsTable).where(eq(customerCartsTable.userId, order.userId)).catch(() => {});
+                const redis = getRedisClient();
+                if (redis) await redis.del(`cart:customer:${order.userId}`).catch(() => {});
+              } catch (cartErr) {
+                req.log.warn({ cartErr, userId: order.userId }, "Failed clearing cart in webhook");
+              }
+            }
+
+            // Generate tax invoice & send notifications
+            try {
+              const settings = await getShopSettings();
+              const pdfInvoiceBuffer = await generateTaxInvoicePdf({
+                orderId: order.id,
+                invoiceNumber: `INV-${order.id.slice(0, 8).toUpperCase()}`,
+                invoiceDate: new Date(),
+                paymentId: razorpayPaymentId || order.razorpayPaymentId || "Razorpay-Webhook",
+                paymentMethod: "Online (Razorpay)",
+                customerName: order.customerName || "Valued Customer",
+                customerEmail: order.customerEmail || "",
+                customerMobile: order.customerMobile || undefined,
+                shippingAddress: order.shippingAddress || "",
+                items: order.itemsJson || [],
+                subtotalCents: order.subtotalCents,
+                discountCents: order.discountCents,
+                shippingFeeCents: order.shippingFeeCents || 0,
+                packagingFeeCents: order.packagingFeeCents || 0,
+                totalCents: order.totalCents,
+                taxableAmountCents: order.taxableAmountCents || order.subtotalCents,
+                cgstCents: order.cgstCents || 0,
+                sgstCents: order.sgstCents || 0,
+                igstCents: order.igstCents || 0,
+                shopName: settings.shopName || "RAJ TRADERS",
+                legalBusinessName: settings.legalBusinessName || "RAJ TRADERS",
+                gstinNumber: settings.gstinNumber || "23AAAAA0000A1Z5",
+                panNumber: settings.panNumber || "AAAAA0000A",
+                shopAddress: settings.shopAddress || "Birsingpur Pali, MP",
+                stateCode: settings.stateCode || "23",
+                stateName: settings.stateName || "Madhya Pradesh",
+                contactEmail: settings.contactEmail || settings.supportEmail || "contact@rajtraders.shop",
+              });
+
+              if (order.customerEmail) {
+                await sendOrderConfirmationEmail(
+                  order.customerEmail,
+                  order.customerName || "Valued Customer",
+                  order.id,
+                  order.totalCents,
+                  JSON.parse(order.itemsJson),
+                  pdfInvoiceBuffer,
+                );
+              }
+
+              await sendOrderConfirmationWhatsApp(order, settings).catch(() => {});
+            } catch (notifyErr) {
+              req.log.error({ notifyErr, orderId: order.id }, "Failed sending order notifications in webhook");
+            }
+
+            req.log.info({ orderId: order.id, razorpayOrderId, razorpayPaymentId }, "Order marked paid via Razorpay webhook");
+          } else {
+            req.log.info({ orderId: order.id }, "Order was already marked paid, webhook idempotent acknowledge");
+          }
+        } else {
+          req.log.warn({ razorpayOrderId }, "Webhook received for unknown razorpayOrderId");
+        }
+      }
+    } else if (event === "payment.failed") {
+      const paymentEntity = payload?.payment?.entity;
+      const razorpayOrderId = paymentEntity?.order_id;
+      const failureReason = paymentEntity?.error_description || paymentEntity?.error_reason;
+
+      req.log.warn({ razorpayOrderId, failureReason }, "Payment failed according to Razorpay webhook");
+    } else if (event === "refund.processed") {
+      const refundEntity = payload?.refund?.entity;
+      const paymentId = refundEntity?.payment_id;
+
+      if (paymentId) {
+        const [order] = await db
+          .select()
+          .from(ordersTable)
+          .where(eq(ordersTable.razorpayPaymentId, paymentId))
+          .limit(1);
+
+        if (order) {
+          await db
+            .update(ordersTable)
+            .set({
+              cancellationStatus: "refunded",
+              updatedAt: new Date(),
+            })
+            .where(eq(ordersTable.id, order.id));
+
+          req.log.info({ orderId: order.id, paymentId }, "Order marked refunded via Razorpay webhook");
+        }
+      }
+    }
+
+    res.status(200).json({ status: "ok" });
+  } catch (err: unknown) {
+    req.log.error({ err }, "Error handling Razorpay webhook event");
+    res.status(500).json({ error: "Failed to process webhook event" });
   }
 });
 

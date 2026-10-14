@@ -304,7 +304,7 @@ router.get("/v1/discounts/active", async (req, res): Promise<void> => {
         .select({ id: ordersTable.id })
         .from(ordersTable)
         .where(eq(ordersTable.userId, authUserId));
-      userOrderPrefixes = userOrders.map((o) => o.id.slice(0, 6).toUpperCase());
+      userOrderPrefixes = userOrders.map((o: { id: string }) => o.id.slice(0, 6).toUpperCase());
     }
 
     const activeCoupons = allDiscounts.filter((d: any) => {

@@ -83,7 +83,14 @@ if (process.env.CLERK_SECRET_KEY) {
 }
 
 // ── Body parsers with configurable size limits ──────────────
-app.use(express.json({ limit: securityConfig.bodySizeLimit }));
+app.use(
+  express.json({
+    limit: securityConfig.bodySizeLimit,
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  }),
+);
 app.use(express.urlencoded({ limit: securityConfig.bodySizeLimit, extended: true }));
 
 // ── Root & API routes ───────────────────────────────────────
