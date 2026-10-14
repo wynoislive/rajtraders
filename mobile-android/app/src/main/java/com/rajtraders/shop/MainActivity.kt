@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -137,6 +139,18 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
         topBar = {
             Column {
                 TopAppBar(
+                    navigationIcon = {
+                        Image(
+                            painter = painterResource(id = R.drawable.logo),
+                            contentDescription = "Raj Traders Logo",
+                            modifier = Modifier
+                                .padding(start = 12.dp, end = 4.dp)
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, RajSaffron.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    },
                     title = {
                         Column {
                             Text(state.shopName, fontWeight = FontWeight.Bold)
