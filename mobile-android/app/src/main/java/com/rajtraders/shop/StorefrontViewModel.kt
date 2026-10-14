@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
+import com.rajtraders.shop.util.PhoneUtils
 
 data class CartLine(val product: Product, val quantity: Int)
 
@@ -311,11 +312,16 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
             _uiState.update { it.copy(authError = "Passwords do not match.") }
             return
         }
+        val cleanMobile = PhoneUtils.cleanIndianMobile(mobile)
+        if (!PhoneUtils.isValidIndianMobile(cleanMobile)) {
+            _uiState.update { it.copy(authError = "Please enter a valid 10-digit Indian mobile number (e.g. 98765 43210).") }
+            return
+        }
         val cleanEmail = email.trim().lowercase()
         viewModelScope.launch {
             _uiState.update { it.copy(isAuthenticating = true, authError = null) }
             runCatching {
-                repository.register(firstName, lastName, mobile, cleanEmail, password, confirmPassword)
+                repository.register(firstName.trim(), lastName.trim(), cleanMobile, cleanEmail, password, confirmPassword)
             }.onSuccess { response ->
                 if (response.requiresVerification == true) {
                     _uiState.update {
@@ -491,10 +497,15 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
 
     fun updateProfile(firstName: String?, lastName: String?, mobileNumber: String?) {
         val token = _uiState.value.authToken ?: return
+        val cleanMobile = mobileNumber?.let { PhoneUtils.cleanIndianMobile(it) }
+        if (!cleanMobile.isNullOrBlank() && !PhoneUtils.isValidIndianMobile(cleanMobile)) {
+            _uiState.update { it.copy(profileUpdateMessage = "Please enter a valid 10-digit Indian mobile number.") }
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isUpdatingProfile = true, profileUpdateMessage = null) }
             runCatching {
-                repository.updateProfile(token, firstName, lastName, mobileNumber)
+                repository.updateProfile(token, firstName?.trim(), lastName?.trim(), cleanMobile)
             }.onSuccess { response ->
                 _uiState.update {
                     it.copy(
@@ -657,7 +668,8 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     }
 
     fun setReceiverDetails(name: String, phone: String) {
-        _uiState.update { it.copy(receiverName = name, receiverPhone = phone) }
+        val cleanPhone = PhoneUtils.cleanIndianMobile(phone)
+        _uiState.update { it.copy(receiverName = name.trim(), receiverPhone = cleanPhone) }
     }
 
     fun setShippingAddress(address: String) {

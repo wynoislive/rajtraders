@@ -5,6 +5,8 @@ import { SeoHead } from './components/SeoHead';
 import { LegalPage, type PolicyType } from './pages/LegalPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { CookieBanner } from './components/CookieBanner';
+import { MobileNumberInput } from './components/MobileNumberInput';
+import { formatMobileDisplay, cleanMobileInput } from './utils/phone';
 import {
   ShoppingBag,
   MapPin,
@@ -780,7 +782,7 @@ export default function App() {
     const formData = new FormData(e.currentTarget);
     const firstName = (formData.get('firstName') as string) || '';
     const lastName = (formData.get('lastName') as string) || '';
-    const mobileNumber = (formData.get('mobileNumber') as string) || '';
+    const mobileNumber = cleanMobileInput((formData.get('mobileNumber') as string) || '');
     const email = (formData.get('email') as string) || '';
     const password = (formData.get('password') as string) || '';
     const confirmPassword = (formData.get('confirmPassword') as string) || '';
@@ -1976,7 +1978,7 @@ export default function App() {
                   <div>
                     <h1 className="text-2xl font-black text-[#0E3D42]">{user?.firstName} {user?.lastName}</h1>
                     <div className="text-xs font-semibold text-gray-500 flex flex-wrap items-center gap-3 mt-1">
-                      <span>📱 {user?.mobileNumber}</span>
+                      <span>📱 {formatMobileDisplay(user?.mobileNumber)}</span>
                       <span>✉️ {user?.email}</span>
                     </div>
                   </div>
@@ -2321,7 +2323,7 @@ export default function App() {
                         const formData = new FormData(form);
                         const firstName = (formData.get('firstName') as string) || '';
                         const lastName = (formData.get('lastName') as string) || '';
-                        const mobileNumber = (formData.get('mobileNumber') as string) || '';
+                        const mobileNumber = cleanMobileInput((formData.get('mobileNumber') as string) || '');
                         try {
                           const res = await fetch(getApiUrl('/api/v1/auth/profile'), {
                             method: 'PUT',
@@ -2349,8 +2351,7 @@ export default function App() {
                           <input required type="text" name="lastName" defaultValue={user?.lastName} placeholder="Last Name" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
                         </div>
                         <div>
-                          <label className="block text-xs font-extrabold text-[#0E3D42] mb-1">Mobile Number (10 digits or +91...)</label>
-                          <input required type="tel" name="mobileNumber" defaultValue={user?.mobileNumber} maxLength={13} placeholder="e.g. 9876543210 or +919876543210" className="w-full p-3 text-xs font-semibold rounded-xl border border-gray-300" />
+                          <MobileNumberInput defaultValue={user?.mobileNumber} label="Mobile Number" />
                         </div>
                         <button type="submit" className="w-full py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow">Save Changes</button>
                       </form>
@@ -3153,9 +3154,11 @@ export default function App() {
               )
             ) : (
               <form onSubmit={handleRegister} className="space-y-3">
-                <input required type="text" name="firstName" placeholder="First Name" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
-                <input required type="text" name="lastName" placeholder="Last Name" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
-                <input required type="tel" name="mobileNumber" maxLength={13} placeholder="Mobile Number (e.g. 9876543210 or +919876543210)" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                <div className="grid grid-cols-2 gap-3">
+                  <input required type="text" name="firstName" placeholder="First Name" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                  <input required type="text" name="lastName" placeholder="Last Name" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
+                </div>
+                <MobileNumberInput label="Mobile Number" />
 
                 <input required type="email" name="email" placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                 <input required type="password" name="password" placeholder="Password" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />

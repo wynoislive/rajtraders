@@ -3,7 +3,7 @@ import { db, ordersTable, productsTable, discountsTable, shopSettingsTable, cust
 import { eq, inArray, sql } from "drizzle-orm";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { calculateHaversineDistanceKm } from "../utils/geo";
-import { getUserIdFromToken } from "./customer-auth";
+import { getUserIdFromToken, normalizeAndValidateIndianMobile } from "./customer-auth";
 import { computeDiscount } from "../utils/discounts";
 import { filterOrders } from "../utils/order-filters";
 import { reserveInventory, commitInventoryReservation } from "../lib/inventory-lock";
@@ -501,7 +501,7 @@ router.post("/create-order", async (req: Request<{}, {}, CreateOrderBody>, res: 
       userId: resolvedUserId,
       customerEmail: customerEmail || null,
       customerName: customerName || null,
-      customerMobile: customerMobile || null,
+      customerMobile: customerMobile ? (normalizeAndValidateIndianMobile(customerMobile).normalized || customerMobile.trim()) : null,
       shippingAddress: finalShippingAddress,
       deliveryLatitude: deliveryLatitude ?? null,
       deliveryLongitude: deliveryLongitude ?? null,

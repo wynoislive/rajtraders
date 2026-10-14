@@ -68,6 +68,8 @@ import androidx.compose.material3.SwitchDefaults
 import com.rajtraders.shop.data.CustomerAddress
 import com.rajtraders.shop.data.CustomerCoupon
 import com.rajtraders.shop.data.NotificationItem
+import com.rajtraders.shop.ui.MobileNumberField
+import com.rajtraders.shop.util.PhoneUtils
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -652,7 +654,7 @@ private fun AuthDialog(state: StorefrontUiState, viewModel: StorefrontViewModel)
                     Spacer(Modifier.height(6.dp))
                     OutlinedTextField(value = lastName, onValueChange = { lastName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Last Name") }, singleLine = true)
                     Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(value = mobile, onValueChange = { mobile = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Mobile Number (Unique Identity)") }, singleLine = true)
+                    MobileNumberField(value = mobile, onValueChange = { mobile = it }, modifier = Modifier.fillMaxWidth(), label = "Mobile Number (Unique Identity)")
                     Spacer(Modifier.height(6.dp))
                 }
 
@@ -1132,7 +1134,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
             }
         } else {
             val user = state.currentUser ?: return
-            var editingMobile by remember { mutableStateOf(user.mobileNumber) }
+            var editingMobile by remember { mutableStateOf(PhoneUtils.cleanIndianMobile(user.mobileNumber)) }
             var editingFirstName by remember { mutableStateOf(user.firstName) }
             var editingLastName by remember { mutableStateOf(user.lastName) }
 
@@ -1156,6 +1158,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                         Column {
                             Text("${user.firstName} ${user.lastName}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             Text(user.email, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Text(PhoneUtils.formatDisplayMobile(user.mobileNumber), style = MaterialTheme.typography.labelSmall, color = Color.DarkGray, fontWeight = FontWeight.Medium)
                         }
                     }
 
@@ -1169,7 +1172,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                     Spacer(Modifier.height(6.dp))
                     OutlinedTextField(value = editingLastName, onValueChange = { editingLastName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Last Name") }, singleLine = true)
                     Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(value = editingMobile, onValueChange = { editingMobile = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Mobile Number (Unique)") }, singleLine = true)
+                    MobileNumberField(value = editingMobile, onValueChange = { editingMobile = it }, modifier = Modifier.fillMaxWidth(), label = "Mobile Number (Unique Identity)")
 
                     state.profileUpdateMessage?.let {
                         Spacer(Modifier.height(8.dp))
@@ -2445,7 +2448,7 @@ private fun CartScreen(
                     state.currentUser?.let { u ->
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Receiver: ${u.firstName} ${u.lastName} · ${u.mobileNumber}",
+                            "Receiver: ${u.firstName} ${u.lastName} · ${PhoneUtils.formatDisplayMobile(u.mobileNumber)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.DarkGray,
                             fontWeight = FontWeight.Medium

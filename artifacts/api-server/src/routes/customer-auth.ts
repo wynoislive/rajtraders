@@ -25,7 +25,7 @@ const router: Router = Router();
 // ── Mobile Number Validation Helper (Supports +91, 91, 0, or 10 digits) ────
 export function normalizeAndValidateIndianMobile(raw: string): { valid: boolean; normalized?: string; error?: string } {
   if (!raw || typeof raw !== "string") return { valid: false, error: "Mobile number is required." };
-  let cleaned = raw.trim().replace(/[\s\-\(\)]/g, "");
+  let cleaned = raw.trim().replace(/[\s\-\(\)\.\,\/]/g, "");
 
   if (cleaned.startsWith("+91")) {
     cleaned = cleaned.slice(3);
@@ -35,10 +35,13 @@ export function normalizeAndValidateIndianMobile(raw: string): { valid: boolean;
     cleaned = cleaned.slice(1);
   }
 
+  // Strip any remaining non-digits
+  cleaned = cleaned.replace(/\D/g, "");
+
   if (!/^[6-9]\d{9}$/.test(cleaned)) {
     return {
       valid: false,
-      error: "Please enter a valid 10-digit Indian mobile number (e.g. 9876543210 or +919876543210). Numbers exceeding 10 digits are not allowed.",
+      error: "Please enter a valid 10-digit Indian mobile number (e.g. 98765 43210 or +91 98765 43210). Numbers must start with 6, 7, 8, or 9.",
     };
   }
 

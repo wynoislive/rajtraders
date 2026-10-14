@@ -128496,7 +128496,7 @@ function verifyRecoveryCode(code, hashedCodes) {
 var router2 = (0, import_express2.Router)();
 function normalizeAndValidateIndianMobile(raw) {
   if (!raw || typeof raw !== "string") return { valid: false, error: "Mobile number is required." };
-  let cleaned = raw.trim().replace(/[\s\-\(\)]/g, "");
+  let cleaned = raw.trim().replace(/[\s\-\(\)\.\,\/]/g, "");
   if (cleaned.startsWith("+91")) {
     cleaned = cleaned.slice(3);
   } else if (cleaned.startsWith("91") && cleaned.length === 12) {
@@ -128504,10 +128504,11 @@ function normalizeAndValidateIndianMobile(raw) {
   } else if (cleaned.startsWith("0") && cleaned.length === 11) {
     cleaned = cleaned.slice(1);
   }
+  cleaned = cleaned.replace(/\D/g, "");
   if (!/^[6-9]\d{9}$/.test(cleaned)) {
     return {
       valid: false,
-      error: "Please enter a valid 10-digit Indian mobile number (e.g. 9876543210 or +919876543210). Numbers exceeding 10 digits are not allowed."
+      error: "Please enter a valid 10-digit Indian mobile number (e.g. 98765 43210 or +91 98765 43210). Numbers must start with 6, 7, 8, or 9."
     };
   }
   return { valid: true, normalized: cleaned };
@@ -132660,7 +132661,7 @@ router6.post("/create-order", async (req, res) => {
       userId: resolvedUserId,
       customerEmail: customerEmail || null,
       customerName: customerName || null,
-      customerMobile: customerMobile || null,
+      customerMobile: customerMobile ? normalizeAndValidateIndianMobile(customerMobile).normalized || customerMobile.trim() : null,
       shippingAddress: finalShippingAddress,
       deliveryLatitude: deliveryLatitude ?? null,
       deliveryLongitude: deliveryLongitude ?? null,
