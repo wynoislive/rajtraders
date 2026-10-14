@@ -644,7 +644,9 @@ router.put(
         updatedAt: new Date(),
       };
       if (typeof shopName === "string") updateData.shopName = shopName.trim();
-      if (typeof shopDomain === "string") updateData.shopDomain = shopDomain.trim();
+      if (typeof shopDomain === "string") {
+        updateData.shopDomain = shopDomain.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+      }
       if (typeof shopAddress === "string") updateData.shopAddress = shopAddress.trim();
       if (typeof latitude === "number" && !isNaN(latitude)) updateData.latitude = latitude;
       if (typeof longitude === "number" && !isNaN(longitude)) updateData.longitude = longitude;

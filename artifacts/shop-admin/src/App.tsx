@@ -1933,9 +1933,9 @@ function StoreSettings() {
                 <input type="text" value={form.shopName} onChange={(e) => setForm({ ...form, shopName: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-semibold" required />
               </div>
               <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Shop Domain</label>
-                <input type="text" value={form.shopDomain} onChange={(e) => setForm({ ...form, shopDomain: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="myshop.com" required />
-                <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Used for public share URLs and password reset links (e.g. https://yourdomain.com/products/...)</p>
+                <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Shop Domain (Canonical Web & App Domain)</label>
+                <input type="text" value={form.shopDomain} onChange={(e) => setForm({ ...form, shopDomain: e.target.value })} className="mt-1.5 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3.5 py-2.5 text-sm font-mono" placeholder="sundarvan.xyz" required />
+                <p className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Configures the canonical domain everywhere across the Android app (legal policies, canonical URLs, product sharing) and web store.</p>
               </div>
               <div className="md:col-span-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Physical Offline Store Address</label>

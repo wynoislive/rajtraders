@@ -310,8 +310,9 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
 
 // ─── Native Share Helper ────────────────────────────────────
 
-private fun shareProductUrl(context: Context, product: Product, shopName: String = "RAJ TRADERS") {
-    val shareUrl = "https://sundarvan.xyz/products/${product.slug}"
+private fun shareProductUrl(context: Context, product: Product, shopName: String = "RAJ TRADERS", domain: String = "sundarvan.xyz") {
+    val cleanDomain = domain.trim().removePrefix("https://").removePrefix("http://").removeSuffix("/")
+    val shareUrl = "https://$cleanDomain/products/${product.slug}"
     val shareText = "Check out ${product.name} at $shopName! Prep time: ${product.prepTimeMinutes} mins.\n$shareUrl"
 
     // Always copy directly to Android system Clipboard for maximum compatibility across all devices & BlueStacks
@@ -1282,7 +1283,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
 
                 OutlinedButton(
                     onClick = {
-                        viewModel.openLegalDialog("Privacy Policy", "https://sundarvan.xyz/privacy")
+                        viewModel.openLegalPolicy("privacy")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
@@ -1295,7 +1296,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = {
-                        viewModel.openLegalDialog("Terms of Service", "https://sundarvan.xyz/terms")
+                        viewModel.openLegalPolicy("terms")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
@@ -1308,7 +1309,7 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = {
-                        viewModel.openLegalDialog("Refund & Cancellation Policy", "https://sundarvan.xyz/refund")
+                        viewModel.openLegalPolicy("refund")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
@@ -1319,19 +1320,20 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
                 }
 
                 Spacer(Modifier.height(8.dp))
+                val supportEmail = viewModel.getSupportEmail()
                 OutlinedButton(
                     onClick = {
                         val intent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("mailto:support@sundarvan.xyz?subject=Raj%20Traders%20Support%20Inquiry")
+                            data = Uri.parse("mailto:$supportEmail?subject=${Uri.encode("${state.shopName} Support Inquiry")}")
                         }
-                        context.startActivity(intent)
+                        runCatching { context.startActivity(intent) }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(Icons.Outlined.Email, contentDescription = null, modifier = Modifier.size(18.dp), tint = RajTeal)
                     Spacer(Modifier.width(8.dp))
-                    Text("Contact Support (support@sundarvan.xyz)", color = RajTeal, fontWeight = FontWeight.SemiBold)
+                    Text("Contact Support ($supportEmail)", color = RajTeal, fontWeight = FontWeight.SemiBold)
                 }
 
                 Spacer(Modifier.height(12.dp))
@@ -1458,7 +1460,7 @@ private fun CatalogScreen(state: StorefrontUiState, padding: PaddingValues, view
                     ProductCard(
                         product = product,
                         onAdd = { viewModel.addToCart(product) },
-                        onShare = { shareProductUrl(context, product, state.shopName) }
+                        onShare = { shareProductUrl(context, product, state.shopName, viewModel.getStoreDomain()) }
                     )
                 }
             }
@@ -2158,8 +2160,11 @@ private fun OrdersScreen(state: StorefrontUiState, padding: PaddingValues, viewM
                             // Invoice Download Button
                             OutlinedButton(
                                 onClick = {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.sundarvan.xyz/v1/checkout/orders/${order.id}/invoice"))
-                                    context.startActivity(intent)
+                                    val invoiceUrl = "${com.rajtraders.shop.data.NetworkModule.resolvedBaseUrl}v1/checkout/orders/${order.id}/invoice"
+                                    runCatching {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(invoiceUrl))
+                                        context.startActivity(intent)
+                                    }
                                 },
                                 modifier = Modifier.weight(1f).height(36.dp),
                                 shape = RoundedCornerShape(8.dp),
@@ -2440,10 +2445,10 @@ private fun LegalDialog(state: StorefrontUiState, viewModel: StorefrontViewModel
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "• Registered Entity: RAJ TRADERS (GSTIN: 23AAAAA0000A1Z5), Thana Rd, beside Nagar Palika, Pali Birsinghpur, MP 484551.\n\n" +
+                            "• Registered Entity: ${state.shopName} (GSTIN: 23AAAAA0000A1Z5), Thana Rd, beside Nagar Palika, Pali Birsinghpur, MP 484551.\n\n" +
                             "• Service Area: Fresh bakery goods and store supplies are delivered within Pali Birsinghpur (PIN: 484551).\n\n" +
                             "• Order Acceptance: Orders are fulfilled according to daily batch availability.\n\n" +
-                            "• Customer Support: Official assistance available at support@sundarvan.xyz or via WhatsApp during store hours (7:00 AM – 10:00 PM).",
+                            "• Customer Support: Official assistance available at ${viewModel.getSupportEmail()} or via WhatsApp during store hours (7:00 AM – 10:00 PM).",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.DarkGray
                         )
@@ -2456,7 +2461,7 @@ private fun LegalDialog(state: StorefrontUiState, viewModel: StorefrontViewModel
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        "Official canonical URL: ${state.activeLegalUrl ?: "https://sundarvan.xyz/refund"}",
+                        "Official canonical URL: ${state.activeLegalUrl ?: viewModel.getCanonicalLegalUrl("refund")}",
                         style = MaterialTheme.typography.labelSmall,
                         color = RajTeal,
                         fontWeight = FontWeight.Medium,

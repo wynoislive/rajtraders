@@ -76,7 +76,7 @@ export function LegalPage({ type, shopSettings = {} }: LegalPageProps) {
       <SeoHead
         title={meta.title}
         description={meta.description}
-        url={`https://sundarvan.xyz/${type}`}
+        url={`https://${(shopSettings?.shopDomain || (typeof window !== 'undefined' ? window.location.host : 'sundarvan.xyz')).replace(/^https?:\/\//i, '').replace(/\/+$/, '')}/${type}`}
       />
 
       <div className="max-w-4xl mx-auto space-y-8">

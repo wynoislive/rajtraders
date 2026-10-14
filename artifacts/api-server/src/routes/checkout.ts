@@ -36,6 +36,8 @@ async function getShopSettings() {
     razorpayKeyId: "rzp_test_sandbox123456",
     razorpayKeySecret: "sandbox_secret",
     shopName: "RAJ TRADERS",
+    shopDomain: "sundarvan.xyz",
+    supportEmail: "support@sundarvan.xyz",
     legalBusinessName: "RAJ TRADERS",
     gstinNumber: "23AAAAA0000A1Z5",
     panNumber: "AAAAA0000A",
@@ -147,6 +149,9 @@ router.get("/shop-info", async (_req: Request, res: Response) => {
       deliveryRadiusKm: settings.deliveryRadiusKm,
       isDeliveryEnabled: settings.isDeliveryEnabled,
       razorpayKeyId: settings.razorpayKeyId,
+      shopDomain: settings.shopDomain || "sundarvan.xyz",
+      shopName: settings.shopName || "RAJ TRADERS",
+      supportEmail: settings.supportEmail || "support@sundarvan.xyz",
     });
   } catch (err: unknown) {
     res.status(500).json({ error: "Failed to load shop info." });

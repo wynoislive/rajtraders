@@ -27,6 +27,7 @@ data class StorefrontSummary(
     val currency: String = "INR",
     val razorpayKeyId: String? = null,
     val updatedAt: String,
+    val shopDomain: String? = null,
 )
 
 data class RegistrationEligibility(
@@ -244,6 +245,9 @@ data class ShopInfoResponse(
     val deliveryRadiusKm: Double,
     val isDeliveryEnabled: Boolean,
     val razorpayKeyId: String,
+    val shopDomain: String? = null,
+    val shopName: String? = null,
+    val supportEmail: String? = null,
 )
 
 data class PincodeCheckRequest(

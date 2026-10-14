@@ -84,6 +84,8 @@ data class StorefrontUiState(
     val deliveryValidation: DeliveryValidationResponse? = null,
     val isValidatingDelivery: Boolean = false,
     val shopInfo: ShopInfoResponse? = null,
+    val shopDomain: String = "sundarvan.xyz",
+    val supportEmail: String = "support@sundarvan.xyz",
     // Profile Edit
     val isUpdatingProfile: Boolean = false,
     val profileUpdateMessage: String? = null,
@@ -153,7 +155,8 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                         products = products,
                         summary = summary,
                         shopName = summary.shopName,
-                        currency = summary.currency
+                        currency = summary.currency,
+                        shopDomain = summary.shopDomain?.takeIf { d -> d.isNotBlank() } ?: it.shopDomain
                     )
                 }
             }.onFailure { error ->
@@ -549,7 +552,16 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     fun fetchShopInfo() {
         viewModelScope.launch {
             runCatching { repository.getShopInfo() }
-                .onSuccess { info -> _uiState.update { it.copy(shopInfo = info) } }
+                .onSuccess { info ->
+                    _uiState.update { current ->
+                        current.copy(
+                            shopInfo = info,
+                            shopDomain = info.shopDomain?.takeIf { it.isNotBlank() } ?: current.shopDomain,
+                            supportEmail = info.supportEmail?.takeIf { it.isNotBlank() } ?: current.supportEmail,
+                            shopName = info.shopName?.takeIf { it.isNotBlank() } ?: current.shopName,
+                        )
+                    }
+                }
         }
     }
 
@@ -1049,6 +1061,39 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     }
 
     // ─── In-App Legal & Policies (Google Play Policy Compliance) ─
+
+    fun getStoreDomain(): String {
+        val domain = _uiState.value.shopInfo?.shopDomain?.takeIf { it.isNotBlank() }
+            ?: _uiState.value.shopDomain
+        return domain.trim()
+            .removePrefix("https://")
+            .removePrefix("http://")
+            .removeSuffix("/")
+            .ifBlank { "sundarvan.xyz" }
+    }
+
+    fun getCanonicalLegalUrl(policyPath: String): String {
+        val domain = getStoreDomain()
+        val path = if (policyPath.startsWith("/")) policyPath else "/$policyPath"
+        return "https://$domain$path"
+    }
+
+    fun getSupportEmail(): String {
+        return _uiState.value.shopInfo?.supportEmail?.takeIf { it.isNotBlank() }
+            ?: _uiState.value.supportEmail.ifBlank { "support@sundarvan.xyz" }
+    }
+
+    fun openLegalPolicy(policyType: String) {
+        val (title, path) = when (policyType.lowercase().trim()) {
+            "privacy", "privacy-policy" -> "Privacy Policy" to "privacy"
+            "terms", "terms-of-service", "terms-and-conditions" -> "Terms of Service" to "terms"
+            "refund", "refund-policy", "cancellation", "cancellation-policy" -> "Refund & Cancellation Policy" to "refund"
+            "shipping", "shipping-policy" -> "Shipping & Delivery Policy" to "shipping-policy"
+            "contact", "contact-us" -> "Contact Information" to "contact"
+            else -> "Store Policy" to policyType
+        }
+        openLegalDialog(title, getCanonicalLegalUrl(path))
+    }
 
     fun openLegalDialog(title: String, url: String) {
         _uiState.update { it.copy(showLegalDialog = true, activeLegalTitle = title, activeLegalUrl = url) }

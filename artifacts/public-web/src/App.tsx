@@ -723,7 +723,9 @@ export default function App() {
   };
 
   const shareProduct = (product: StorefrontProduct) => {
-    const url = `https://sundarvan.xyz/products/${product.slug}`;
+    const rawDomain = shopSettings?.shopDomain || (typeof window !== 'undefined' ? window.location.host : 'sundarvan.xyz');
+    const domain = rawDomain.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    const url = `https://${domain}/products/${product.slug}`;
     navigator.clipboard.writeText(url);
     showToast('Product link copied to clipboard!', 'success');
   };
