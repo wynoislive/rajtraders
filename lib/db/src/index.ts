@@ -3,6 +3,7 @@ import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { PGlite } from "@electric-sql/pglite";
 import pg from "pg";
 import path from "path";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { eq } from "drizzle-orm";
 import * as schema from "./schema/index.js";
 
@@ -415,32 +416,193 @@ let dbReadyPromise: Promise<any> | null = null;
 let pgliteInstance: any = null;
 let isInitialized = false;
 
-const DEFAULT_SUPABASE_URL = "postgresql://postgres.hbwwbapappmsbdsjaasm:jooPR0L9GDu6R7sM@aws-0-ap-south-1.pooler.supabase.com:6543/postgres";
-let rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : undefined);
+// ─── Dual-Pool Architecture (Primary Writer + Read Replica) ───
 
-if (rawDbUrl && (rawDbUrl.includes("supabase.co:5432") || rawDbUrl.includes("db.hbwwbapappmsbdsjaasm"))) {
-  rawDbUrl = rawDbUrl.replace(/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co:5432/, "postgres.$2:$1@aws-0-ap-south-1.pooler.supabase.com:6543");
+export interface DbContext {
+  forcePrimary?: boolean;
+  hasRecentWrite?: boolean;
+  requestId?: string;
 }
 
-if (rawDbUrl) {
-  const isCloudPg = rawDbUrl.includes("supabase.co") || rawDbUrl.includes("pooler.supabase.com") || rawDbUrl.includes("sslmode=") || !!process.env.VERCEL;
-  poolInstance = new Pool({
-    connectionString: rawDbUrl,
-    max: 10,
+export const dbContextStorage = new AsyncLocalStorage<DbContext>();
+
+export function runWithDbContext<T>(context: DbContext, fn: () => T): T {
+  return dbContextStorage.run(context, fn);
+}
+
+const DEFAULT_SUPABASE_URL = "postgresql://postgres.hbwwbapappmsbdsjaasm:jooPR0L9GDu6R7sM@aws-0-ap-south-1.pooler.supabase.com:6543/postgres";
+
+// Primary connection string (writes, transactions, sticky sessions)
+let rawPrimaryUrl = process.env.PRIMARY_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : undefined);
+if (rawPrimaryUrl && (rawPrimaryUrl.includes("supabase.co:5432") || rawPrimaryUrl.includes("db.hbwwbapappmsbdsjaasm"))) {
+  rawPrimaryUrl = rawPrimaryUrl.replace(/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co:5432/, "postgres.$2:$1@aws-0-ap-south-1.pooler.supabase.com:6543");
+}
+
+// Replica connection string (read-only queries, e.g. PgBouncer on port 6433 or replica host)
+let rawReplicaUrl = process.env.REPLICA_DATABASE_URL || null;
+if (rawReplicaUrl && (rawReplicaUrl.includes("supabase.co:5432") || rawReplicaUrl.includes("db.hbwwbapappmsbdsjaasm"))) {
+  rawReplicaUrl = rawReplicaUrl.replace(/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co:5432/, "postgres.$2:$1@aws-0-ap-south-1.pooler.supabase.com:6543");
+}
+
+let primaryPoolInstance: any = null;
+let replicaPoolInstance: any = null;
+let primaryDbInstance: any = null;
+let replicaDbInstance: any = null;
+
+let isReplicaConfigured = false;
+let isReplicaHealthy = true;
+let lastLagSeconds: number | null = 0;
+let lastLagCheckTime: number = 0;
+
+if (rawPrimaryUrl) {
+  const isCloudPg = rawPrimaryUrl.includes("supabase.co") || rawPrimaryUrl.includes("pooler.supabase.com") || rawPrimaryUrl.includes("sslmode=") || !!process.env.VERCEL;
+  
+  // 1. Primary Pool (Write Master / PgBouncer 6432)
+  primaryPoolInstance = new Pool({
+    connectionString: rawPrimaryUrl,
+    max: parseInt(process.env.DB_PRIMARY_MAX_CONNECTIONS || "15", 10),
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
     ...(isCloudPg ? { ssl: { rejectUnauthorized: false } } : {}),
   });
-  dbInstance = drizzlePg(poolInstance, { schema });
+  primaryDbInstance = drizzlePg(primaryPoolInstance, { schema });
+  dbInstance = primaryDbInstance;
+  poolInstance = primaryPoolInstance;
+
+  // 2. Replica Pool (Read Standby / PgBouncer 6433)
+  if (rawReplicaUrl && rawReplicaUrl.trim() !== rawPrimaryUrl.trim()) {
+    isReplicaConfigured = true;
+    const isReplicaCloudPg = rawReplicaUrl.includes("supabase.co") || rawReplicaUrl.includes("pooler.supabase.com") || rawReplicaUrl.includes("sslmode=") || !!process.env.VERCEL;
+    replicaPoolInstance = new Pool({
+      connectionString: rawReplicaUrl,
+      max: parseInt(process.env.DB_REPLICA_MAX_CONNECTIONS || "25", 10),
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      ...(isReplicaCloudPg ? { ssl: { rejectUnauthorized: false } } : {}),
+    });
+    replicaDbInstance = drizzlePg(replicaPoolInstance, { schema });
+  } else {
+    // If no distinct replica URL provided, replica aliases safely to primary pool
+    replicaPoolInstance = primaryPoolInstance;
+    replicaDbInstance = primaryDbInstance;
+    isReplicaConfigured = false;
+  }
 } else {
   try {
     const dataDir = "memory://";
     pgliteInstance = new PGlite(dataDir);
     dbInstance = drizzlePglite(pgliteInstance, { schema });
+    primaryDbInstance = dbInstance;
+    replicaDbInstance = dbInstance;
   } catch (e) {
     console.warn("PGlite initialization warning (ignoring in serverless runtime):", e);
   }
 }
+
+// ─── Replication Health & Lag Monitor ─────────────────────────
+
+export async function getDbReplicationHealth(): Promise<{
+  isReplicaConfigured: boolean;
+  isReplicaHealthy: boolean;
+  lagSeconds: number | null;
+  primaryConnected: boolean;
+  replicaConnected: boolean;
+  activeRouting: "replica" | "primary_fallback" | "single_primary";
+  error?: string;
+}> {
+  if (!isReplicaConfigured || !replicaPoolInstance) {
+    const primaryOk = !!primaryPoolInstance;
+    return {
+      isReplicaConfigured: false,
+      isReplicaHealthy: true,
+      lagSeconds: 0,
+      primaryConnected: primaryOk,
+      replicaConnected: false,
+      activeRouting: "single_primary",
+    };
+  }
+
+  let primaryConnected = false;
+  let replicaConnected = false;
+  let lagSec: number | null = null;
+  let errorMsg: string | undefined;
+
+  try {
+    const pCheck = await primaryPoolInstance.query("SELECT 1 AS ok");
+    primaryConnected = pCheck.rows[0]?.ok === 1;
+  } catch (err: any) {
+    errorMsg = `Primary DB check failed: ${err.message}`;
+  }
+
+  try {
+    const rCheck = await replicaPoolInstance.query(`
+      SELECT 
+        pg_is_in_recovery() AS is_in_recovery,
+        EXTRACT(EPOCH FROM (NOW() - pg_last_xact_replay_timestamp())) AS lag_seconds
+    `);
+    replicaConnected = true;
+    const rawLag = rCheck.rows[0]?.lag_seconds;
+    lagSec = typeof rawLag === "number" ? Math.max(0, Math.round(rawLag)) : null;
+    lastLagSeconds = lagSec;
+    lastLagCheckTime = Date.now();
+    // Replica is deemed unhealthy if replication lag exceeds 10 seconds
+    isReplicaHealthy = lagSec === null || lagSec <= 10;
+  } catch (err: any) {
+    replicaConnected = false;
+    isReplicaHealthy = false;
+    errorMsg = errorMsg ? `${errorMsg}; Replica DB error: ${err.message}` : `Replica DB error: ${err.message}`;
+  }
+
+  return {
+    isReplicaConfigured,
+    isReplicaHealthy,
+    lagSeconds: lagSec,
+    primaryConnected,
+    replicaConnected,
+    activeRouting: !isReplicaHealthy ? "primary_fallback" : "replica",
+    error: errorMsg,
+  };
+}
+
+// Periodic background health check every 10 seconds if replica is configured
+if (isReplicaConfigured) {
+  setInterval(() => {
+    getDbReplicationHealth().catch((e) => console.warn("Replica health monitor check error:", e));
+  }, 10000).unref();
+}
+
+// ─── Query Routing Engine (getDb) ─────────────────────────────
+
+export function getDb(options?: DbContext): any {
+  const context = options || dbContextStorage.getStore();
+  if (context?.forcePrimary || context?.hasRecentWrite) {
+    return primaryDbInstance || dbInstance;
+  }
+  // Check if replica is configured and healthy (within acceptable lag threshold)
+  if (isReplicaConfigured && isReplicaHealthy && replicaDbInstance) {
+    return replicaDbInstance;
+  }
+  return primaryDbInstance || dbInstance;
+}
+
+// ─── Smart Proxy for Transparent Read/Write Splitting ─────────
+
+const smartDbProxy = new Proxy({} as any, {
+  get(_target, prop: string | symbol) {
+    // Read operations default to replica unless pinned
+    if (prop === "select") {
+      const activeDb = getDb();
+      return activeDb.select.bind(activeDb);
+    }
+    // Mutations and transactions MUST always execute on Primary
+    const writer = primaryDbInstance || dbInstance;
+    const value = writer[prop];
+    if (typeof value === "function") {
+      return value.bind(writer);
+    }
+    return value;
+  },
+});
 
 let lastDbError: string | null = null;
 
@@ -449,9 +611,9 @@ export async function ensureDbReady(): Promise<any> {
   if (!dbReadyPromise) {
     dbReadyPromise = (async () => {
       try {
-        if (rawDbUrl && poolInstance) {
-          await poolInstance.query(createTablesSql);
-          if (dbInstance) await syncEnvToShopSettings(dbInstance);
+        if (rawPrimaryUrl && primaryPoolInstance) {
+          await primaryPoolInstance.query(createTablesSql);
+          if (primaryDbInstance) await syncEnvToShopSettings(primaryDbInstance);
         } else if (pgliteInstance) {
           await pgliteInstance.waitReady;
           await pgliteInstance.exec(createTablesSql);
@@ -461,7 +623,7 @@ export async function ensureDbReady(): Promise<any> {
       } catch (err: unknown) {
         console.error("ensureDbReady error:", err);
       }
-      return dbInstance;
+      return primaryDbInstance || dbInstance;
     })();
   }
   return dbReadyPromise;
@@ -470,7 +632,12 @@ export async function ensureDbReady(): Promise<any> {
 // Safe initialization trigger
 ensureDbReady().catch((e) => console.warn("ensureDbReady startup error:", e));
 
-export const pool = poolInstance;
-export const db = dbInstance;
+// Exports
+export const db = smartDbProxy;
+export const primaryDb = primaryDbInstance || dbInstance;
+export const replicaDb = replicaDbInstance || primaryDbInstance || dbInstance;
+export const pool = primaryPoolInstance || poolInstance;
+export const primaryPool = primaryPoolInstance || poolInstance;
+export const replicaPool = replicaPoolInstance || primaryPoolInstance || poolInstance;
 
 export * from "./schema/index.js";

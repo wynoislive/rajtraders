@@ -10,7 +10,9 @@ import { CLERK_PROXY_PATH, clerkProxyMiddleware, getClerkProxyHost } from "./mid
 import { isAllowedOrigin, secureGateway } from "./middlewares/security";
 import { csrfProtection } from "./middlewares/csrf-guard";
 import { requestIdMiddleware } from "./middlewares/request-id";
+import cookieParser from "cookie-parser";
 import { globalErrorHandler } from "./middlewares/error-handler";
+import { dbRoutingMiddleware } from "./middlewares/db-routing";
 import { ensureDbReady } from "@workspace/db";
 
 const app: Express = express();
@@ -92,6 +94,10 @@ app.use(
   }),
 );
 app.use(express.urlencoded({ limit: securityConfig.bodySizeLimit, extended: true }));
+app.use(cookieParser());
+
+// ── Smart Read/Write DB Replication & 5s Sticky Consistency ───
+app.use(dbRoutingMiddleware);
 
 // ── Root & API routes ───────────────────────────────────────
 app.get("/", (_req, res) => {

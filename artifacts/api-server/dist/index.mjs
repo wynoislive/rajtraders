@@ -101856,6 +101856,119 @@ var require_micromatch = __commonJS({
   }
 });
 
+// ../../node_modules/.pnpm/cookie-signature@1.0.6/node_modules/cookie-signature/index.js
+var require_cookie_signature2 = __commonJS({
+  "../../node_modules/.pnpm/cookie-signature@1.0.6/node_modules/cookie-signature/index.js"(exports) {
+    var crypto3 = __require("crypto");
+    exports.sign = function(val, secret) {
+      if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
+      if ("string" != typeof secret) throw new TypeError("Secret string must be provided.");
+      return val + "." + crypto3.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+    };
+    exports.unsign = function(val, secret) {
+      if ("string" != typeof val) throw new TypeError("Signed cookie string must be provided.");
+      if ("string" != typeof secret) throw new TypeError("Secret string must be provided.");
+      var str = val.slice(0, val.lastIndexOf(".")), mac = exports.sign(str, secret);
+      return sha1(mac) == sha1(val) ? str : false;
+    };
+    function sha1(str) {
+      return crypto3.createHash("sha1").update(str).digest("hex");
+    }
+  }
+});
+
+// ../../node_modules/.pnpm/cookie-parser@1.4.7/node_modules/cookie-parser/index.js
+var require_cookie_parser = __commonJS({
+  "../../node_modules/.pnpm/cookie-parser@1.4.7/node_modules/cookie-parser/index.js"(exports, module) {
+    "use strict";
+    var cookie = require_cookie();
+    var signature = require_cookie_signature2();
+    module.exports = cookieParser2;
+    module.exports.JSONCookie = JSONCookie;
+    module.exports.JSONCookies = JSONCookies;
+    module.exports.signedCookie = signedCookie;
+    module.exports.signedCookies = signedCookies;
+    function cookieParser2(secret, options) {
+      var secrets = !secret || Array.isArray(secret) ? secret || [] : [secret];
+      return function cookieParser3(req, res, next) {
+        if (req.cookies) {
+          return next();
+        }
+        var cookies = req.headers.cookie;
+        req.secret = secrets[0];
+        req.cookies = /* @__PURE__ */ Object.create(null);
+        req.signedCookies = /* @__PURE__ */ Object.create(null);
+        if (!cookies) {
+          return next();
+        }
+        req.cookies = cookie.parse(cookies, options);
+        if (secrets.length !== 0) {
+          req.signedCookies = signedCookies(req.cookies, secrets);
+          req.signedCookies = JSONCookies(req.signedCookies);
+        }
+        req.cookies = JSONCookies(req.cookies);
+        next();
+      };
+    }
+    function JSONCookie(str) {
+      if (typeof str !== "string" || str.substr(0, 2) !== "j:") {
+        return void 0;
+      }
+      try {
+        return JSON.parse(str.slice(2));
+      } catch (err) {
+        return void 0;
+      }
+    }
+    function JSONCookies(obj) {
+      var cookies = Object.keys(obj);
+      var key;
+      var val;
+      for (var i = 0; i < cookies.length; i++) {
+        key = cookies[i];
+        val = JSONCookie(obj[key]);
+        if (val) {
+          obj[key] = val;
+        }
+      }
+      return obj;
+    }
+    function signedCookie(str, secret) {
+      if (typeof str !== "string") {
+        return void 0;
+      }
+      if (str.substr(0, 2) !== "s:") {
+        return str;
+      }
+      var secrets = !secret || Array.isArray(secret) ? secret || [] : [secret];
+      for (var i = 0; i < secrets.length; i++) {
+        var val = signature.unsign(str.slice(2), secrets[i]);
+        if (val !== false) {
+          return val;
+        }
+      }
+      return false;
+    }
+    function signedCookies(obj, secret) {
+      var cookies = Object.keys(obj);
+      var dec;
+      var key;
+      var ret = /* @__PURE__ */ Object.create(null);
+      var val;
+      for (var i = 0; i < cookies.length; i++) {
+        key = cookies[i];
+        val = obj[key];
+        dec = signedCookie(val, secret);
+        if (val !== dec) {
+          ret[key] = dec;
+          delete obj[key];
+        }
+      }
+      return ret;
+    }
+  }
+});
+
 // ../../node_modules/.pnpm/dotenv@17.4.2/node_modules/dotenv/config.js
 (function() {
   require_main().config(
@@ -116197,16 +116310,8 @@ var UploadProductImageBody = objectType({
 });
 var UploadProductImageResponse = recordType(stringType(), unknownType());
 
-// src/routes/health.ts
-var router = (0, import_express.Router)();
-router.get("/healthz", (_req, res) => {
-  const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json(data);
-});
-var health_default = router;
-
-// src/routes/storefront.ts
-var import_express3 = __toESM(require_express2(), 1);
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/node-postgres/driver.js
+import pg2 from "pg";
 
 // ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/entity.js
 var entityKind = /* @__PURE__ */ Symbol.for("drizzle:entityKind");
@@ -116233,6 +116338,61 @@ function is(value, type) {
   }
   return false;
 }
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/logger.js
+var ConsoleLogWriter = class {
+  static [entityKind] = "ConsoleLogWriter";
+  write(message) {
+    console.log(message);
+  }
+};
+var DefaultLogger = class {
+  static [entityKind] = "DefaultLogger";
+  writer;
+  constructor(config) {
+    this.writer = config?.writer ?? new ConsoleLogWriter();
+  }
+  logQuery(query, params) {
+    const stringifiedParams = params.map((p) => {
+      try {
+        return JSON.stringify(p);
+      } catch {
+        return String(p);
+      }
+    });
+    const paramsStr = stringifiedParams.length ? ` -- params: [${stringifiedParams.join(", ")}]` : "";
+    this.writer.write(`Query: ${query}${paramsStr}`);
+  }
+};
+var NoopLogger = class {
+  static [entityKind] = "NoopLogger";
+  logQuery() {
+  }
+};
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/query-promise.js
+var QueryPromise = class {
+  static [entityKind] = "QueryPromise";
+  [Symbol.toStringTag] = "QueryPromise";
+  catch(onRejected) {
+    return this.then(void 0, onRejected);
+  }
+  finally(onFinally) {
+    return this.then(
+      (value) => {
+        onFinally?.();
+        return value;
+      },
+      (reason) => {
+        onFinally?.();
+        throw reason;
+      }
+    );
+  }
+  then(onFulfilled, onRejected) {
+    return this.execute().then(onFulfilled, onRejected);
+  }
+};
 
 // ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/column.js
 var Column = class {
@@ -117435,85 +117595,71 @@ function mapColumnsInSQLToAlias(query, alias) {
   }));
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/errors.js
-var DrizzleError = class extends Error {
-  static [entityKind] = "DrizzleError";
-  constructor({ message, cause }) {
-    super(message);
-    this.name = "DrizzleError";
-    this.cause = cause;
-  }
-};
-var DrizzleQueryError = class _DrizzleQueryError extends Error {
-  constructor(query, params, cause) {
-    super(`Failed query: ${query}
-params: ${params}`);
-    this.query = query;
-    this.params = params;
-    this.cause = cause;
-    Error.captureStackTrace(this, _DrizzleQueryError);
-    if (cause) this.cause = cause;
-  }
-};
-var TransactionRollbackError = class extends DrizzleError {
-  static [entityKind] = "TransactionRollbackError";
-  constructor() {
-    super({ message: "Rollback" });
-  }
-};
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/logger.js
-var ConsoleLogWriter = class {
-  static [entityKind] = "ConsoleLogWriter";
-  write(message) {
-    console.log(message);
-  }
-};
-var DefaultLogger = class {
-  static [entityKind] = "DefaultLogger";
-  writer;
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/selection-proxy.js
+var SelectionProxyHandler = class _SelectionProxyHandler {
+  static [entityKind] = "SelectionProxyHandler";
+  config;
   constructor(config) {
-    this.writer = config?.writer ?? new ConsoleLogWriter();
+    this.config = { ...config };
   }
-  logQuery(query, params) {
-    const stringifiedParams = params.map((p) => {
-      try {
-        return JSON.stringify(p);
-      } catch {
-        return String(p);
+  get(subquery, prop) {
+    if (prop === "_") {
+      return {
+        ...subquery["_"],
+        selectedFields: new Proxy(
+          subquery._.selectedFields,
+          this
+        )
+      };
+    }
+    if (prop === ViewBaseConfig) {
+      return {
+        ...subquery[ViewBaseConfig],
+        selectedFields: new Proxy(
+          subquery[ViewBaseConfig].selectedFields,
+          this
+        )
+      };
+    }
+    if (typeof prop === "symbol") {
+      return subquery[prop];
+    }
+    const columns = is(subquery, Subquery) ? subquery._.selectedFields : is(subquery, View) ? subquery[ViewBaseConfig].selectedFields : subquery;
+    const value = columns[prop];
+    if (is(value, SQL.Aliased)) {
+      if (this.config.sqlAliasedBehavior === "sql" && !value.isSelectionField) {
+        return value.sql;
       }
-    });
-    const paramsStr = stringifiedParams.length ? ` -- params: [${stringifiedParams.join(", ")}]` : "";
-    this.writer.write(`Query: ${query}${paramsStr}`);
-  }
-};
-var NoopLogger = class {
-  static [entityKind] = "NoopLogger";
-  logQuery() {
-  }
-};
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/query-promise.js
-var QueryPromise = class {
-  static [entityKind] = "QueryPromise";
-  [Symbol.toStringTag] = "QueryPromise";
-  catch(onRejected) {
-    return this.then(void 0, onRejected);
-  }
-  finally(onFinally) {
-    return this.then(
-      (value) => {
-        onFinally?.();
+      const newValue = value.clone();
+      newValue.isSelectionField = true;
+      return newValue;
+    }
+    if (is(value, SQL)) {
+      if (this.config.sqlBehavior === "sql") {
         return value;
-      },
-      (reason) => {
-        onFinally?.();
-        throw reason;
       }
-    );
-  }
-  then(onFulfilled, onRejected) {
-    return this.execute().then(onFulfilled, onRejected);
+      throw new Error(
+        `You tried to reference "${prop}" field from a subquery, which is a raw SQL field, but it doesn't have an alias declared. Please add an alias to the field using ".as('alias')" method.`
+      );
+    }
+    if (is(value, Column)) {
+      if (this.config.alias) {
+        return new Proxy(
+          value,
+          new ColumnAliasProxyHandler(
+            new Proxy(
+              value.table,
+              new TableAliasProxyHandler(this.config.alias, this.config.replaceOriginalName ?? false)
+            )
+          )
+        );
+      }
+      return value;
+    }
+    if (typeof value !== "object" || value === null) {
+      return value;
+    }
+    return new Proxy(value, new _SelectionProxyHandler(this.config));
   }
 };
 
@@ -119080,6 +119226,118 @@ var pgTable = (name, columns, extraConfig) => {
   return pgTableWithSchema(name, columns, extraConfig, void 0);
 };
 
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/pg-core/indexes.js
+var IndexBuilderOn = class {
+  constructor(unique, name) {
+    this.unique = unique;
+    this.name = name;
+  }
+  static [entityKind] = "PgIndexBuilderOn";
+  on(...columns) {
+    return new IndexBuilder(
+      columns.map((it) => {
+        if (is(it, SQL)) {
+          return it;
+        }
+        it = it;
+        const clonedIndexedColumn = new IndexedColumn(it.name, !!it.keyAsName, it.columnType, it.indexConfig);
+        it.indexConfig = JSON.parse(JSON.stringify(it.defaultConfig));
+        return clonedIndexedColumn;
+      }),
+      this.unique,
+      false,
+      this.name
+    );
+  }
+  onOnly(...columns) {
+    return new IndexBuilder(
+      columns.map((it) => {
+        if (is(it, SQL)) {
+          return it;
+        }
+        it = it;
+        const clonedIndexedColumn = new IndexedColumn(it.name, !!it.keyAsName, it.columnType, it.indexConfig);
+        it.indexConfig = it.defaultConfig;
+        return clonedIndexedColumn;
+      }),
+      this.unique,
+      true,
+      this.name
+    );
+  }
+  /**
+   * Specify what index method to use. Choices are `btree`, `hash`, `gist`, `spgist`, `gin`, `brin`, or user-installed access methods like `bloom`. The default method is `btree.
+   *
+   * If you have the `pg_vector` extension installed in your database, you can use the `hnsw` and `ivfflat` options, which are predefined types.
+   *
+   * **You can always specify any string you want in the method, in case Drizzle doesn't have it natively in its types**
+   *
+   * @param method The name of the index method to be used
+   * @param columns
+   * @returns
+   */
+  using(method, ...columns) {
+    return new IndexBuilder(
+      columns.map((it) => {
+        if (is(it, SQL)) {
+          return it;
+        }
+        it = it;
+        const clonedIndexedColumn = new IndexedColumn(it.name, !!it.keyAsName, it.columnType, it.indexConfig);
+        it.indexConfig = JSON.parse(JSON.stringify(it.defaultConfig));
+        return clonedIndexedColumn;
+      }),
+      this.unique,
+      true,
+      this.name,
+      method
+    );
+  }
+};
+var IndexBuilder = class {
+  static [entityKind] = "PgIndexBuilder";
+  /** @internal */
+  config;
+  constructor(columns, unique, only, name, method = "btree") {
+    this.config = {
+      name,
+      columns,
+      unique,
+      only,
+      method
+    };
+  }
+  concurrently() {
+    this.config.concurrently = true;
+    return this;
+  }
+  with(obj) {
+    this.config.with = obj;
+    return this;
+  }
+  where(condition) {
+    this.config.where = condition;
+    return this;
+  }
+  /** @internal */
+  build(table) {
+    return new Index(this.config, table);
+  }
+};
+var Index = class {
+  static [entityKind] = "PgIndex";
+  config;
+  constructor(config, table) {
+    this.config = { ...config, table };
+  }
+};
+function index(name) {
+  return new IndexBuilderOn(false, name);
+}
+function uniqueIndex(name) {
+  return new IndexBuilderOn(true, name);
+}
+
 // ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/pg-core/primary-keys.js
 var PrimaryKeyBuilder = class {
   static [entityKind] = "PgPrimaryKeyBuilder";
@@ -119107,6 +119365,85 @@ var PrimaryKey = class {
   name;
   getName() {
     return this.name ?? `${this.table[PgTable.Symbol.Name]}_${this.columns.map((column) => column.name).join("_")}_pk`;
+  }
+};
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/casing.js
+function toSnakeCase(input) {
+  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
+  return words.map((word) => word.toLowerCase()).join("_");
+}
+function toCamelCase(input) {
+  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
+  return words.reduce((acc, word, i) => {
+    const formattedWord = i === 0 ? word.toLowerCase() : `${word[0].toUpperCase()}${word.slice(1)}`;
+    return acc + formattedWord;
+  }, "");
+}
+function noopCase(input) {
+  return input;
+}
+var CasingCache = class {
+  static [entityKind] = "CasingCache";
+  /** @internal */
+  cache = {};
+  cachedTables = {};
+  convert;
+  constructor(casing) {
+    this.convert = casing === "snake_case" ? toSnakeCase : casing === "camelCase" ? toCamelCase : noopCase;
+  }
+  getColumnCasing(column) {
+    if (!column.keyAsName) return column.name;
+    const schema = column.table[Table.Symbol.Schema] ?? "public";
+    const tableName = column.table[Table.Symbol.OriginalName];
+    const key = `${schema}.${tableName}.${column.name}`;
+    if (!this.cache[key]) {
+      this.cacheTable(column.table);
+    }
+    return this.cache[key];
+  }
+  cacheTable(table) {
+    const schema = table[Table.Symbol.Schema] ?? "public";
+    const tableName = table[Table.Symbol.OriginalName];
+    const tableKey = `${schema}.${tableName}`;
+    if (!this.cachedTables[tableKey]) {
+      for (const column of Object.values(table[Table.Symbol.Columns])) {
+        const columnKey = `${tableKey}.${column.name}`;
+        this.cache[columnKey] = this.convert(column.name);
+      }
+      this.cachedTables[tableKey] = true;
+    }
+  }
+  clearCache() {
+    this.cache = {};
+    this.cachedTables = {};
+  }
+};
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/errors.js
+var DrizzleError = class extends Error {
+  static [entityKind] = "DrizzleError";
+  constructor({ message, cause }) {
+    super(message);
+    this.name = "DrizzleError";
+    this.cause = cause;
+  }
+};
+var DrizzleQueryError = class _DrizzleQueryError extends Error {
+  constructor(query, params, cause) {
+    super(`Failed query: ${query}
+params: ${params}`);
+    this.query = query;
+    this.params = params;
+    this.cause = cause;
+    Error.captureStackTrace(this, _DrizzleQueryError);
+    if (cause) this.cause = cause;
+  }
+};
+var TransactionRollbackError = class extends DrizzleError {
+  static [entityKind] = "TransactionRollbackError";
+  constructor() {
+    super({ message: "Rollback" });
   }
 };
 
@@ -119493,241 +119830,6 @@ function mapRelationalRow(tablesConfig, tableConfig, row, buildQueryResultSelect
   }
   return result;
 }
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/node-postgres/driver.js
-import pg2 from "pg";
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/selection-proxy.js
-var SelectionProxyHandler = class _SelectionProxyHandler {
-  static [entityKind] = "SelectionProxyHandler";
-  config;
-  constructor(config) {
-    this.config = { ...config };
-  }
-  get(subquery, prop) {
-    if (prop === "_") {
-      return {
-        ...subquery["_"],
-        selectedFields: new Proxy(
-          subquery._.selectedFields,
-          this
-        )
-      };
-    }
-    if (prop === ViewBaseConfig) {
-      return {
-        ...subquery[ViewBaseConfig],
-        selectedFields: new Proxy(
-          subquery[ViewBaseConfig].selectedFields,
-          this
-        )
-      };
-    }
-    if (typeof prop === "symbol") {
-      return subquery[prop];
-    }
-    const columns = is(subquery, Subquery) ? subquery._.selectedFields : is(subquery, View) ? subquery[ViewBaseConfig].selectedFields : subquery;
-    const value = columns[prop];
-    if (is(value, SQL.Aliased)) {
-      if (this.config.sqlAliasedBehavior === "sql" && !value.isSelectionField) {
-        return value.sql;
-      }
-      const newValue = value.clone();
-      newValue.isSelectionField = true;
-      return newValue;
-    }
-    if (is(value, SQL)) {
-      if (this.config.sqlBehavior === "sql") {
-        return value;
-      }
-      throw new Error(
-        `You tried to reference "${prop}" field from a subquery, which is a raw SQL field, but it doesn't have an alias declared. Please add an alias to the field using ".as('alias')" method.`
-      );
-    }
-    if (is(value, Column)) {
-      if (this.config.alias) {
-        return new Proxy(
-          value,
-          new ColumnAliasProxyHandler(
-            new Proxy(
-              value.table,
-              new TableAliasProxyHandler(this.config.alias, this.config.replaceOriginalName ?? false)
-            )
-          )
-        );
-      }
-      return value;
-    }
-    if (typeof value !== "object" || value === null) {
-      return value;
-    }
-    return new Proxy(value, new _SelectionProxyHandler(this.config));
-  }
-};
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/pg-core/indexes.js
-var IndexBuilderOn = class {
-  constructor(unique, name) {
-    this.unique = unique;
-    this.name = name;
-  }
-  static [entityKind] = "PgIndexBuilderOn";
-  on(...columns) {
-    return new IndexBuilder(
-      columns.map((it) => {
-        if (is(it, SQL)) {
-          return it;
-        }
-        it = it;
-        const clonedIndexedColumn = new IndexedColumn(it.name, !!it.keyAsName, it.columnType, it.indexConfig);
-        it.indexConfig = JSON.parse(JSON.stringify(it.defaultConfig));
-        return clonedIndexedColumn;
-      }),
-      this.unique,
-      false,
-      this.name
-    );
-  }
-  onOnly(...columns) {
-    return new IndexBuilder(
-      columns.map((it) => {
-        if (is(it, SQL)) {
-          return it;
-        }
-        it = it;
-        const clonedIndexedColumn = new IndexedColumn(it.name, !!it.keyAsName, it.columnType, it.indexConfig);
-        it.indexConfig = it.defaultConfig;
-        return clonedIndexedColumn;
-      }),
-      this.unique,
-      true,
-      this.name
-    );
-  }
-  /**
-   * Specify what index method to use. Choices are `btree`, `hash`, `gist`, `spgist`, `gin`, `brin`, or user-installed access methods like `bloom`. The default method is `btree.
-   *
-   * If you have the `pg_vector` extension installed in your database, you can use the `hnsw` and `ivfflat` options, which are predefined types.
-   *
-   * **You can always specify any string you want in the method, in case Drizzle doesn't have it natively in its types**
-   *
-   * @param method The name of the index method to be used
-   * @param columns
-   * @returns
-   */
-  using(method, ...columns) {
-    return new IndexBuilder(
-      columns.map((it) => {
-        if (is(it, SQL)) {
-          return it;
-        }
-        it = it;
-        const clonedIndexedColumn = new IndexedColumn(it.name, !!it.keyAsName, it.columnType, it.indexConfig);
-        it.indexConfig = JSON.parse(JSON.stringify(it.defaultConfig));
-        return clonedIndexedColumn;
-      }),
-      this.unique,
-      true,
-      this.name,
-      method
-    );
-  }
-};
-var IndexBuilder = class {
-  static [entityKind] = "PgIndexBuilder";
-  /** @internal */
-  config;
-  constructor(columns, unique, only, name, method = "btree") {
-    this.config = {
-      name,
-      columns,
-      unique,
-      only,
-      method
-    };
-  }
-  concurrently() {
-    this.config.concurrently = true;
-    return this;
-  }
-  with(obj) {
-    this.config.with = obj;
-    return this;
-  }
-  where(condition) {
-    this.config.where = condition;
-    return this;
-  }
-  /** @internal */
-  build(table) {
-    return new Index(this.config, table);
-  }
-};
-var Index = class {
-  static [entityKind] = "PgIndex";
-  config;
-  constructor(config, table) {
-    this.config = { ...config, table };
-  }
-};
-function index(name) {
-  return new IndexBuilderOn(false, name);
-}
-function uniqueIndex(name) {
-  return new IndexBuilderOn(true, name);
-}
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/casing.js
-function toSnakeCase(input) {
-  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
-  return words.map((word) => word.toLowerCase()).join("_");
-}
-function toCamelCase(input) {
-  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
-  return words.reduce((acc, word, i) => {
-    const formattedWord = i === 0 ? word.toLowerCase() : `${word[0].toUpperCase()}${word.slice(1)}`;
-    return acc + formattedWord;
-  }, "");
-}
-function noopCase(input) {
-  return input;
-}
-var CasingCache = class {
-  static [entityKind] = "CasingCache";
-  /** @internal */
-  cache = {};
-  cachedTables = {};
-  convert;
-  constructor(casing) {
-    this.convert = casing === "snake_case" ? toSnakeCase : casing === "camelCase" ? toCamelCase : noopCase;
-  }
-  getColumnCasing(column) {
-    if (!column.keyAsName) return column.name;
-    const schema = column.table[Table.Symbol.Schema] ?? "public";
-    const tableName = column.table[Table.Symbol.OriginalName];
-    const key = `${schema}.${tableName}.${column.name}`;
-    if (!this.cache[key]) {
-      this.cacheTable(column.table);
-    }
-    return this.cache[key];
-  }
-  cacheTable(table) {
-    const schema = table[Table.Symbol.Schema] ?? "public";
-    const tableName = table[Table.Symbol.OriginalName];
-    const tableKey = `${schema}.${tableName}`;
-    if (!this.cachedTables[tableKey]) {
-      for (const column of Object.values(table[Table.Symbol.Columns])) {
-        const columnKey = `${tableKey}.${column.name}`;
-        this.cache[columnKey] = this.convert(column.name);
-      }
-      this.cachedTables[tableKey] = true;
-    }
-  }
-  clearCache() {
-    this.cache = {};
-    this.cachedTables = {};
-  }
-};
 
 // ../../node_modules/.pnpm/drizzle-orm@0.45.2_@electri_1f3613059acfc56885dda2eaec453da8/node_modules/drizzle-orm/pg-core/view-base.js
 var PgViewBase = class extends View {
@@ -123500,6 +123602,7 @@ function drizzle2(...params) {
 // ../../lib/db/src/index.ts
 import { PGlite as PGlite2 } from "@electric-sql/pglite";
 import pg3 from "pg";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 // ../../lib/db/src/schema/index.ts
 var schema_exports = {};
@@ -124329,38 +124432,152 @@ async function syncEnvToShopSettings(db2) {
 var dbReadyPromise = null;
 var pgliteInstance = null;
 var isInitialized = false;
-var DEFAULT_SUPABASE_URL = "postgresql://postgres.hbwwbapappmsbdsjaasm:jooPR0L9GDu6R7sM@aws-0-ap-south-1.pooler.supabase.com:6543/postgres";
-var rawDbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : void 0);
-if (rawDbUrl && (rawDbUrl.includes("supabase.co:5432") || rawDbUrl.includes("db.hbwwbapappmsbdsjaasm"))) {
-  rawDbUrl = rawDbUrl.replace(/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co:5432/, "postgres.$2:$1@aws-0-ap-south-1.pooler.supabase.com:6543");
+var dbContextStorage = new AsyncLocalStorage();
+function runWithDbContext(context, fn) {
+  return dbContextStorage.run(context, fn);
 }
-if (rawDbUrl) {
-  const isCloudPg = rawDbUrl.includes("supabase.co") || rawDbUrl.includes("pooler.supabase.com") || rawDbUrl.includes("sslmode=") || !!process.env.VERCEL;
-  poolInstance = new Pool2({
-    connectionString: rawDbUrl,
-    max: 10,
+var DEFAULT_SUPABASE_URL = "postgresql://postgres.hbwwbapappmsbdsjaasm:jooPR0L9GDu6R7sM@aws-0-ap-south-1.pooler.supabase.com:6543/postgres";
+var rawPrimaryUrl = process.env.PRIMARY_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL || (process.env.VERCEL || process.env.NODE_ENV === "production" ? DEFAULT_SUPABASE_URL : void 0);
+if (rawPrimaryUrl && (rawPrimaryUrl.includes("supabase.co:5432") || rawPrimaryUrl.includes("db.hbwwbapappmsbdsjaasm"))) {
+  rawPrimaryUrl = rawPrimaryUrl.replace(/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co:5432/, "postgres.$2:$1@aws-0-ap-south-1.pooler.supabase.com:6543");
+}
+var rawReplicaUrl = process.env.REPLICA_DATABASE_URL || null;
+if (rawReplicaUrl && (rawReplicaUrl.includes("supabase.co:5432") || rawReplicaUrl.includes("db.hbwwbapappmsbdsjaasm"))) {
+  rawReplicaUrl = rawReplicaUrl.replace(/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co:5432/, "postgres.$2:$1@aws-0-ap-south-1.pooler.supabase.com:6543");
+}
+var primaryPoolInstance = null;
+var replicaPoolInstance = null;
+var primaryDbInstance = null;
+var replicaDbInstance = null;
+var isReplicaConfigured = false;
+var isReplicaHealthy = true;
+var lastLagSeconds = 0;
+var lastLagCheckTime = 0;
+if (rawPrimaryUrl) {
+  const isCloudPg = rawPrimaryUrl.includes("supabase.co") || rawPrimaryUrl.includes("pooler.supabase.com") || rawPrimaryUrl.includes("sslmode=") || !!process.env.VERCEL;
+  primaryPoolInstance = new Pool2({
+    connectionString: rawPrimaryUrl,
+    max: parseInt(process.env.DB_PRIMARY_MAX_CONNECTIONS || "15", 10),
     idleTimeoutMillis: 3e4,
     connectionTimeoutMillis: 1e4,
     ...isCloudPg ? { ssl: { rejectUnauthorized: false } } : {}
   });
-  dbInstance = drizzle(poolInstance, { schema: schema_exports });
+  primaryDbInstance = drizzle(primaryPoolInstance, { schema: schema_exports });
+  dbInstance = primaryDbInstance;
+  poolInstance = primaryPoolInstance;
+  if (rawReplicaUrl && rawReplicaUrl.trim() !== rawPrimaryUrl.trim()) {
+    isReplicaConfigured = true;
+    const isReplicaCloudPg = rawReplicaUrl.includes("supabase.co") || rawReplicaUrl.includes("pooler.supabase.com") || rawReplicaUrl.includes("sslmode=") || !!process.env.VERCEL;
+    replicaPoolInstance = new Pool2({
+      connectionString: rawReplicaUrl,
+      max: parseInt(process.env.DB_REPLICA_MAX_CONNECTIONS || "25", 10),
+      idleTimeoutMillis: 3e4,
+      connectionTimeoutMillis: 1e4,
+      ...isReplicaCloudPg ? { ssl: { rejectUnauthorized: false } } : {}
+    });
+    replicaDbInstance = drizzle(replicaPoolInstance, { schema: schema_exports });
+  } else {
+    replicaPoolInstance = primaryPoolInstance;
+    replicaDbInstance = primaryDbInstance;
+    isReplicaConfigured = false;
+  }
 } else {
   try {
     const dataDir = "memory://";
     pgliteInstance = new PGlite2(dataDir);
     dbInstance = drizzle2(pgliteInstance, { schema: schema_exports });
+    primaryDbInstance = dbInstance;
+    replicaDbInstance = dbInstance;
   } catch (e) {
     console.warn("PGlite initialization warning (ignoring in serverless runtime):", e);
   }
 }
+async function getDbReplicationHealth() {
+  if (!isReplicaConfigured || !replicaPoolInstance) {
+    const primaryOk = !!primaryPoolInstance;
+    return {
+      isReplicaConfigured: false,
+      isReplicaHealthy: true,
+      lagSeconds: 0,
+      primaryConnected: primaryOk,
+      replicaConnected: false,
+      activeRouting: "single_primary"
+    };
+  }
+  let primaryConnected = false;
+  let replicaConnected = false;
+  let lagSec = null;
+  let errorMsg;
+  try {
+    const pCheck = await primaryPoolInstance.query("SELECT 1 AS ok");
+    primaryConnected = pCheck.rows[0]?.ok === 1;
+  } catch (err) {
+    errorMsg = `Primary DB check failed: ${err.message}`;
+  }
+  try {
+    const rCheck = await replicaPoolInstance.query(`
+      SELECT 
+        pg_is_in_recovery() AS is_in_recovery,
+        EXTRACT(EPOCH FROM (NOW() - pg_last_xact_replay_timestamp())) AS lag_seconds
+    `);
+    replicaConnected = true;
+    const rawLag = rCheck.rows[0]?.lag_seconds;
+    lagSec = typeof rawLag === "number" ? Math.max(0, Math.round(rawLag)) : null;
+    lastLagSeconds = lagSec;
+    lastLagCheckTime = Date.now();
+    isReplicaHealthy = lagSec === null || lagSec <= 10;
+  } catch (err) {
+    replicaConnected = false;
+    isReplicaHealthy = false;
+    errorMsg = errorMsg ? `${errorMsg}; Replica DB error: ${err.message}` : `Replica DB error: ${err.message}`;
+  }
+  return {
+    isReplicaConfigured,
+    isReplicaHealthy,
+    lagSeconds: lagSec,
+    primaryConnected,
+    replicaConnected,
+    activeRouting: !isReplicaHealthy ? "primary_fallback" : "replica",
+    error: errorMsg
+  };
+}
+if (isReplicaConfigured) {
+  setInterval(() => {
+    getDbReplicationHealth().catch((e) => console.warn("Replica health monitor check error:", e));
+  }, 1e4).unref();
+}
+function getDb(options) {
+  const context = options || dbContextStorage.getStore();
+  if (context?.forcePrimary || context?.hasRecentWrite) {
+    return primaryDbInstance || dbInstance;
+  }
+  if (isReplicaConfigured && isReplicaHealthy && replicaDbInstance) {
+    return replicaDbInstance;
+  }
+  return primaryDbInstance || dbInstance;
+}
+var smartDbProxy = new Proxy({}, {
+  get(_target, prop) {
+    if (prop === "select") {
+      const activeDb = getDb();
+      return activeDb.select.bind(activeDb);
+    }
+    const writer = primaryDbInstance || dbInstance;
+    const value = writer[prop];
+    if (typeof value === "function") {
+      return value.bind(writer);
+    }
+    return value;
+  }
+});
 async function ensureDbReady() {
   if (isInitialized) return dbInstance;
   if (!dbReadyPromise) {
     dbReadyPromise = (async () => {
       try {
-        if (rawDbUrl && poolInstance) {
-          await poolInstance.query(createTablesSql);
-          if (dbInstance) await syncEnvToShopSettings(dbInstance);
+        if (rawPrimaryUrl && primaryPoolInstance) {
+          await primaryPoolInstance.query(createTablesSql);
+          if (primaryDbInstance) await syncEnvToShopSettings(primaryDbInstance);
         } else if (pgliteInstance) {
           await pgliteInstance.waitReady;
           await pgliteInstance.exec(createTablesSql);
@@ -124370,13 +124587,41 @@ async function ensureDbReady() {
       } catch (err) {
         console.error("ensureDbReady error:", err);
       }
-      return dbInstance;
+      return primaryDbInstance || dbInstance;
     })();
   }
   return dbReadyPromise;
 }
 ensureDbReady().catch((e) => console.warn("ensureDbReady startup error:", e));
-var db = dbInstance;
+var db = smartDbProxy;
+
+// src/routes/health.ts
+var router = (0, import_express.Router)();
+router.get("/healthz", (_req, res) => {
+  const data = HealthCheckResponse.parse({ status: "ok" });
+  res.json(data);
+});
+router.get("/health/db", async (_req, res) => {
+  try {
+    const health = await getDbReplicationHealth();
+    const isDegraded = !health.primaryConnected || !health.isReplicaHealthy && health.isReplicaConfigured;
+    res.status(isDegraded ? 503 : 200).json({
+      status: isDegraded ? "degraded" : "ok",
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      ...health
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: "error",
+      error: err.message,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  }
+});
+var health_default = router;
+
+// src/routes/storefront.ts
+var import_express3 = __toESM(require_express2(), 1);
 
 // src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
@@ -134578,6 +134823,9 @@ var requestIdMiddleware = (req, res, next) => {
   next();
 };
 
+// src/app.ts
+var import_cookie_parser = __toESM(require_cookie_parser(), 1);
+
 // src/middlewares/error-handler.ts
 var AppError = class extends Error {
   constructor(statusCode, code, message, details) {
@@ -134638,6 +134886,86 @@ var globalErrorHandler = (err, req, res, _next) => {
     requestId
   });
 };
+
+// src/middlewares/db-routing.ts
+import { createHmac as createHmac3, timingSafeEqual as timingSafeEqual7 } from "node:crypto";
+var TOKEN_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || "raj_traders_sticky_db_routing_secret_salt_2026";
+var WRITE_STICKY_WINDOW_MS = 5e3;
+function signTimestamp(timestamp2) {
+  return createHmac3("sha256", TOKEN_SECRET).update(timestamp2).digest("hex").slice(0, 16);
+}
+function generateWriteToken() {
+  const ts = Date.now().toString();
+  const sig = signTimestamp(ts);
+  return `${ts}.${sig}`;
+}
+function validateWriteToken(token) {
+  if (!token || typeof token !== "string") return false;
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const [tsStr, signature] = parts;
+  const ts = parseInt(tsStr, 10);
+  if (isNaN(ts)) return false;
+  const age = Date.now() - ts;
+  if (age < 0 || age > WRITE_STICKY_WINDOW_MS) {
+    return false;
+  }
+  const expectedSig = signTimestamp(tsStr);
+  if (expectedSig.length !== signature.length) return false;
+  try {
+    return timingSafeEqual7(Buffer.from(signature), Buffer.from(expectedSig));
+  } catch {
+    return false;
+  }
+}
+var CRITICAL_PRIMARY_PREFIXES = [
+  "/api/v1/checkout/create-order",
+  "/api/v1/checkout/verify-payment",
+  "/api/v1/checkout/webhook",
+  "/api/v1/auth/reset-password",
+  "/api/v1/auth/delete-account",
+  "/api/v1/admin/shop-settings"
+];
+function dbRoutingMiddleware(req, res, next) {
+  const incomingHeader = req.headers["x-db-recent-write"];
+  const incomingCookie = req.cookies?.["x-db-recent-write"];
+  const rawToken = incomingHeader || incomingCookie;
+  const hasRecentWrite = validateWriteToken(rawToken);
+  const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(req.method.toUpperCase());
+  const isCriticalPath = CRITICAL_PRIMARY_PREFIXES.some((prefix) => req.originalUrl?.startsWith(prefix));
+  const forcePrimary = isMutation || isCriticalPath || hasRecentWrite;
+  if (isMutation) {
+    const newToken = generateWriteToken();
+    res.setHeader("x-db-recent-write", newToken);
+    const existingExposed = res.getHeader("Access-Control-Expose-Headers") || "";
+    const exposedStr = typeof existingExposed === "string" ? existingExposed : "";
+    if (!exposedStr.includes("x-db-recent-write")) {
+      res.setHeader(
+        "Access-Control-Expose-Headers",
+        exposedStr ? `${exposedStr}, x-db-recent-write` : "x-db-recent-write"
+      );
+    }
+    if (typeof res.cookie === "function") {
+      res.cookie("x-db-recent-write", newToken, {
+        maxAge: WRITE_STICKY_WINDOW_MS,
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/"
+      });
+    }
+  }
+  req.isDbPinnedToPrimary = forcePrimary;
+  req.hasRecentWrite = hasRecentWrite;
+  req.db = getDb({ forcePrimary, hasRecentWrite, requestId: req.id });
+  runWithDbContext(
+    {
+      forcePrimary,
+      hasRecentWrite,
+      requestId: req.id
+    },
+    () => next()
+  );
+}
 
 // src/app.ts
 import path from "node:path";
@@ -134703,6 +135031,8 @@ app.use(
   })
 );
 app.use(import_express13.default.urlencoded({ limit: securityConfig.bodySizeLimit, extended: true }));
+app.use((0, import_cookie_parser.default)());
+app.use(dbRoutingMiddleware);
 app.get("/", (_req, res) => {
   res.json({
     status: "ok",
@@ -135088,6 +135418,14 @@ fill-range/index.js:
    *
    * Copyright (c) 2014-present, Jon Schlinkert.
    * Licensed under the MIT License.
+   *)
+
+cookie-parser/index.js:
+  (*!
+   * cookie-parser
+   * Copyright(c) 2014 TJ Holowaychuk
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
    *)
 
 otpauth/dist/otpauth.node.mjs:
