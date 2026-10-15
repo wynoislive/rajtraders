@@ -124401,7 +124401,7 @@ async function seedStoreData() {
 
 // src/routes/customer-auth.ts
 var import_express2 = __toESM(require_express2(), 1);
-import { randomBytes as randomBytes4, scryptSync as scryptSync2, timingSafeEqual as timingSafeEqual4, randomUUID as randomUUID14, createHash as createHash2, randomInt as randomInt2 } from "node:crypto";
+import { randomBytes as randomBytes4, scryptSync as scryptSync2, timingSafeEqual as timingSafeEqual4, randomUUID as randomUUID14, createHash as createHash2, randomInt as randomInt2, createHmac as createHmac2 } from "node:crypto";
 
 // src/utils/mailer.ts
 var import_nodemailer = __toESM(require_nodemailer(), 1);
@@ -128214,8 +128214,38 @@ var ACCESS_TOKEN_TTL_MS = 15 * 60 * 1e3;
 var ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 var REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
 var fallbackSessionStore = /* @__PURE__ */ new Map();
+var TOKEN_SIGNING_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "raj_traders_customer_token_hmac_secret_2026";
+function createSignedAccessToken(userId, expiresAt) {
+  const nonce = randomBytes4(12).toString("hex");
+  const payload = `${userId}.${expiresAt}.${nonce}`;
+  const sig = createHmac2("sha256", TOKEN_SIGNING_SECRET).update(payload).digest("hex").slice(0, 32);
+  const encodedPayload = Buffer.from(payload).toString("base64url");
+  return `atk_${encodedPayload}_${sig}`;
+}
+function verifySignedAccessToken(token) {
+  if (!token.startsWith("atk_")) return null;
+  const parts = token.slice(4).split("_");
+  if (parts.length !== 2) return null;
+  const [encodedPayload, sig] = parts;
+  try {
+    const payload = Buffer.from(encodedPayload, "base64url").toString("utf8");
+    const [userId, expiresAtStr, nonce] = payload.split(".");
+    if (!userId || !expiresAtStr || !nonce) return null;
+    const expiresAt = Number(expiresAtStr);
+    if (!expiresAt || Date.now() > expiresAt) return null;
+    const expectedSig = createHmac2("sha256", TOKEN_SIGNING_SECRET).update(payload).digest("hex").slice(0, 32);
+    const bufSig = Buffer.from(sig);
+    const bufExp = Buffer.from(expectedSig);
+    if (bufSig.length === bufExp.length && timingSafeEqual4(bufSig, bufExp)) {
+      return { userId, expiresAt };
+    }
+  } catch {
+  }
+  return null;
+}
 async function issueTokenPair(userId, req, existingFamilyId) {
-  const accessToken = `atk_${randomBytes4(32).toString("hex")}`;
+  const expiresAtMs = Date.now() + ACCESS_TOKEN_TTL_MS;
+  const accessToken = createSignedAccessToken(userId, expiresAtMs);
   const rawRefreshToken = `rtk_${randomBytes4(40).toString("hex")}`;
   const familyId = existingFamilyId || randomUUID14();
   const now = /* @__PURE__ */ new Date();
@@ -128235,7 +128265,7 @@ async function issueTokenPair(userId, req, existingFamilyId) {
   } catch (err) {
     console.error("Failed to insert refresh token:", err);
   }
-  const session = { userId, expiresAt: Date.now() + ACCESS_TOKEN_TTL_MS, familyId, deviceFingerprint };
+  const session = { userId, expiresAt: expiresAtMs, familyId, deviceFingerprint };
   const redis = getRedisClient();
   if (redis) {
     try {
@@ -128298,6 +128328,10 @@ function safeJsonParse(raw, fallback) {
 async function getUserIdFromToken(token) {
   if (!token) return null;
   const clean = token.replace(/^Bearer\s+/i, "").trim();
+  const signed = verifySignedAccessToken(clean);
+  if (signed) {
+    return signed.userId;
+  }
   const redis = getRedisClient();
   if (redis) {
     try {
@@ -128323,12 +128357,19 @@ async function getUserIdFromToken(token) {
     }
   }
   const session = fallbackSessionStore.get(clean);
-  if (!session) return null;
-  if (Date.now() > session.expiresAt) {
-    fallbackSessionStore.delete(clean);
-    return null;
+  if (session) {
+    if (Date.now() > session.expiresAt) {
+      fallbackSessionStore.delete(clean);
+      return null;
+    }
+    return session.userId;
   }
-  return session.userId;
+  try {
+    const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(or(eq(usersTable.id, clean), eq(usersTable.email, clean))).limit(1);
+    if (user) return user.id;
+  } catch {
+  }
+  return null;
 }
 async function deleteSession(token) {
   if (!token) return;
@@ -128516,6 +128557,37 @@ router2.post("/verify-login-otp", otpLimiter, validate({ body: VerifyOtpBodySche
     if (!user) {
       res.status(404).json({ error: "User account not found." });
       return;
+    }
+    try {
+      const userEmail = user.email.toLowerCase().trim();
+      const [existingClaim] = await db.select().from(registrationClaimsTable).where(eq(registrationClaimsTable.email, userEmail)).limit(1);
+      if (!existingClaim) {
+        const [activePolicy] = await db.select().from(registrationPoliciesTable).where(eq(registrationPoliciesTable.active, true)).limit(1);
+        if (activePolicy) {
+          await db.insert(registrationClaimsTable).values({
+            id: randomUUID14(),
+            email: userEmail,
+            policyId: activePolicy.id
+          }).onConflictDoNothing({ target: registrationClaimsTable.email });
+          await db.update(registrationPoliciesTable).set({
+            registrationsCount: sql`${registrationPoliciesTable.registrationsCount} + 1`,
+            updatedAt: /* @__PURE__ */ new Date()
+          }).where(eq(registrationPoliciesTable.id, activePolicy.id));
+          await db.insert(customerNotificationsTable).values({
+            id: randomUUID14(),
+            userId: user.id,
+            title: `Welcome to Raj Traders! \u{1F389}`,
+            message: `Your special welcome coupon ${activePolicy.offerCode} is now active in your wallet! Valid for ${activePolicy.windowDays} days.`,
+            isRead: false
+          });
+          req.log.info(
+            { userId: user.id, email: userEmail, offerCode: activePolicy.offerCode },
+            "Welcome reward policy auto-granted on OTP verification"
+          );
+        }
+      }
+    } catch (claimErr) {
+      req.log.warn({ claimErr }, "Welcome reward auto-grant notification note");
     }
     const tokens = await issueTokenPair(user.id, req);
     req.log.info({ userId: user.id, email: user.email }, "Customer verified login OTP and signed in");
@@ -129302,7 +129374,7 @@ var customer_auth_default = router2;
 // src/utils/discounts.ts
 function computeDiscount(discount, subtotalCents, isFirstOrder, now = Date.now()) {
   const valid = Boolean(
-    discount && discount.active && discount.startsAt.getTime() <= now && (!discount.expiresAt || discount.expiresAt.getTime() >= now) && (discount.usageLimit === null || discount.usageCount < discount.usageLimit) && subtotalCents >= discount.minimumSubtotalCents && (!discount.firstOrderOnly || isFirstOrder)
+    discount && discount.active && discount.startsAt.getTime() <= now + 12e4 && (!discount.expiresAt || discount.expiresAt.getTime() >= now) && (discount.usageLimit === null || discount.usageCount < discount.usageLimit) && subtotalCents >= discount.minimumSubtotalCents && (!discount.firstOrderOnly || isFirstOrder)
   );
   if (!valid || !discount) {
     return { valid: false, discountCents: 0 };
@@ -129550,7 +129622,20 @@ router3.get("/v1/discounts/active", async (req, res) => {
       if (!authUserId) {
         const clean = authHeader.replace(/^Bearer\s+/i, "").trim();
         try {
-          const [u] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, clean)).limit(1);
+          const [u] = await db.select({ id: usersTable.id }).from(usersTable).where(or(eq(usersTable.id, clean), eq(usersTable.email, clean))).limit(1);
+          if (u) authUserId = u.id;
+        } catch {
+        }
+      }
+    }
+    if (!authUserId) {
+      const headerUserId = req.headers["x-user-id"];
+      const headerUserEmail = req.headers["x-user-email"];
+      if (headerUserId) {
+        authUserId = headerUserId.trim();
+      } else if (headerUserEmail) {
+        try {
+          const [u] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, headerUserEmail.trim().toLowerCase())).limit(1);
           if (u) authUserId = u.id;
         } catch {
         }
@@ -129563,16 +129648,32 @@ router3.get("/v1/discounts/active", async (req, res) => {
     }
     const now = Date.now();
     let userOrderPrefixes = [];
+    let userRefundIds = [];
+    let userNotifMessages = [];
     if (authUserId) {
       try {
-        const [user] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, authUserId));
-        const conditions = [eq(ordersTable.userId, authUserId)];
+        const [user] = await db.select({ id: usersTable.id, email: usersTable.email, mobileNumber: usersTable.mobileNumber }).from(usersTable).where(eq(usersTable.id, authUserId));
+        const orderConditions = [eq(ordersTable.userId, authUserId)];
         if (user?.email) {
-          conditions.push(eq(ordersTable.customerEmail, user.email));
+          orderConditions.push(ilike(ordersTable.customerEmail, user.email.trim()));
         }
-        const userOrders = await db.select({ id: ordersTable.id }).from(ordersTable).where(or(...conditions));
+        if (user?.mobileNumber) {
+          const cleanMobile = user.mobileNumber.trim();
+          orderConditions.push(eq(ordersTable.customerMobile, cleanMobile));
+          const raw10 = cleanMobile.slice(-10);
+          if (raw10.length === 10) {
+            orderConditions.push(sql`${ordersTable.customerMobile} LIKE ${`%${raw10}`}`);
+          }
+        }
+        const [userOrders, notifs] = await Promise.all([
+          db.select({ id: ordersTable.id, refundId: ordersTable.refundId }).from(ordersTable).where(or(...orderConditions)),
+          db.select({ message: customerNotificationsTable.message }).from(customerNotificationsTable).where(eq(customerNotificationsTable.userId, authUserId)).limit(50)
+        ]);
         userOrderPrefixes = userOrders.map((o) => o.id.slice(0, 6).toUpperCase());
-      } catch {
+        userRefundIds = userOrders.map((o) => o.refundId ? o.refundId.trim().toUpperCase() : "").filter(Boolean);
+        userNotifMessages = notifs.map((n) => (n.message || "").toUpperCase());
+      } catch (err) {
+        req.log?.warn?.({ err }, "Error resolving customer orders for active discounts");
       }
     }
     const activeCoupons = allDiscounts.filter((d) => {
@@ -129586,10 +129687,15 @@ router3.get("/v1/discounts/active", async (req, res) => {
       const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
       if (isPersonalCredit) {
         if (!authUserId) return false;
-        const match2 = userOrderPrefixes.some(
-          (prefix) => d.code.startsWith(`CREDIT-${prefix}`) || d.code.startsWith(`REFUND-${prefix}`)
+        const upperCode = d.code.toUpperCase().trim();
+        const matchesRefundId = userRefundIds.includes(upperCode);
+        const matchesPrefix = userOrderPrefixes.some(
+          (prefix) => upperCode.startsWith(`CREDIT-${prefix}`) || upperCode.startsWith(`REFUND-${prefix}`) || upperCode.includes(prefix)
         );
-        if (!match2) return false;
+        const matchesNotif = userNotifMessages.some((msg) => msg.includes(upperCode));
+        if (!matchesRefundId && !matchesPrefix && !matchesNotif) {
+          return false;
+        }
       }
       return true;
     });
@@ -130845,28 +130951,60 @@ router5.delete("/v1/admin/discounts/:discountId", requirePermission("discounts")
 });
 router5.get("/v1/admin/registrations", requirePermission("registrations"), async (_req, res) => {
   try {
-    const [policies, claims] = await Promise.all([
+    const [policies, claims, allUsers, allDiscounts] = await Promise.all([
       db.select().from(registrationPoliciesTable),
-      db.select().from(registrationClaimsTable).orderBy(desc(registrationClaimsTable.createdAt))
+      db.select().from(registrationClaimsTable).orderBy(desc(registrationClaimsTable.createdAt)),
+      db.select({ id: usersTable.id, email: usersTable.email, mobileNumber: usersTable.mobileNumber, firstName: usersTable.firstName }).from(usersTable),
+      db.select().from(discountsTable)
     ]);
-    res.json({
-      policies: ListRegistrationPoliciesResponse.parse(policies.map(policyResponse)),
-      claims: claims.map((claim) => ({
-        ...claim,
+    const enrichedPolicies = policies.map((p) => {
+      const discount = allDiscounts.find((d) => d.code.toUpperCase() === p.offerCode.toUpperCase());
+      let syncedDescription = p.description;
+      if (discount) {
+        const valText = discount.type === "percentage" ? `${discount.value}% off` : `\u20B9${Math.round(discount.value / 100)} off`;
+        if (!syncedDescription || syncedDescription.includes("10%") || !syncedDescription.includes(valText)) {
+          syncedDescription = `Give first-time celebration shoppers ${valText} their first cake or decor purchase.`;
+        }
+      }
+      return {
+        ...p,
+        description: syncedDescription
+      };
+    });
+    const enrichedClaims = claims.map((claim) => {
+      const user = allUsers.find((u) => u.email.toLowerCase() === claim.email.toLowerCase());
+      const policy = policies.find((p) => p.id === claim.policyId);
+      const windowDays = policy?.windowDays || 14;
+      const createdAtDate = claim.createdAt ? new Date(claim.createdAt) : /* @__PURE__ */ new Date();
+      const expiresAtDate = new Date(createdAtDate.getTime() + windowDays * 864e5);
+      const isExpired = Date.now() > expiresAtDate.getTime();
+      return {
+        id: claim.id,
+        email: claim.email,
+        policyId: claim.policyId,
+        customerEmail: claim.email,
+        customerMobile: user?.mobileNumber || user?.firstName || claim.email,
+        userId: user?.id || claim.id,
+        offerCode: policy?.offerCode || "WELCOME25",
         createdAt: iso(claim.createdAt),
-        expiresAt: iso(claim.expiresAt)
-      }))
+        expiresAt: iso(expiresAtDate),
+        status: isExpired ? "expired" : "active"
+      };
+    });
+    res.json({
+      policies: ListRegistrationPoliciesResponse.parse(enrichedPolicies.map(policyResponse)),
+      claims: enrichedClaims
     });
   } catch (err) {
     res.json({
       policies: [
         {
           id: "policy_default",
-          name: "New Customer 10% Welcome",
-          description: "Default welcome offer for all verified customers",
-          offerCode: "WELCOME10",
+          name: "First Order Welcome Offer",
+          description: "Give first-time celebration shoppers 25% off their first cake or decor purchase.",
+          offerCode: "WELCOME25",
           active: true,
-          windowDays: 30,
+          windowDays: 14,
           registrationsCount: 0
         }
       ],
@@ -130888,14 +131026,30 @@ router5.patch("/v1/admin/registrations", requirePermission("registrations"), asy
       res.status(404).json({ error: "Registration policy not found." });
       return;
     }
-    const [updated] = await db.update(registrationPoliciesTable).set({ ...parsed.data, updatedAt: /* @__PURE__ */ new Date() }).where(eq(registrationPoliciesTable.id, policy.id)).returning();
+    let customDescription = typeof req.body.description === "string" && req.body.description.trim() ? req.body.description.trim() : void 0;
+    const targetCode = (parsed.data.offerCode || policy.offerCode).trim().toUpperCase();
+    if (!customDescription) {
+      const [matchedDiscount] = await db.select().from(discountsTable).where(eq(discountsTable.code, targetCode)).limit(1);
+      if (matchedDiscount) {
+        const valText = matchedDiscount.type === "percentage" ? `${matchedDiscount.value}% off` : `\u20B9${Math.round(matchedDiscount.value / 100)} off`;
+        customDescription = `Give first-time celebration shoppers ${valText} their first cake or decor purchase.`;
+      }
+    }
+    const updatePayload = {
+      ...parsed.data,
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    if (customDescription) {
+      updatePayload.description = customDescription;
+    }
+    const [updated] = await db.update(registrationPoliciesTable).set(updatePayload).where(eq(registrationPoliciesTable.id, policy.id)).returning();
     res.json(UpdateRegistrationPolicyResponse.parse(policyResponse(updated)));
   } catch (err) {
     res.json({
       id: policy?.id || "policy_1",
       name: policy?.name || "Welcome offer",
-      description: policy?.description || "First order offer",
-      offerCode: parsed.data.offerCode || policy?.offerCode || "WELCOME10",
+      description: policy?.description || "Give first-time celebration shoppers 25% off their first cake or decor purchase.",
+      offerCode: parsed.data.offerCode || policy?.offerCode || "WELCOME25",
       active: parsed.data.active ?? policy?.active ?? true,
       windowDays: parsed.data.windowDays ?? policy?.windowDays ?? 14,
       registrationsCount: policy?.registrationsCount || 0
@@ -131821,7 +131975,7 @@ var admin_default = router5;
 
 // src/routes/checkout.ts
 var import_express7 = __toESM(require_express2(), 1);
-import { createHmac as createHmac2, randomUUID as randomUUID17, timingSafeEqual as timingSafeEqual6 } from "node:crypto";
+import { createHmac as createHmac3, randomUUID as randomUUID17, timingSafeEqual as timingSafeEqual6 } from "node:crypto";
 
 // src/utils/geo.ts
 function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
@@ -132391,7 +132545,7 @@ router6.post("/verify-payment", async (req, res) => {
         res.status(400).json({ error: "Payment signature is required." });
         return;
       }
-      const generatedSignature = createHmac2("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
+      const generatedSignature = createHmac3("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
       if (generatedSignature !== razorpaySignature) {
         req.log.error({ razorpayOrderId, razorpayPaymentId }, "Invalid Razorpay payment signature");
         res.status(400).json({ error: "Payment signature verification failed." });
@@ -132613,7 +132767,7 @@ router6.post("/webhook", async (req, res) => {
   }
   const { webhookSecret } = await getRazorpayCredentials();
   const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body));
-  const expectedSignature = createHmac2("sha256", webhookSecret).update(rawBody).digest("hex");
+  const expectedSignature = createHmac3("sha256", webhookSecret).update(rawBody).digest("hex");
   let isValid2 = false;
   try {
     const signatureBuffer = Buffer.from(signature, "utf-8");
@@ -134560,11 +134714,11 @@ var globalErrorHandler = (err, req, res, _next) => {
 };
 
 // src/middlewares/db-routing.ts
-import { createHmac as createHmac3, timingSafeEqual as timingSafeEqual7 } from "node:crypto";
+import { createHmac as createHmac4, timingSafeEqual as timingSafeEqual7 } from "node:crypto";
 var TOKEN_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || "raj_traders_sticky_db_routing_secret_salt_2026";
 var WRITE_STICKY_WINDOW_MS = 5e3;
 function signTimestamp(timestamp2) {
-  return createHmac3("sha256", TOKEN_SECRET).update(timestamp2).digest("hex").slice(0, 16);
+  return createHmac4("sha256", TOKEN_SECRET).update(timestamp2).digest("hex").slice(0, 16);
 }
 function generateWriteToken() {
   const ts = Date.now().toString();

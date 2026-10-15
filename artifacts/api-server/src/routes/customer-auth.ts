@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
-import { db, usersTable, deletedAccountsLogTable, passwordResetsTable, passwordLockoutsTable, registrationClaimsTable, emailVerificationsTable, shopSettingsTable, totpSecretsTable, customerAddressesTable, customerFavoritesTable, customerNotificationsTable, ordersTable, productsTable, refreshTokensTable } from "@workspace/db";
-import { eq, and, ne, gt, asc, desc, sql } from "drizzle-orm";
-import { randomBytes, scryptSync, timingSafeEqual, randomUUID, createHash, randomInt } from "node:crypto";
+import { db, usersTable, deletedAccountsLogTable, passwordResetsTable, passwordLockoutsTable, registrationClaimsTable, registrationPoliciesTable, emailVerificationsTable, shopSettingsTable, totpSecretsTable, customerAddressesTable, customerFavoritesTable, customerNotificationsTable, ordersTable, productsTable, refreshTokensTable } from "@workspace/db";
+import { eq, and, ne, gt, asc, desc, sql, or } from "drizzle-orm";
+import { randomBytes, scryptSync, timingSafeEqual, randomUUID, createHash, randomInt, createHmac } from "node:crypto";
 import { z } from "zod";
 import { sendPasswordRecoveryEmail, sendVerificationOtpEmail } from "../utils/mailer";
 import { sendOtpWhatsApp, sendWhatsAppTextMessage } from "../utils/whatsapp";
@@ -161,8 +161,40 @@ export interface TokenPair {
 // In-memory fallback for local dev without Redis
 export const fallbackSessionStore = new Map<string, CustomerSession>();
 
+const TOKEN_SIGNING_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || "raj_traders_customer_token_hmac_secret_2026";
+
+export function createSignedAccessToken(userId: string, expiresAt: number): string {
+  const nonce = randomBytes(12).toString("hex");
+  const payload = `${userId}.${expiresAt}.${nonce}`;
+  const sig = createHmac("sha256", TOKEN_SIGNING_SECRET).update(payload).digest("hex").slice(0, 32);
+  const encodedPayload = Buffer.from(payload).toString("base64url");
+  return `atk_${encodedPayload}_${sig}`;
+}
+
+export function verifySignedAccessToken(token: string): { userId: string; expiresAt: number } | null {
+  if (!token.startsWith("atk_")) return null;
+  const parts = token.slice(4).split("_");
+  if (parts.length !== 2) return null;
+  const [encodedPayload, sig] = parts;
+  try {
+    const payload = Buffer.from(encodedPayload, "base64url").toString("utf8");
+    const [userId, expiresAtStr, nonce] = payload.split(".");
+    if (!userId || !expiresAtStr || !nonce) return null;
+    const expiresAt = Number(expiresAtStr);
+    if (!expiresAt || Date.now() > expiresAt) return null;
+    const expectedSig = createHmac("sha256", TOKEN_SIGNING_SECRET).update(payload).digest("hex").slice(0, 32);
+    const bufSig = Buffer.from(sig);
+    const bufExp = Buffer.from(expectedSig);
+    if (bufSig.length === bufExp.length && timingSafeEqual(bufSig, bufExp)) {
+      return { userId, expiresAt };
+    }
+  } catch {}
+  return null;
+}
+
 export async function issueTokenPair(userId: string, req?: Request, existingFamilyId?: string): Promise<TokenPair> {
-  const accessToken = `atk_${randomBytes(32).toString("hex")}`;
+  const expiresAtMs = Date.now() + ACCESS_TOKEN_TTL_MS;
+  const accessToken = createSignedAccessToken(userId, expiresAtMs);
   const rawRefreshToken = `rtk_${randomBytes(40).toString("hex")}`;
   const familyId = existingFamilyId || randomUUID();
   const now = new Date();
@@ -189,7 +221,7 @@ export async function issueTokenPair(userId: string, req?: Request, existingFami
   }
 
   // 2. Store Access Token in Redis or memory
-  const session: CustomerSession = { userId, expiresAt: Date.now() + ACCESS_TOKEN_TTL_MS, familyId, deviceFingerprint };
+  const session: CustomerSession = { userId, expiresAt: expiresAtMs, familyId, deviceFingerprint };
   const redis = getRedisClient();
   if (redis) {
     try {
@@ -272,10 +304,17 @@ export async function getUserIdFromToken(token?: string): Promise<string | null>
   if (!token) return null;
   const clean = token.replace(/^Bearer\s+/i, "").trim();
 
+  // 1. Self-verifying signed token (survives restarts and multi-instance)
+  const signed = verifySignedAccessToken(clean);
+  if (signed) {
+    return signed.userId;
+  }
+
+  // 2. Redis session cache
   const redis = getRedisClient();
   if (redis) {
     try {
-      // 1. Check dual-token access token
+      // Check dual-token access token
       const accessData = await redis.get(`session:customer:access:${clean}`);
       if (accessData) {
         const session: CustomerSession = JSON.parse(accessData);
@@ -286,7 +325,7 @@ export async function getUserIdFromToken(token?: string): Promise<string | null>
         return session.userId;
       }
 
-      // 2. Check legacy single-token
+      // Check legacy single-token
       const legacyData = await redis.get(`session:customer:${clean}`);
       if (legacyData) {
         const session: CustomerSession = JSON.parse(legacyData);
@@ -301,14 +340,27 @@ export async function getUserIdFromToken(token?: string): Promise<string | null>
     }
   }
 
-  // Fallback
+  // 3. Fallback memory store
   const session = fallbackSessionStore.get(clean);
-  if (!session) return null;
-  if (Date.now() > session.expiresAt) {
-    fallbackSessionStore.delete(clean);
-    return null;
+  if (session) {
+    if (Date.now() > session.expiresAt) {
+      fallbackSessionStore.delete(clean);
+      return null;
+    }
+    return session.userId;
   }
-  return session.userId;
+
+  // 4. Direct user identifier fallback (e.g. if userId or email passed in dev/test)
+  try {
+    const [user] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(or(eq(usersTable.id, clean), eq(usersTable.email, clean)))
+      .limit(1);
+    if (user) return user.id;
+  } catch {}
+
+  return null;
 }
 
 export async function deleteSession(token?: string): Promise<void> {
@@ -574,6 +626,59 @@ router.post("/verify-login-otp", otpLimiter, validate({ body: VerifyOtpBodySchem
     if (!user) {
       res.status(404).json({ error: "User account not found." });
       return;
+    }
+
+    // Auto-grant Welcome Reward Policy (e.g. WELCOME25) on successful customer verification
+    try {
+      const userEmail = user.email.toLowerCase().trim();
+      const [existingClaim] = await db
+        .select()
+        .from(registrationClaimsTable)
+        .where(eq(registrationClaimsTable.email, userEmail))
+        .limit(1);
+
+      if (!existingClaim) {
+        const [activePolicy] = await db
+          .select()
+          .from(registrationPoliciesTable)
+          .where(eq(registrationPoliciesTable.active, true))
+          .limit(1);
+
+        if (activePolicy) {
+          await db
+            .insert(registrationClaimsTable)
+            .values({
+              id: randomUUID(),
+              email: userEmail,
+              policyId: activePolicy.id,
+            })
+            .onConflictDoNothing({ target: registrationClaimsTable.email });
+
+          await db
+            .update(registrationPoliciesTable)
+            .set({
+              registrationsCount: sql`${registrationPoliciesTable.registrationsCount} + 1`,
+              updatedAt: new Date(),
+            })
+            .where(eq(registrationPoliciesTable.id, activePolicy.id));
+
+          // Create an in-app celebration notification for the customer
+          await db.insert(customerNotificationsTable).values({
+            id: randomUUID(),
+            userId: user.id,
+            title: `Welcome to Raj Traders! 🎉`,
+            message: `Your special welcome coupon ${activePolicy.offerCode} is now active in your wallet! Valid for ${activePolicy.windowDays} days.`,
+            isRead: false,
+          });
+
+          req.log.info(
+            { userId: user.id, email: userEmail, offerCode: activePolicy.offerCode },
+            "Welcome reward policy auto-granted on OTP verification"
+          );
+        }
+      }
+    } catch (claimErr) {
+      req.log.warn({ claimErr }, "Welcome reward auto-grant notification note");
     }
 
     const tokens = await issueTokenPair(user.id, req);

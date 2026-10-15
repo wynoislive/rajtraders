@@ -25,7 +25,7 @@ export function computeDiscount(
   const valid = Boolean(
     discount &&
       discount.active &&
-      discount.startsAt.getTime() <= now &&
+      discount.startsAt.getTime() <= now + 120000 &&
       (!discount.expiresAt || discount.expiresAt.getTime() >= now) &&
       (discount.usageLimit === null || discount.usageCount < discount.usageLimit) &&
       subtotalCents >= discount.minimumSubtotalCents &&

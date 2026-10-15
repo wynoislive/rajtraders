@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, ilike, lt, sql } from "drizzle-orm";
-import { db, discountsTable, ordersTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable, customerNotificationsTable } from "@workspace/db";
+import { db, discountsTable, ordersTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable, customerNotificationsTable, usersTable } from "@workspace/db";
 import { seedStoreData } from "../lib/seed";
 import {
   CreateDiscountBody,
@@ -533,28 +533,64 @@ router.delete("/v1/admin/discounts/:discountId", requirePermission("discounts"),
 
 router.get("/v1/admin/registrations", requirePermission("registrations"), async (_req, res): Promise<void> => {
   try {
-    const [policies, claims] = await Promise.all([
+    const [policies, claims, allUsers, allDiscounts] = await Promise.all([
       db.select().from(registrationPoliciesTable),
       db.select().from(registrationClaimsTable).orderBy(desc(registrationClaimsTable.createdAt)),
+      db.select({ id: usersTable.id, email: usersTable.email, mobileNumber: usersTable.mobileNumber, firstName: usersTable.firstName }).from(usersTable),
+      db.select().from(discountsTable),
     ]);
-    res.json({
-      policies: ListRegistrationPoliciesResponse.parse(policies.map(policyResponse)),
-      claims: claims.map((claim: any) => ({
-        ...claim,
+
+    const enrichedPolicies = policies.map((p) => {
+      const discount = allDiscounts.find((d) => d.code.toUpperCase() === p.offerCode.toUpperCase());
+      let syncedDescription = p.description;
+      if (discount) {
+        const valText = discount.type === "percentage" ? `${discount.value}% off` : `₹${Math.round(discount.value / 100)} off`;
+        // Auto-sync dynamic description if it still has old 10% placeholder or doesn't match the active discount
+        if (!syncedDescription || syncedDescription.includes("10%") || !syncedDescription.includes(valText)) {
+          syncedDescription = `Give first-time celebration shoppers ${valText} their first cake or decor purchase.`;
+        }
+      }
+      return {
+        ...p,
+        description: syncedDescription,
+      };
+    });
+
+    const enrichedClaims = claims.map((claim: any) => {
+      const user = allUsers.find((u) => u.email.toLowerCase() === claim.email.toLowerCase());
+      const policy = policies.find((p) => p.id === claim.policyId);
+      const windowDays = policy?.windowDays || 14;
+      const createdAtDate = claim.createdAt ? new Date(claim.createdAt) : new Date();
+      const expiresAtDate = new Date(createdAtDate.getTime() + windowDays * 86400000);
+      const isExpired = Date.now() > expiresAtDate.getTime();
+      return {
+        id: claim.id,
+        email: claim.email,
+        policyId: claim.policyId,
+        customerEmail: claim.email,
+        customerMobile: user?.mobileNumber || user?.firstName || claim.email,
+        userId: user?.id || claim.id,
+        offerCode: policy?.offerCode || "WELCOME25",
         createdAt: iso(claim.createdAt) as string,
-        expiresAt: iso(claim.expiresAt) as string,
-      })),
+        expiresAt: iso(expiresAtDate) as string,
+        status: isExpired ? "expired" : "active",
+      };
+    });
+
+    res.json({
+      policies: ListRegistrationPoliciesResponse.parse(enrichedPolicies.map(policyResponse)),
+      claims: enrichedClaims,
     });
   } catch (err) {
     res.json({
       policies: [
         {
           id: "policy_default",
-          name: "New Customer 10% Welcome",
-          description: "Default welcome offer for all verified customers",
-          offerCode: "WELCOME10",
+          name: "First Order Welcome Offer",
+          description: "Give first-time celebration shoppers 25% off their first cake or decor purchase.",
+          offerCode: "WELCOME25",
           active: true,
-          windowDays: 30,
+          windowDays: 14,
           registrationsCount: 0,
         },
       ],
@@ -577,9 +613,29 @@ router.patch("/v1/admin/registrations", requirePermission("registrations"), asyn
       res.status(404).json({ error: "Registration policy not found." });
       return;
     }
+
+    let customDescription = typeof req.body.description === "string" && req.body.description.trim() ? req.body.description.trim() : undefined;
+    const targetCode = (parsed.data.offerCode || policy.offerCode).trim().toUpperCase();
+
+    if (!customDescription) {
+      const [matchedDiscount] = await db.select().from(discountsTable).where(eq(discountsTable.code, targetCode)).limit(1);
+      if (matchedDiscount) {
+        const valText = matchedDiscount.type === "percentage" ? `${matchedDiscount.value}% off` : `₹${Math.round(matchedDiscount.value / 100)} off`;
+        customDescription = `Give first-time celebration shoppers ${valText} their first cake or decor purchase.`;
+      }
+    }
+
+    const updatePayload: Record<string, any> = {
+      ...parsed.data,
+      updatedAt: new Date(),
+    };
+    if (customDescription) {
+      updatePayload.description = customDescription;
+    }
+
     const [updated] = await db
       .update(registrationPoliciesTable)
-      .set({ ...parsed.data, updatedAt: new Date() })
+      .set(updatePayload)
       .where(eq(registrationPoliciesTable.id, policy.id))
       .returning();
     res.json(UpdateRegistrationPolicyResponse.parse(policyResponse(updated)));
@@ -587,11 +643,11 @@ router.patch("/v1/admin/registrations", requirePermission("registrations"), asyn
     res.json({
       id: policy?.id || "policy_1",
       name: policy?.name || "Welcome offer",
-      description: policy?.description || "First order offer",
-      offerCode: parsed.data.offerCode || policy?.offerCode || "WELCOME10",
+      description: policy?.description || "Give first-time celebration shoppers 25% off their first cake or decor purchase.",
+      offerCode: parsed.data.offerCode || policy?.offerCode || "WELCOME25",
       active: parsed.data.active ?? policy?.active ?? true,
       windowDays: parsed.data.windowDays ?? policy?.windowDays ?? 14,
-      registrationsCount: policy?.registrationsCount || 0
+      registrationsCount: policy?.registrationsCount || 0,
     });
   }
 });

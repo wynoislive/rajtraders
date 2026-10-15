@@ -3998,7 +3998,7 @@ function Registrations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<any | null>(null);
-  const [policyForm, setPolicyForm] = useState({ name: '', offerCode: '', windowDays: 30, active: true });
+  const [policyForm, setPolicyForm] = useState({ name: '', offerCode: '', windowDays: 14, active: true, description: '' });
   const [notice, setNotice] = useState<string | null>(null);
 
   const fetchRegistrationsData = async () => {
@@ -4054,8 +4054,9 @@ function Registrations() {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           offerCode: policyForm.offerCode.trim().toUpperCase(),
-          windowDays: Number(policyForm.windowDays) || 30,
+          windowDays: Number(policyForm.windowDays) || 14,
           active: policyForm.active,
+          description: policyForm.description.trim() || undefined,
         }),
       });
       if (res.ok) {
@@ -4129,8 +4130,9 @@ function Registrations() {
                       setPolicyForm({
                         name: p.name,
                         offerCode: p.offerCode,
-                        windowDays: p.windowDays || 30,
+                        windowDays: p.windowDays || 14,
                         active: p.active !== false,
+                        description: p.description || '',
                       });
                     }}
                   >
@@ -4178,7 +4180,7 @@ function Registrations() {
               claims.map((claim) => (
                 <div key={claim.id} className="grid grid-cols-1 md:grid-cols-[minmax(160px,1.5fr)_1fr_1fr_1fr_100px] gap-2 md:gap-4 items-center px-5 py-3.5 text-xs">
                   <div>
-                    <p className="font-bold text-[hsl(var(--foreground))]">{claim.customerMobile || claim.userId || 'Verified Customer'}</p>
+                    <p className="font-bold text-[hsl(var(--foreground))]">{claim.customerMobile || claim.customerEmail || claim.userId || 'Verified Customer'}</p>
                     <p className="text-[10px] font-mono text-[hsl(var(--muted-foreground))]">ID: {claim.userId ? claim.userId.slice(0, 12) : claim.id.slice(0, 8)}</p>
                   </div>
                   <div>
@@ -4190,7 +4192,7 @@ function Registrations() {
                     {claim.createdAt ? new Date(claim.createdAt).toLocaleDateString() : 'N/A'}
                   </div>
                   <div className="text-[hsl(var(--muted-foreground))] font-mono">
-                    {claim.expiresAt ? new Date(claim.expiresAt).toLocaleDateString() : '30 Days'}
+                    {claim.expiresAt ? new Date(claim.expiresAt).toLocaleDateString() : '14 Days'}
                   </div>
                   <div>
                     <StatusPill tone={claim.status === 'redeemed' ? 'teal' : (claim.status === 'expired' ? 'coral' : 'green')}>
@@ -4215,8 +4217,22 @@ function Registrations() {
                 required
                 value={policyForm.offerCode}
                 onChange={(e) => setPolicyForm({ ...policyForm, offerCode: e.target.value.toUpperCase() })}
-                placeholder="WELCOME10"
+                placeholder="WELCOME25"
                 className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-mono font-bold uppercase outline-none focus:border-[hsl(var(--primary))]"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-extrabold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">Offer Description</label>
+                <span className="text-[10px] text-[hsl(var(--muted-foreground))]">Leave blank to auto-sync with /discounts</span>
+              </div>
+              <input
+                type="text"
+                value={policyForm.description}
+                onChange={(e) => setPolicyForm({ ...policyForm, description: e.target.value })}
+                placeholder="Give first-time celebration shoppers 25% off their first purchase."
+                className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-medium outline-none focus:border-[hsl(var(--primary))]"
               />
             </div>
 
@@ -4228,7 +4244,7 @@ function Registrations() {
                 max="365"
                 required
                 value={policyForm.windowDays}
-                onChange={(e) => setPolicyForm({ ...policyForm, windowDays: Number(e.target.value) || 30 })}
+                onChange={(e) => setPolicyForm({ ...policyForm, windowDays: Number(e.target.value) || 14 })}
                 className="mt-1.5 h-10 w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-bold outline-none focus:border-[hsl(var(--primary))]"
               />
             </div>

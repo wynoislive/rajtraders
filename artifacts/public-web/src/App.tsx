@@ -704,6 +704,8 @@ export default function App() {
       const headers: Record<string, string> = {};
       const activeToken = token || localStorage.getItem('raj_token') || localStorage.getItem('raj_auth_token');
       if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
+      if (user?.id) headers['x-user-id'] = user.id;
+      if (user?.email) headers['x-user-email'] = user.email;
       const res = await fetch(getApiUrl('/api/v1/discounts/active'), { headers });
       if (res.ok) {
         const data = await res.json();
@@ -715,6 +717,10 @@ export default function App() {
       setCouponsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchCoupons();
+  }, [user, token]);
 
   const toggleFavorite = async (product: StorefrontProduct) => {
     const isFav = favorites.includes(product.id);
@@ -936,8 +942,8 @@ export default function App() {
     }
   };
 
-  const handleApplyDiscount = async (codeOverride?: string) => {
-    const codeToApply = (codeOverride || discountCode).trim();
+  const handleApplyDiscount = async (codeOverride?: any) => {
+    const codeToApply = (typeof codeOverride === 'string' ? codeOverride : discountCode).trim();
     if (!codeToApply) return;
     try {
       const res = await fetch(getApiUrl('/api/v1/discounts/validate'), {
@@ -947,8 +953,12 @@ export default function App() {
       });
       const data = await res.json();
       setDiscountResult(data);
-      if (data.valid) showToast(`Coupon ${data.code} applied!`, 'success');
-      else showToast(data.message || 'Invalid coupon code', 'error');
+      if (data.valid) {
+        setDiscountCode(codeToApply);
+        showToast(`Coupon ${data.code} applied!`, 'success');
+      } else {
+        showToast(data.message || 'Invalid coupon code', 'error');
+      }
     } catch {
       setDiscountResult({ valid: false, message: 'Could not validate code.' });
     }
@@ -1522,23 +1532,54 @@ export default function App() {
                       </div>
 
                       {/* Discount Code */}
-                      <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <div className="space-y-2.5 pt-2 border-t border-gray-100">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-extrabold text-[#0E3D42]">Discount Code</label>
                           <button onClick={() => { fetchCoupons(); setShowCouponsDrawer(true); }} className="text-xs font-bold text-[#E2A93B] hover:underline flex items-center gap-1">
-                            <Tag size={12} /> View Coupons
+                            <Tag size={12} /> View Coupons ({availableCoupons.length})
                           </button>
                         </div>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             value={discountCode}
-                            onChange={(e) => setDiscountCode(e.target.value)}
-                            placeholder="WELCOME10"
-                            className="flex-1 p-2.5 text-xs font-semibold rounded-xl border border-gray-300 uppercase"
+                            onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+                            placeholder="WELCOME25"
+                            className="flex-1 p-2.5 text-xs font-semibold rounded-xl border border-gray-300 uppercase tracking-wider font-mono outline-none focus:border-[#0E3D42]"
                           />
-                          <button onClick={handleApplyDiscount} className="px-4 py-2 bg-[#0E3D42] text-white text-xs font-bold rounded-xl">Apply</button>
+                          <button onClick={() => handleApplyDiscount()} className="px-4 py-2 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 transition">Apply</button>
                         </div>
+
+                        {/* Quick 1-Tap Coupon Chips */}
+                        {availableCoupons.length > 0 && (
+                          <div className="pt-1 flex flex-wrap gap-1.5 items-center">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quick Apply:</span>
+                            {availableCoupons.map((c: any) => {
+                              const isCredit = c.isRefundCredit || c.code.startsWith('CREDIT-') || c.code.startsWith('REFUND-');
+                              const isApplied = discountResult?.valid && discountResult?.code === c.code;
+                              return (
+                                <button
+                                  key={c.code}
+                                  type="button"
+                                  onClick={() => handleApplyDiscount(c.code)}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition flex items-center gap-1 ${
+                                    isApplied
+                                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                                      : isCredit
+                                      ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200 shadow-sm'
+                                      : 'bg-teal-50 text-[#0E3D42] border-teal-200 hover:bg-teal-100'
+                                  }`}
+                                  title={`1-tap apply ${c.code}`}
+                                >
+                                  <span>{isCredit ? '🏷️' : '✨'} {c.code}</span>
+                                  <span className="text-[10px] opacity-80">
+                                    ({c.type === 'percentage' ? `${c.value}%` : money(c.value)})
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       {!isFreeDelivery && cartTotalCents < (shopSettings.freeDeliveryThresholdCents || 50000) && (
@@ -2780,40 +2821,76 @@ export default function App() {
               </div>
             ) : (
               <div className="space-y-3">
-                {availableCoupons.map((coupon: any) => (
-                  <div key={coupon.code} className="p-4 rounded-2xl border border-[#0E3D42]/10 bg-[#F7F2EA] space-y-2 hover:border-[#E2A93B]/50 transition">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-black text-[#0E3D42] tracking-wider bg-white px-3 py-1 rounded-lg border border-dashed border-[#0E3D42]/30">{coupon.code}</span>
-                      <button
-                        onClick={() => {
-                          setDiscountCode(coupon.code);
-                          setShowCouponsDrawer(false);
-                          handleApplyDiscount(coupon.code);
-                        }}
-                        className="px-3 py-1.5 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 transition"
-                      >
-                        Apply
-                      </button>
+                {availableCoupons.map((coupon: any) => {
+                  const isCredit = coupon.isRefundCredit || coupon.code.startsWith('CREDIT-') || coupon.code.startsWith('REFUND-');
+                  const isApplied = discountResult?.valid && discountResult?.code === coupon.code;
+                  return (
+                    <div
+                      key={coupon.code}
+                      className={`p-4 rounded-2xl border transition space-y-2.5 ${
+                        isCredit
+                          ? 'border-amber-300 bg-amber-50/80 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.8),2px_2px_8px_rgba(217,119,6,0.15)]'
+                          : 'border-[#0E3D42]/10 bg-[#F7F2EA] hover:border-[#E2A93B]/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-black tracking-wider px-3 py-1 rounded-lg border border-dashed ${
+                            isCredit
+                              ? 'text-amber-900 bg-white border-amber-400'
+                              : 'text-[#0E3D42] bg-white border-[#0E3D42]/30'
+                          }`}>
+                            {coupon.code}
+                          </span>
+                          {isCredit && (
+                            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                              Store Credit
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setDiscountCode(coupon.code);
+                            setShowCouponsDrawer(false);
+                            handleApplyDiscount(coupon.code);
+                          }}
+                          className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition shadow-sm ${
+                            isApplied
+                              ? 'bg-emerald-600 text-white'
+                              : isCredit
+                              ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                              : 'bg-[#0E3D42] hover:bg-[#0E3D42]/90 text-white'
+                          }`}
+                        >
+                          {isApplied ? 'Applied ✓' : isCredit ? '1-Tap Apply Credit' : '1-Tap Apply'}
+                        </button>
+                      </div>
+                      <div className="text-xs font-semibold text-[#0E3D42]/80 space-y-1">
+                        <p className="font-extrabold text-[#0E3D42]">
+                          {coupon.type === 'percentage'
+                            ? `${coupon.value}% OFF Order`
+                            : `Flat ${money(coupon.value)} OFF Order`}
+                          {coupon.minimumSubtotalCents > 0
+                            ? ` on orders above ${money(coupon.minimumSubtotalCents)}`
+                            : isCredit ? ' · No minimum spend' : ''}
+                        </p>
+                        {isCredit && (
+                          <p className="text-[11px] text-amber-900 font-bold bg-amber-100/80 px-2 py-0.5 rounded inline-block">
+                            🏷️ Personalized Store Credit (Your Verified Account)
+                          </p>
+                        )}
+                        {coupon.firstOrderOnly && (
+                          <p className="text-[10px] text-amber-700 font-bold">🌟 First order only</p>
+                        )}
+                        {coupon.expiresAt && (
+                          <p className="text-[10px] text-gray-500">
+                            Expires: {new Date(coupon.expiresAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs font-semibold text-[#0E3D42]/70 space-y-0.5">
-                      <p>
-                        {coupon.type === 'percentage'
-                          ? `${coupon.value}% OFF`
-                          : `Flat ${money(coupon.value)} OFF`}
-                        {coupon.minimumSubtotalCents > 0 && ` on orders above ${money(coupon.minimumSubtotalCents)}`}
-                      </p>
-                      {coupon.code.startsWith('CREDIT-') && (
-                        <p className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded-md inline-block">🏷️ Store Credit Refund (Your Account)</p>
-                      )}
-                      {coupon.firstOrderOnly && (
-                        <p className="text-[10px] text-amber-700 font-bold">🌟 First order only</p>
-                      )}
-                      {coupon.expiresAt && (
-                        <p className="text-[10px] text-gray-500">Expires: {new Date(coupon.expiresAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -2251,9 +2251,10 @@ private fun CartScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = code,
-                        onValueChange = { code = it },
+                        onValueChange = { code = it.uppercase() },
                         modifier = Modifier.weight(1f),
                         label = { Text("Coupon or Refund code") },
+                        placeholder = { Text("WELCOME25") },
                         singleLine = true,
                         enabled = !state.isCheckingOut
                     )
@@ -2270,6 +2271,49 @@ private fun CartScreen(
                 state.discount?.let { result ->
                     if (!result.valid) {
                         Text(result.message, modifier = Modifier.padding(top = 4.dp), color = Color(0xFFB84A3D), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                if (state.availableCoupons.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Quick 1-Tap Apply:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        state.availableCoupons.forEach { coupon ->
+                            val isRefund = coupon.isRefundCredit || coupon.code.startsWith("CREDIT-") || coupon.code.startsWith("REFUND-")
+                            val offerLabel = if (coupon.type == "percentage") "${coupon.value.toInt()}% OFF" else if (coupon.value >= 100.0) money(coupon.value.toInt()) else "₹${coupon.value.toInt()}"
+                            val chipBg = if (isRefund) Color(0xFFFEF3C7) else Color(0xFFE6FFFA)
+                            val chipBorder = if (isRefund) Color(0xFFF59E0B) else RajTeal
+                            val chipText = if (isRefund) Color(0xFF92400E) else RajTeal
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = chipBg,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, chipBorder.copy(alpha = 0.5f)),
+                                modifier = Modifier.clickable {
+                                    code = coupon.code
+                                    viewModel.validateDiscount(coupon.code, state.orders.isEmpty())
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(if (isRefund) "🏷️" else "✨", style = MaterialTheme.typography.labelSmall)
+                                    Text(coupon.code, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, color = chipText)
+                                    Text("($offerLabel)", style = MaterialTheme.typography.labelSmall, color = chipText.copy(alpha = 0.8f))
+                                }
+                            }
+                        }
                     }
                 }
             }

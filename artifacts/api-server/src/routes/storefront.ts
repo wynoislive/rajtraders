@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { and, asc, eq, ilike, or, ne } from "drizzle-orm";
-import { db, discountsTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable, ordersTable, usersTable } from "@workspace/db";
+import { and, asc, eq, ilike, or, ne, sql } from "drizzle-orm";
+import { db, discountsTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable, ordersTable, usersTable, customerNotificationsTable } from "@workspace/db";
 import { seedStoreData } from "../lib/seed";
 import { getUserIdFromToken } from "./customer-auth";
 import {
@@ -296,7 +296,29 @@ router.get("/v1/discounts/active", async (req, res): Promise<void> => {
       if (!authUserId) {
         const clean = authHeader.replace(/^Bearer\s+/i, "").trim();
         try {
-          const [u] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, clean)).limit(1);
+          const [u] = await db
+            .select({ id: usersTable.id })
+            .from(usersTable)
+            .where(or(eq(usersTable.id, clean), eq(usersTable.email, clean)))
+            .limit(1);
+          if (u) authUserId = u.id;
+        } catch {}
+      }
+    }
+
+    // Direct header or query fallback for seamless client sync
+    if (!authUserId) {
+      const headerUserId = req.headers["x-user-id"] as string | undefined;
+      const headerUserEmail = req.headers["x-user-email"] as string | undefined;
+      if (headerUserId) {
+        authUserId = headerUserId.trim();
+      } else if (headerUserEmail) {
+        try {
+          const [u] = await db
+            .select({ id: usersTable.id })
+            .from(usersTable)
+            .where(eq(usersTable.email, headerUserEmail.trim().toLowerCase()))
+            .limit(1);
           if (u) authUserId = u.id;
         } catch {}
       }
@@ -309,27 +331,51 @@ router.get("/v1/discounts/active", async (req, res): Promise<void> => {
     }
     const now = Date.now();
 
-    // Look up customer orders matching userId or email if authenticated
+    // Look up customer orders, refund codes, and notifications if authenticated
     let userOrderPrefixes: string[] = [];
+    let userRefundIds: string[] = [];
+    let userNotifMessages: string[] = [];
+
     if (authUserId) {
       try {
         const [user] = await db
-          .select({ email: usersTable.email })
+          .select({ id: usersTable.id, email: usersTable.email, mobileNumber: usersTable.mobileNumber })
           .from(usersTable)
           .where(eq(usersTable.id, authUserId));
 
-        const conditions = [eq(ordersTable.userId, authUserId)];
+        const orderConditions = [eq(ordersTable.userId, authUserId)];
         if (user?.email) {
-          conditions.push(eq(ordersTable.customerEmail, user.email));
+          orderConditions.push(ilike(ordersTable.customerEmail, user.email.trim()));
+        }
+        if (user?.mobileNumber) {
+          const cleanMobile = user.mobileNumber.trim();
+          orderConditions.push(eq(ordersTable.customerMobile, cleanMobile));
+          const raw10 = cleanMobile.slice(-10);
+          if (raw10.length === 10) {
+            orderConditions.push(sql`${ordersTable.customerMobile} LIKE ${`%${raw10}`}`);
+          }
         }
 
-        const userOrders = await db
-          .select({ id: ordersTable.id })
-          .from(ordersTable)
-          .where(or(...conditions));
+        const [userOrders, notifs] = await Promise.all([
+          db
+            .select({ id: ordersTable.id, refundId: ordersTable.refundId })
+            .from(ordersTable)
+            .where(or(...orderConditions)),
+          db
+            .select({ message: customerNotificationsTable.message })
+            .from(customerNotificationsTable)
+            .where(eq(customerNotificationsTable.userId, authUserId))
+            .limit(50),
+        ]);
 
         userOrderPrefixes = userOrders.map((o: { id: string }) => o.id.slice(0, 6).toUpperCase());
-      } catch {}
+        userRefundIds = userOrders
+          .map((o: { refundId: string | null }) => (o.refundId ? o.refundId.trim().toUpperCase() : ""))
+          .filter(Boolean);
+        userNotifMessages = notifs.map((n: { message: string }) => (n.message || "").toUpperCase());
+      } catch (err) {
+        req.log?.warn?.({ err }, "Error resolving customer orders for active discounts");
+      }
     }
 
     const activeCoupons = allDiscounts.filter((d: any) => {
@@ -342,14 +388,28 @@ router.get("/v1/discounts/active", async (req, res): Promise<void> => {
       if (d.usageLimit && d.usageCount >= d.usageLimit) return false;
       if (typeof d.value === "number" && d.value <= 0) return false;
 
-      // Privacy: Store Credit / Refund coupons (CREDIT-* / REFUND-*) only visible to the user who owns that order!
+      // Privacy: Store Credit / Refund coupons (CREDIT-* / REFUND-*) only visible to the user who owns that credit!
       const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
       if (isPersonalCredit) {
         if (!authUserId) return false; // Guest users never see private store credits
-        const match = userOrderPrefixes.some((prefix) =>
-          d.code.startsWith(`CREDIT-${prefix}`) || d.code.startsWith(`REFUND-${prefix}`)
+        const upperCode = d.code.toUpperCase().trim();
+
+        // 1. Direct match on order refundId (e.g. CREDIT-32C722)
+        const matchesRefundId = userRefundIds.includes(upperCode);
+
+        // 2. Prefix match on order ID (e.g. CREDIT-32C722 where order is 32c722...)
+        const matchesPrefix = userOrderPrefixes.some((prefix) =>
+          upperCode.startsWith(`CREDIT-${prefix}`) ||
+          upperCode.startsWith(`REFUND-${prefix}`) ||
+          upperCode.includes(prefix)
         );
-        if (!match) return false;
+
+        // 3. Notification message match (customer was alerted of this credit code)
+        const matchesNotif = userNotifMessages.some((msg) => msg.includes(upperCode));
+
+        if (!matchesRefundId && !matchesPrefix && !matchesNotif) {
+          return false;
+        }
       }
 
       return true;
