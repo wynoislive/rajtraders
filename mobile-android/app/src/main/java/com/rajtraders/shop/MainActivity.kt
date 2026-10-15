@@ -55,6 +55,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -69,8 +70,11 @@ import com.rajtraders.shop.data.CustomerAddress
 import com.rajtraders.shop.data.CustomerCoupon
 import com.rajtraders.shop.data.NotificationItem
 import com.rajtraders.shop.ui.MobileNumberField
+import com.rajtraders.shop.ui.NeumorphicIconTile
+import com.rajtraders.shop.ui.NeumorphicContactPill
 import com.rajtraders.shop.util.PhoneUtils
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -337,10 +341,70 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
                     }
                 }
                 NavigationBar(containerColor = Color.White) {
-                    NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Outlined.Verified, null) }, label = { Text("Shop") })
-                    NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Outlined.ShoppingBag, null) }, label = { Text("Bag") })
-                    NavigationBarItem(selected = selectedTab == 2, onClick = { selectedTab = 2; viewModel.fetchOrders() }, icon = { Icon(Icons.Outlined.CheckCircle, null) }, label = { Text("Orders") })
-                    NavigationBarItem(selected = selectedTab == 3, onClick = { selectedTab = 3; viewModel.fetchCoupons() }, icon = { Icon(Icons.Outlined.Person, null) }, label = { Text("Account") })
+                    NavigationBarItem(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        icon = {
+                            NeumorphicIconTile(
+                                icon = Icons.Outlined.Verified,
+                                contentDescription = "Shop",
+                                isSelected = selectedTab == 0,
+                                size = 34.dp,
+                                iconSize = 18.dp,
+                                shapeRadius = 10.dp
+                            )
+                        },
+                        label = { Text("Shop", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium) },
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        icon = {
+                            NeumorphicIconTile(
+                                icon = Icons.Outlined.ShoppingBag,
+                                contentDescription = "Bag",
+                                isSelected = selectedTab == 1,
+                                size = 34.dp,
+                                iconSize = 18.dp,
+                                shapeRadius = 10.dp
+                            )
+                        },
+                        label = { Text("Bag", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Medium) },
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2; viewModel.fetchOrders() },
+                        icon = {
+                            NeumorphicIconTile(
+                                icon = Icons.Outlined.CheckCircle,
+                                contentDescription = "Orders",
+                                isSelected = selectedTab == 2,
+                                size = 34.dp,
+                                iconSize = 18.dp,
+                                shapeRadius = 10.dp
+                            )
+                        },
+                        label = { Text("Orders", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Medium) },
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 3,
+                        onClick = { selectedTab = 3; viewModel.fetchCoupons() },
+                        icon = {
+                            NeumorphicIconTile(
+                                icon = Icons.Outlined.Person,
+                                contentDescription = "Account",
+                                isSelected = selectedTab == 3,
+                                size = 34.dp,
+                                iconSize = 18.dp,
+                                shapeRadius = 10.dp
+                            )
+                        },
+                        label = { Text("Account", fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Medium) },
+                        colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
+                    )
                 }
             }
         },
@@ -1149,16 +1213,34 @@ private fun AccountScreen(state: StorefrontUiState, padding: PaddingValues, view
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(20.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(shape = RoundedCornerShape(24.dp), color = RajTeal, modifier = Modifier.size(48.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = RajTeal,
+                            shadowElevation = 4.dp,
+                            modifier = Modifier.size(54.dp)
+                        ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text("${user.firstName.first()}${user.lastName.first()}", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "${user.firstName.first()}${user.lastName.first()}",
+                                    color = RajSaffron,
+                                    fontWeight = FontWeight.Black,
+                                    style = MaterialTheme.typography.titleLarge
+                                )
                             }
                         }
                         Spacer(Modifier.width(14.dp))
                         Column {
                             Text("${user.firstName} ${user.lastName}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            Text(user.email, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            Text(PhoneUtils.formatDisplayMobile(user.mobileNumber), style = MaterialTheme.typography.labelSmall, color = Color.DarkGray, fontWeight = FontWeight.Medium)
+                            Spacer(Modifier.height(6.dp))
+                            NeumorphicContactPill(
+                                icon = Icons.Outlined.Call,
+                                label = PhoneUtils.formatDisplayMobile(user.mobileNumber)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            NeumorphicContactPill(
+                                icon = Icons.Outlined.Email,
+                                label = user.email
+                            )
                         }
                     }
 

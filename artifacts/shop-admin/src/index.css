@@ -446,3 +446,28 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 @keyframes fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* ─── Neumorphic Tactile Icon & Surface System ─── */
+.neumorph-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: linear-gradient(145deg, hsl(var(--card)), hsl(var(--muted)/.6));
+  box-shadow: -2px -2px 5px rgba(255, 255, 255, 0.7), 2px 2px 6px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.neumorph-icon-tile-active {
+  background: linear-gradient(145deg, hsl(var(--sidebar-primary)/.9), hsl(var(--sidebar-primary)));
+  box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.3), inset -1px -1px 3px rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(200, 138, 44, 0.5);
+  color: #FFFFFF;
+}
+
+.dark .neumorph-icon-tile {
+  background: linear-gradient(145deg, hsl(var(--muted)/.4), hsl(var(--muted)/.2));
+  box-shadow: -1px -1px 4px rgba(255, 255, 255, 0.05), 2px 2px 6px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}

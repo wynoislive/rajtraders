@@ -53,6 +53,7 @@ import {
   ExternalLink,
   MessageCircle,
   Mail,
+  Clipboard,
 } from 'lucide-react';
 
 export type StorefrontProduct = Product & {
@@ -1372,11 +1373,11 @@ export default function App() {
                   }
                 }}
                 aria-label="View notifications"
-                className="relative p-2.5 rounded-xl bg-[#0E3D42]/5 hover:bg-[#0E3D42]/10 transition text-[#0E3D42]"
+                className="relative size-10 rounded-xl neumorph-icon-tile hover:scale-105 active:scale-95 transition text-[#0E3D42]"
               >
-                <Bell size={18} />
+                <Bell size={18} strokeWidth={2.2} />
                 {unreadNotificationsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-black size-4 rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-black size-4 rounded-full flex items-center justify-center shadow-sm">
                     {unreadNotificationsCount}
                   </span>
                 )}
@@ -1402,10 +1403,10 @@ export default function App() {
                   fetchCoupons();
                   setShowCouponsDrawer(true);
                 }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[#0E3D42] text-xs font-black transition shadow-sm"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl neumorph-raised text-[#0E3D42] text-xs font-black transition hover:scale-105 active:scale-95"
                 title="View Available Coupons & Offers"
               >
-                <Tag size={15} className="text-amber-600" />
+                <Tag size={15} className="text-amber-600" strokeWidth={2.5} />
                 <span className="hidden sm:inline">Offers</span>
               </button>
 
@@ -1413,11 +1414,11 @@ export default function App() {
               <Link
                 href="/cart"
                 aria-label="View shopping bag"
-                className="relative p-2.5 rounded-xl bg-[#0E3D42] text-white hover:bg-[#0E3D42]/90 transition shadow-sm"
+                className="relative size-10 rounded-xl bg-gradient-to-br from-[#0E3D42] to-[#0A2F33] text-white flex items-center justify-center shadow-[inset_1px_1px_2px_rgba(255,255,255,0.25),3px_3px_8px_rgba(14,61,66,0.3)] hover:scale-105 active:scale-95 transition"
               >
-                <ShoppingBag size={18} />
+                <ShoppingBag size={18} strokeWidth={2.2} />
                 {cart.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-[#E2A93B] text-[#0E3D42] text-[10px] font-black size-5 rounded-full flex items-center justify-center shadow">
+                  <span className="absolute -top-1 -right-1 bg-[#E2A93B] text-[#0E3D42] text-[10px] font-black size-5 rounded-full flex items-center justify-center shadow-md">
                     {cart.reduce((a, b) => a + b.quantity, 0)}
                   </span>
                 )}
@@ -1972,14 +1973,24 @@ export default function App() {
             <div className="space-y-6">
               <div className="bg-white p-6 sm:p-8 rounded-3xl border border-[#0E3D42]/10 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
-                  <div className="size-16 rounded-full bg-[#0E3D42] text-[#E2A93B] font-black text-2xl flex items-center justify-center shadow-inner">
+                  <div className="size-16 rounded-2xl bg-gradient-to-br from-[#0E3D42] to-[#08282B] text-[#E2A93B] font-black text-2xl flex items-center justify-center shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3),4px_4px_12px_rgba(14,61,66,0.25)] border border-white/20">
                     {user?.firstName ? user.firstName[0].toUpperCase() : 'U'}
                   </div>
                   <div>
-                    <h1 className="text-2xl font-black text-[#0E3D42]">{user?.firstName} {user?.lastName}</h1>
-                    <div className="text-xs font-semibold text-gray-500 flex flex-wrap items-center gap-3 mt-1">
-                      <span>📱 {formatMobileDisplay(user?.mobileNumber)}</span>
-                      <span>✉️ {user?.email}</span>
+                    <h1 className="text-2xl font-black text-[#0E3D42] tracking-tight">{user?.firstName} {user?.lastName}</h1>
+                    <div className="flex flex-wrap items-center gap-2.5 mt-2">
+                      <div className="neumorph-contact-pill text-xs font-bold text-[#0E3D42]">
+                        <span className="neumorph-icon-tile size-6 rounded-lg text-[#0E3D42]">
+                          <Phone size={12} strokeWidth={2.5} />
+                        </span>
+                        <span>{formatMobileDisplay(user?.mobileNumber) || 'Add Mobile'}</span>
+                      </div>
+                      <div className="neumorph-contact-pill text-xs font-bold text-[#0E3D42]">
+                        <span className="neumorph-icon-tile size-6 rounded-lg text-[#0E3D42]">
+                          <Mail size={12} strokeWidth={2.5} />
+                        </span>
+                        <span>{user?.email}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2002,7 +2013,7 @@ export default function App() {
               {/* Sidebar + Content Grid */}
               <div className="grid md:grid-cols-4 gap-6">
                 {/* Sidebar Navigation */}
-                <div className="bg-white p-4 rounded-3xl border border-[#0E3D42]/10 shadow-sm space-y-1 h-fit">
+                <div className="bg-white/95 p-3.5 rounded-3xl border border-[#0E3D42]/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-2 h-fit backdrop-blur-sm">
                   {[
                     { id: 'orders', label: 'My Orders', icon: Package },
                     { id: 'addresses', label: 'Saved Addresses', icon: MapPin },
@@ -2016,10 +2027,22 @@ export default function App() {
                       <button
                         key={tab.id}
                         onClick={() => setActiveAccountTab(tab.id as any)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-extrabold transition ${isActive ? 'bg-[#0E3D42] text-white shadow' : 'text-[#0E3D42] hover:bg-gray-50'}`}
+                        className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition-all duration-200 cursor-pointer ${
+                          isActive
+                            ? 'neumorph-active-tab translate-x-1'
+                            : 'text-[#0E3D42] hover:bg-[#FAF8F5]'
+                        }`}
                       >
-                        <Icon size={16} />
-                        <span>{tab.label}</span>
+                        <span
+                          className={`size-8 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                            isActive
+                              ? 'neumorph-icon-tile-active'
+                              : 'neumorph-icon-tile text-[#0E3D42]'
+                          }`}
+                        >
+                          <Icon size={16} strokeWidth={isActive ? 2.5 : 2} />
+                        </span>
+                        <span className="tracking-tight">{tab.label}</span>
                       </button>
                     );
                   })}
@@ -2580,8 +2603,8 @@ export default function App() {
                               <span className="bg-amber-500 text-[#0E3D42] text-[10px] font-black px-2 py-0.5 rounded-full shadow">⭐ Bestseller</span>
                             )}
                           </div>
-                          <button onClick={() => toggleFavorite(product)} className="absolute top-3 right-3 p-2 rounded-full bg-white/80 text-red-600 hover:bg-white shadow">
-                            <Heart size={16} fill={favorites.includes(product.id) ? 'currentColor' : 'none'} />
+                          <button onClick={() => toggleFavorite(product)} className="absolute top-3 right-3 size-8 rounded-full neumorph-icon-tile text-red-600 hover:scale-110 active:scale-95 transition-transform" title="Add to Wishlist">
+                            <Heart size={16} strokeWidth={2.2} fill={favorites.includes(product.id) ? 'currentColor' : 'none'} />
                           </button>
                         </div>
                         <div className="p-5 space-y-2">
@@ -2981,9 +3004,9 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setOtpChannel('email')}
-                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${otpChannel === 'email' ? 'bg-white text-[#0E3D42] shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${otpChannel === 'email' ? 'bg-white text-[#0E3D42] shadow-sm font-black' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                      <span>✉️</span> Email
+                      <Mail size={14} strokeWidth={2.5} /> Email
                     </button>
                   </div>
                 </div>
@@ -3023,7 +3046,7 @@ export default function App() {
                       className="absolute right-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#0E3D42] text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1 border border-gray-200"
                       title="Paste verification code from clipboard"
                     >
-                      📋 Paste
+                      <Clipboard size={12} strokeWidth={2.5} /> Paste
                     </button>
                   )}
                 </div>
@@ -3035,7 +3058,7 @@ export default function App() {
                     disabled={resendCooldown > 0 || authLoading}
                     className={`font-extrabold transition-colors ${resendCooldown > 0 || authLoading ? 'text-gray-400 cursor-not-allowed' : 'text-[#0E3D42] hover:underline cursor-pointer'}`}
                   >
-                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : `Resend OTP via ${otpChannel === 'whatsapp' ? 'WhatsApp 💬' : 'Email ✉️'}`}
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : `Resend OTP via ${otpChannel === 'whatsapp' ? 'WhatsApp' : 'Email'}`}
                   </button>
                   <button
                     type="button"
@@ -3080,16 +3103,16 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setOtpChannel('email')}
-                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${otpChannel === 'email' ? 'bg-white text-[#0E3D42] shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                      className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${otpChannel === 'email' ? 'bg-white text-[#0E3D42] shadow-sm font-black' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                      <span>✉️</span> Email Inbox
+                      <Mail size={14} strokeWidth={2.5} /> Email Inbox
                     </button>
                   </div>
                 </div>
 
                 <input required type="email" name="email" defaultValue={pendingEmail} placeholder="Email Address" className="w-full p-3 text-sm font-semibold rounded-xl border border-gray-300" />
                 <button type="submit" disabled={authLoading} className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold rounded-xl shadow">
-                  {authLoading ? 'Sending Reset Link...' : `Send Reset Link via ${otpChannel === 'whatsapp' ? 'WhatsApp 💬' : 'Email ✉️'}`}
+                  {authLoading ? 'Sending Reset Link...' : `Send Reset Link via ${otpChannel === 'whatsapp' ? 'WhatsApp' : 'Email'}`}
                 </button>
                 <div className="flex justify-between text-xs font-bold text-[#0E3D42]/70 pt-1">
                   <button type="button" onClick={() => { setAuthMode('login'); setAuthError(null); }} className="underline text-[#0E3D42]">

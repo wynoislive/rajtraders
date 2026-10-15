@@ -414,12 +414,38 @@ function Shell({ children }: { children: ReactNode }) {
         </div>
         <div className="mt-8 px-3 font-mono text-[10px] font-medium uppercase tracking-[.18em] text-[hsl(var(--sidebar-foreground)/.45)]">Workspace</div>
         <nav className="mt-3 space-y-1" aria-label="Main navigation">
-          {accessibleNavItems.map(({ href, label, icon: Icon }) => (
-            <Link href={href} key={href} onClick={() => setMobileNav(false)} data-testid={`link-nav-${label.toLowerCase()}`} className={cx('group flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold transition-colors', location === href ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.64)] hover:bg-[hsl(var(--sidebar-accent)/.65)] hover:text-[hsl(var(--sidebar-foreground))]')}>
-              <span className="flex items-center gap-3"><Icon size={17} strokeWidth={location === href ? 2.4 : 1.8} /><span>{label}</span></span>
-              {location === href && <span className="size-1.5 rounded-full bg-[hsl(var(--sidebar-primary))]" />}
-            </Link>
-          ))}
+          {accessibleNavItems.map(({ href, label, icon: Icon }) => {
+            const isSelected = location === href;
+            return (
+              <Link
+                href={href}
+                key={href}
+                onClick={() => setMobileNav(false)}
+                data-testid={`link-nav-${label.toLowerCase()}`}
+                className={cx(
+                  'group flex items-center justify-between rounded-xl px-2.5 py-2 text-sm font-bold transition-all duration-200',
+                  isSelected
+                    ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))] shadow-sm translate-x-0.5'
+                    : 'text-[hsl(var(--sidebar-foreground)/.7)] hover:bg-[hsl(var(--sidebar-accent)/.5)] hover:text-[hsl(var(--sidebar-foreground))]'
+                )}
+              >
+                <span className="flex items-center gap-2.5">
+                  <span
+                    className={cx(
+                      'size-7 rounded-lg flex items-center justify-center transition-all duration-200',
+                      isSelected
+                        ? 'neumorph-icon-tile-active'
+                        : 'neumorph-icon-tile text-[hsl(var(--sidebar-foreground))]'
+                    )}
+                  >
+                    <Icon size={15} strokeWidth={isSelected ? 2.4 : 1.8} />
+                  </span>
+                  <span>{label}</span>
+                </span>
+                {isSelected && <span className="size-1.5 rounded-full bg-[hsl(var(--sidebar-primary))]" />}
+              </Link>
+            );
+          })}
         </nav>
         <div className="mt-auto">
           <div className="mb-4 rounded-2xl border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-accent)/.7)] p-4">
