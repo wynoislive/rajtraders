@@ -172,4 +172,27 @@ interface StorefrontApi {
     suspend fun markAllNotificationsRead(
         @Header("Authorization") token: String,
     ): GenericResponse
+
+    // ─── Customer Persistent Cart ────────────────────────────────
+    @GET("v1/customer/cart")
+    suspend fun getCustomerCart(
+        @Header("Authorization") token: String,
+    ): CustomerCartResponse
+
+    @PUT("v1/customer/cart")
+    suspend fun updateCustomerCart(
+        @Header("Authorization") token: String,
+        @Body body: UpdateCartRequest,
+    ): CustomerCartResponse
+
+    @POST("v1/customer/cart/merge")
+    suspend fun mergeCustomerCart(
+        @Header("Authorization") token: String,
+        @Body body: MergeCartRequest,
+    ): CustomerCartResponse
+
+    @DELETE("v1/customer/cart")
+    suspend fun clearCustomerCart(
+        @Header("Authorization") token: String,
+    ): GenericResponse
 }

@@ -1,7 +1,11 @@
 package com.rajtraders.shop
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rajtraders.shop.data.CartLine
+import com.rajtraders.shop.data.CartSessionStorage
+import com.rajtraders.shop.data.CustomerCartItem
 import com.rajtraders.shop.data.DeliveryValidationResponse
 import com.rajtraders.shop.data.DiscountValidation
 import com.rajtraders.shop.data.OrderHistoryItem
@@ -24,8 +28,6 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import com.rajtraders.shop.util.PhoneUtils
 
-data class CartLine(val product: Product, val quantity: Int)
-
 data class StorefrontUiState(
     val isLoading: Boolean = true,
     val isSyncing: Boolean = false,
@@ -34,6 +36,7 @@ data class StorefrontUiState(
     val summary: StorefrontSummary? = null,
     val shopName: String = "RAJ TRADERS",
     val cart: List<CartLine> = emptyList(),
+    val cartNotice: String? = null,
     val search: String = "",
     val selectedCategory: String? = null,
     val eligibility: RegistrationEligibility? = null,
@@ -139,7 +142,10 @@ data class StorefrontUiState(
     val showLegalDialog: Boolean = false,
 )
 
-class StorefrontViewModel(private val repository: StorefrontRepository) : ViewModel() {
+class StorefrontViewModel(
+    private val repository: StorefrontRepository,
+    private val storage: CartSessionStorage? = null,
+) : ViewModel() {
     private val _uiState = MutableStateFlow(StorefrontUiState())
     val uiState: StateFlow<StorefrontUiState> = _uiState.asStateFlow()
 
@@ -149,8 +155,42 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     private var searchJob: Job? = null
 
     init {
+        // 1. Immediately restore persistent session & cart on launch
+        storage?.let { s ->
+            val savedToken = s.getAuthToken()
+            val savedUser = s.getCurrentUser()
+            val savedCart = s.loadCart()
+            val savedPincode = s.getSelectedPincode()
+            val savedCity = s.getSelectedCity()
+            val savedReceiverName = s.getReceiverName()
+            val savedReceiverPhone = s.getReceiverPhone()
+            val savedShippingAddress = s.getShippingAddress()
+
+            _uiState.update {
+                it.copy(
+                    authToken = savedToken,
+                    currentUser = savedUser,
+                    cart = savedCart,
+                    selectedPincode = savedPincode,
+                    selectedCity = savedCity,
+                    receiverName = savedReceiverName,
+                    receiverPhone = savedReceiverPhone,
+                    shippingAddress = savedShippingAddress,
+                )
+            }
+        }
+
         refresh()
         fetchShopInfo()
+
+        // 2. If user was logged in, refresh account & sync backend cart
+        _uiState.value.authToken?.let { token ->
+            fetchOrders()
+            fetchCoupons()
+            fetchAddresses()
+            fetchNotifications()
+            syncCartFromBackend(token)
+        }
     }
 
     fun refresh() {
@@ -160,6 +200,30 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
             runCatching {
                 repository.products(_uiState.value.search, _uiState.value.selectedCategory) to repository.summary()
             }.onSuccess { (products, summary) ->
+                // Stock Reconciliation on fresh catalog load
+                val currentCart = _uiState.value.cart
+                var stockAdjusted = false
+                val reconciledCart = if (currentCart.isNotEmpty() && products.isNotEmpty()) {
+                    currentCart.mapNotNull { line ->
+                        val liveProd = products.firstOrNull { it.id == line.product.id }
+                        if (liveProd == null || liveProd.inventory <= 0) {
+                            stockAdjusted = true
+                            null // Remove out-of-stock items
+                        } else {
+                            val clampedQty = line.quantity.coerceAtMost(liveProd.inventory)
+                            if (clampedQty != line.quantity) stockAdjusted = true
+                            line.copy(product = liveProd, quantity = clampedQty)
+                        }
+                    }
+                } else {
+                    currentCart
+                }
+
+                if (stockAdjusted) {
+                    storage?.saveCart(reconciledCart)
+                    _uiState.value.authToken?.let { syncCartToBackend(reconciledCart) }
+                }
+
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -168,7 +232,9 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                         summary = summary,
                         shopName = summary.shopName,
                         currency = summary.currency,
-                        shopDomain = summary.shopDomain?.takeIf { d -> d.isNotBlank() } ?: it.shopDomain
+                        shopDomain = summary.shopDomain?.takeIf { d -> d.isNotBlank() } ?: it.shopDomain,
+                        cart = reconciledCart,
+                        cartNotice = if (stockAdjusted) "Your cart was updated to reflect current stock." else it.cartNotice,
                     )
                 }
             }.onFailure { error ->
@@ -198,25 +264,152 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     }
 
     fun addToCart(product: Product) {
+        if (product.inventory <= 0) {
+            _uiState.update { it.copy(cartNotice = "${product.name} is currently out of stock.") }
+            return
+        }
+        var reachedLimit = false
         _uiState.update { state ->
             val existing = state.cart.firstOrNull { it.product.id == product.id }
             val next = if (existing == null) {
                 state.cart + CartLine(product, 1)
             } else {
-                state.cart.map { line ->
-                    if (line.product.id == product.id) line.copy(quantity = line.quantity + 1) else line
+                if (existing.quantity >= product.inventory) {
+                    reachedLimit = true
+                    state.cart
+                } else {
+                    state.cart.map { line ->
+                        if (line.product.id == product.id) line.copy(quantity = line.quantity + 1) else line
+                    }
                 }
             }
-            state.copy(cart = next)
+            state.copy(
+                cart = next,
+                cartNotice = if (reachedLimit) "Maximum available stock for ${product.name} reached." else null
+            )
         }
+        val currentCart = _uiState.value.cart
+        storage?.saveCart(currentCart)
+        syncCartToBackend(currentCart)
     }
 
     fun removeFromCart(productId: String) {
         _uiState.update { state ->
-            state.copy(cart = state.cart.mapNotNull { line ->
+            val next = state.cart.mapNotNull { line ->
                 if (line.product.id != productId) line
-                else if (line.quantity == 1) null else line.copy(quantity = line.quantity - 1)
-            })
+                else if (line.quantity <= 1) null else line.copy(quantity = line.quantity - 1)
+            }
+            state.copy(cart = next, cartNotice = null)
+        }
+        val currentCart = _uiState.value.cart
+        storage?.saveCart(currentCart)
+        syncCartToBackend(currentCart)
+    }
+
+    fun clearCartNotice() {
+        _uiState.update { it.copy(cartNotice = null) }
+    }
+
+    private fun syncCartToBackend(cart: List<CartLine>) {
+        val token = _uiState.value.authToken ?: return
+        viewModelScope.launch {
+            runCatching {
+                val items = cart.map {
+                    CustomerCartItem(
+                        productId = it.product.id,
+                        name = it.product.name,
+                        priceCents = it.product.priceCents,
+                        imageUrl = it.product.imageUrl,
+                        quantity = it.quantity,
+                        category = it.product.category,
+                    )
+                }
+                repository.updateCustomerCart(token, items)
+            }
+        }
+    }
+
+    private fun syncCartFromBackend(token: String) {
+        viewModelScope.launch {
+            runCatching {
+                repository.getCustomerCart(token)
+            }.onSuccess { resp ->
+                if (resp.success && resp.items.isNotEmpty()) {
+                    val liveProds = _uiState.value.products
+                    val lines = resp.items.mapNotNull { item ->
+                        val p = liveProds.firstOrNull { it.id == item.productId }
+                            ?: Product(
+                                id = item.productId,
+                                name = item.name ?: "Product",
+                                slug = item.productId,
+                                description = "",
+                                priceCents = item.priceCents ?: 0,
+                                compareAtPriceCents = null,
+                                category = item.category ?: "Cakes",
+                                imageUrl = item.imageUrl ?: "",
+                                status = "active",
+                                featured = false,
+                                inventory = 99,
+                                createdAt = "",
+                                updatedAt = "",
+                            )
+                        CartLine(p, item.quantity)
+                    }
+                    if (lines.isNotEmpty()) {
+                        _uiState.update { it.copy(cart = lines) }
+                        storage?.saveCart(lines)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun onAuthSuccess(token: String, user: UserProfile) {
+        storage?.saveAuthSession(token, user)
+        val guestItems = _uiState.value.cart
+        if (guestItems.isNotEmpty()) {
+            val reqItems = guestItems.map {
+                CustomerCartItem(
+                    productId = it.product.id,
+                    name = it.product.name,
+                    priceCents = it.product.priceCents,
+                    imageUrl = it.product.imageUrl,
+                    quantity = it.quantity,
+                    category = it.product.category,
+                )
+            }
+            viewModelScope.launch {
+                runCatching {
+                    repository.mergeCustomerCart(token, reqItems)
+                }.onSuccess { resp ->
+                    if (resp.items.isNotEmpty()) {
+                        val liveProds = _uiState.value.products
+                        val mergedLines = resp.items.mapNotNull { item ->
+                            val p = liveProds.firstOrNull { it.id == item.productId }
+                                ?: Product(
+                                    id = item.productId,
+                                    name = item.name ?: "Product",
+                                    slug = item.productId,
+                                    description = "",
+                                    priceCents = item.priceCents ?: 0,
+                                    compareAtPriceCents = null,
+                                    category = item.category ?: "Cakes",
+                                    imageUrl = item.imageUrl ?: "",
+                                    status = "active",
+                                    featured = false,
+                                    inventory = 99,
+                                    createdAt = "",
+                                    updatedAt = "",
+                                )
+                            CartLine(p, item.quantity)
+                        }
+                        _uiState.update { it.copy(cart = mergedLines) }
+                        storage?.saveCart(mergedLines)
+                    }
+                }
+            }
+        } else {
+            syncCartFromBackend(token)
         }
     }
 
@@ -346,6 +539,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                             lockdownWarning = response.lockdownPenaltyNotice,
                         )
                     }
+                    onAuthSuccess(response.token, response.user)
                     fetchOrders()
                     fetchCoupons()
                 } else {
@@ -397,6 +591,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                             authSuccess = "Welcome back, ${response.user.firstName}!",
                         )
                     }
+                    onAuthSuccess(response.token, response.user)
                     fetchOrders()
                     fetchAddresses()
                     fetchNotifications()
@@ -432,6 +627,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                         pendingLoginEmail = "",
                     )
                 }
+                onAuthSuccess(response.token, response.user)
                 fetchOrders()
                 fetchAddresses()
                 fetchNotifications()
@@ -478,16 +674,38 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     }
 
     fun logout() {
+        val token = _uiState.value.authToken
+        val cartToSave = _uiState.value.cart
+        if (token != null && cartToSave.isNotEmpty()) {
+            viewModelScope.launch {
+                runCatching {
+                    val items = cartToSave.map {
+                        CustomerCartItem(
+                            productId = it.product.id,
+                            name = it.product.name,
+                            priceCents = it.product.priceCents,
+                            imageUrl = it.product.imageUrl,
+                            quantity = it.quantity,
+                            category = it.product.category,
+                        )
+                    }
+                    repository.updateCustomerCart(token, items)
+                }
+            }
+        }
+        storage?.clearAuthSession()
+        storage?.clearCart()
         _uiState.update {
             it.copy(
                 authToken = null,
                 currentUser = null,
+                cart = emptyList(),
                 orders = emptyList(),
                 savedAddresses = emptyList(),
                 notifications = emptyList(),
                 unreadNotificationsCount = 0,
                 selectedAddressId = null,
-                authSuccess = null,
+                authSuccess = "You have been logged out.",
                 lockdownWarning = null,
                 availableCoupons = emptyList(),
                 discount = null,
@@ -529,11 +747,14 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
             runCatching {
                 repository.deleteAccount(token)
             }.onSuccess { response ->
+                storage?.clearAuthSession()
+                storage?.clearCart()
                 _uiState.update {
                     it.copy(
                         isDeletingAccount = false,
                         authToken = null,
                         currentUser = null,
+                        cart = emptyList(),
                         orders = emptyList(),
                         accountDeletionNotice = response.message,
                     )
@@ -781,6 +1002,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                 receipt
             }.onSuccess { receipt ->
                 activeIdempotencyKey = UUID.randomUUID().toString()
+                storage?.clearCart()
                 _uiState.update {
                     it.copy(
                         isCheckingOut = false,
@@ -1011,6 +1233,7 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
                 _uiState.update { state ->
                     val nextCity = result.city ?: state.selectedCity
                     val prefilledAddress = if (state.shippingAddress.isBlank()) "PIN: $cleanPin, $nextCity" else state.shippingAddress
+                    storage?.saveLocation(cleanPin, nextCity)
                     state.copy(
                         isCheckingPincode = false,
                         pincodeCheckResult = result,
@@ -1228,9 +1451,10 @@ class StorefrontViewModel(private val repository: StorefrontRepository) : ViewMo
     }
 }
 
-class StorefrontViewModelFactory : androidx.lifecycle.ViewModelProvider.Factory {
+class StorefrontViewModelFactory(private val context: Context? = null) : androidx.lifecycle.ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return StorefrontViewModel(StorefrontRepository(com.rajtraders.shop.data.NetworkModule.api)) as T
+        val storage = context?.let { CartSessionStorage(it.applicationContext) }
+        return StorefrontViewModel(StorefrontRepository(com.rajtraders.shop.data.NetworkModule.api), storage) as T
     }
 }

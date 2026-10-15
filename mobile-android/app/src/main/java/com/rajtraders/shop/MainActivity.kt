@@ -134,7 +134,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             RajTradersTheme {
-                val viewModel: StorefrontViewModel = viewModel(factory = StorefrontViewModelFactory())
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val viewModel: StorefrontViewModel = viewModel(factory = StorefrontViewModelFactory(context))
                 RajTradersApp(viewModel)
             }
         }

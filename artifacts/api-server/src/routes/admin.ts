@@ -456,7 +456,8 @@ router.post("/v1/admin/discounts", requirePermission("discounts"), async (req, r
       action: "DISCOUNT_CREATED",
       resource: "discounts",
       resourceId: inserted.id,
-      detail: `Created promotion code ${inserted.code} (${inserted.type}: ${inserted.value})`,
+      status: "SUCCESS",
+      details: { message: `Created promotion code ${inserted.code} (${inserted.type}: ${inserted.value})` },
     });
     res.status(201).json(CreateDiscountResponse.parse(discountResponse(inserted)));
   } catch (err: any) {
@@ -481,8 +482,8 @@ router.patch("/v1/admin/discounts/:discountId", requirePermission("discounts"), 
     const [updated] = await db
       .update(discountsTable)
       .set({
-        ...(update.code ? { code: update.code.trim().toUpperCase() } : {}),
-        ...(update.type ? { type: update.type } : {}),
+        ...((update as any).code ? { code: (update as any).code.trim().toUpperCase() } : {}),
+        ...((update as any).type ? { type: (update as any).type } : {}),
         ...(update.value === undefined ? {} : { value: update.value }),
         ...(update.active === undefined ? {} : { active: update.active }),
         ...(update.firstOrderOnly === undefined ? {} : { firstOrderOnly: update.firstOrderOnly }),
@@ -501,7 +502,8 @@ router.patch("/v1/admin/discounts/:discountId", requirePermission("discounts"), 
       action: "DISCOUNT_UPDATED",
       resource: "discounts",
       resourceId: updated.id,
-      detail: `Updated discount ${updated.code} (${updated.type}: ${updated.value}, active: ${updated.active})`,
+      status: "SUCCESS",
+      details: { message: `Updated discount ${updated.code} (${updated.type}: ${updated.value}, active: ${updated.active})` },
     });
     res.json(UpdateDiscountResponse.parse(discountResponse(updated)));
   } catch (err: any) {
@@ -540,8 +542,8 @@ router.get("/v1/admin/registrations", requirePermission("registrations"), async 
       db.select().from(discountsTable),
     ]);
 
-    const enrichedPolicies = policies.map((p) => {
-      const discount = allDiscounts.find((d) => d.code.toUpperCase() === p.offerCode.toUpperCase());
+    const enrichedPolicies = policies.map((p: any) => {
+      const discount = allDiscounts.find((d: any) => d.code.toUpperCase() === p.offerCode.toUpperCase());
       let syncedDescription = p.description;
       if (discount) {
         const valText = discount.type === "percentage" ? `${discount.value}% off` : `₹${Math.round(discount.value / 100)} off`;
@@ -557,8 +559,8 @@ router.get("/v1/admin/registrations", requirePermission("registrations"), async 
     });
 
     const enrichedClaims = claims.map((claim: any) => {
-      const user = allUsers.find((u) => u.email.toLowerCase() === claim.email.toLowerCase());
-      const policy = policies.find((p) => p.id === claim.policyId);
+      const user = allUsers.find((u: any) => u.email.toLowerCase() === claim.email.toLowerCase());
+      const policy = policies.find((p: any) => p.id === claim.policyId);
       const windowDays = policy?.windowDays || 14;
       const createdAtDate = claim.createdAt ? new Date(claim.createdAt) : new Date();
       const expiresAtDate = new Date(createdAtDate.getTime() + windowDays * 86400000);

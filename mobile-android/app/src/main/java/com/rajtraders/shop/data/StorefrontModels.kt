@@ -19,6 +19,11 @@ data class Product(
     val updatedAt: String,
 )
 
+data class CartLine(
+    val product: Product,
+    val quantity: Int,
+)
+
 data class StorefrontSummary(
     val shopName: String = "RAJ TRADERS",
     val featuredCount: Int,
@@ -362,4 +367,28 @@ data class NotificationItem(
 data class NotificationsResponse(
     val notifications: List<NotificationItem> = emptyList(),
     val unreadCount: Int = 0,
+)
+
+// ─── Customer Persistent Cart ──────────────────────────────
+
+data class CustomerCartItem(
+    val productId: String,
+    val name: String? = null,
+    val priceCents: Int? = null,
+    val imageUrl: String? = null,
+    val quantity: Int,
+    val category: String? = null,
+)
+
+data class CustomerCartResponse(
+    val success: Boolean = true,
+    val items: List<CustomerCartItem> = emptyList(),
+)
+
+data class UpdateCartRequest(
+    val items: List<CustomerCartItem>,
+)
+
+data class MergeCartRequest(
+    val guestItems: List<CustomerCartItem>,
 )

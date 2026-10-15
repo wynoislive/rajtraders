@@ -248,4 +248,18 @@ class StorefrontRepository(private val api: StorefrontApi) {
 
     suspend fun markAllNotificationsRead(token: String): GenericResponse =
         api.markAllNotificationsRead("Bearer $token")
+
+    // ─── Customer Persistent Cart ────────────────────────────────
+
+    suspend fun getCustomerCart(token: String): CustomerCartResponse =
+        api.getCustomerCart("Bearer $token")
+
+    suspend fun updateCustomerCart(token: String, items: List<CustomerCartItem>): CustomerCartResponse =
+        api.updateCustomerCart("Bearer $token", UpdateCartRequest(items))
+
+    suspend fun mergeCustomerCart(token: String, guestItems: List<CustomerCartItem>): CustomerCartResponse =
+        api.mergeCustomerCart("Bearer $token", MergeCartRequest(guestItems))
+
+    suspend fun clearCustomerCart(token: String): GenericResponse =
+        api.clearCustomerCart("Bearer $token")
 }
