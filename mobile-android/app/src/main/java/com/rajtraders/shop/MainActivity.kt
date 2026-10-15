@@ -249,6 +249,23 @@ private fun RajTradersApp(viewModel: StorefrontViewModel) {
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold
                         )
+                        val isServiceable = state.selectedPincode == "484551" || (state.pincodeCheckResult?.allowed == true)
+                        if (!isServiceable) {
+                            Spacer(Modifier.width(6.dp))
+                            Surface(
+                                color = Color(0x33FFB300),
+                                shape = RoundedCornerShape(4.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x66FFB300))
+                            ) {
+                                Text(
+                                    text = "Unavailable",
+                                    color = Color(0xFFFFD54F),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         Spacer(Modifier.width(4.dp))
                         Text(
                             text = "▼",
@@ -1968,7 +1985,8 @@ private fun CartScreen(
         state.discount?.code?.let { code = it }
     }
     val isCooldownActive = state.cooldownRemainingMs > 0L
-    val isCheckoutDisabled = state.isCheckingOut || isCooldownActive || state.cart.isEmpty() || state.currentUser == null
+    val isPincodeServiceable = state.selectedPincode == "484551" || (state.pincodeCheckResult?.allowed == true)
+    val isCheckoutDisabled = state.isCheckingOut || isCooldownActive || state.cart.isEmpty() || state.currentUser == null || !isPincodeServiceable
 
     var isDetectingLocation by remember { mutableStateOf(false) }
     var locationStatusNotice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
@@ -2346,6 +2364,38 @@ private fun CartScreen(
                     Text("Change", color = RajTeal, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                 }
             }
+            if (!isPincodeServiceable) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    color = Color(0xFFFFF3E0),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFB74D))
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = Color(0xFFE65100), modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Delivery Unavailable for ${state.selectedCity} (${state.selectedPincode})",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFE65100),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                "Raj Traders delivers exclusively within Birsinghpur Pali (484551).",
+                                color = Color(0xFFBF360C),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        TextButton(onClick = { viewModel.checkPincode("484551") }) {
+                            Text("Switch to Pali", color = RajTeal, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(12.dp))
 
             Text("Shipping Address", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -2650,6 +2700,10 @@ private fun CartScreen(
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
                     Text("Securing Payment...", color = Color.White, fontWeight = FontWeight.Bold)
+                } else if (!isPincodeServiceable) {
+                    Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = Color.White)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Delivery Unavailable for ${state.selectedCity}", fontWeight = FontWeight.Bold)
                 } else if (isCooldownActive) {
                     val remainingSec = ((state.cooldownRemainingMs + 999) / 1000)
                     Text("Please wait (${remainingSec}s)...", color = Color.White.copy(alpha = 0.8f))

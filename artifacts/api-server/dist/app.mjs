@@ -132174,27 +132174,197 @@ router6.get("/shop-info", async (_req, res) => {
     res.status(500).json({ error: "Failed to load shop info." });
   }
 });
-function resolveCityForPincode(pin) {
+var PINCODE_LOCATION_CACHE = /* @__PURE__ */ new Map();
+var STATE_CODE_MAP = {
+  "Madhya Pradesh": "MP",
+  "Delhi": "DL",
+  "Maharashtra": "MH",
+  "Karnataka": "KA",
+  "Telangana": "TS",
+  "Tamil Nadu": "TN",
+  "West Bengal": "WB",
+  "Gujarat": "GJ",
+  "Rajasthan": "RJ",
+  "Uttar Pradesh": "UP",
+  "Bihar": "BR",
+  "Chhattisgarh": "CG",
+  "Punjab": "PB",
+  "Haryana": "HR",
+  "Jharkhand": "JH",
+  "Odisha": "OD",
+  "Kerala": "KL",
+  "Andhra Pradesh": "AP",
+  "Assam": "AS",
+  "Uttarakhand": "UK",
+  "Himachal Pradesh": "HP",
+  "Goa": "GA",
+  "Chandigarh": "CH"
+};
+async function resolveLocationForPincode(pin) {
   const clean = pin.trim();
-  if (clean === "484551") return "Birsinghpur Pali";
-  if (clean === "484661") return "Nowrozabad";
-  if (clean === "484660") return "Chandia";
-  if (clean.startsWith("482")) return "Jabalpur";
-  if (clean.startsWith("484")) return "Shahdol / Umaria";
-  if (clean.startsWith("40")) return "Mumbai";
-  if (clean.startsWith("411")) return "Pune";
-  if (clean.startsWith("11")) return "New Delhi";
-  if (clean.startsWith("56")) return "Bengaluru";
-  if (clean.startsWith("70")) return "Kolkata";
-  if (clean.startsWith("60")) return "Chennai";
-  if (clean.startsWith("50")) return "Hyderabad";
-  if (clean.startsWith("38")) return "Ahmedabad";
-  if (clean.startsWith("302")) return "Jaipur";
-  if (clean.startsWith("462")) return "Bhopal";
-  if (clean.startsWith("452")) return "Indore";
-  if (clean.startsWith("474")) return "Gwalior";
-  if (clean.startsWith("48")) return "Madhya Pradesh";
-  return "India";
+  if (PINCODE_LOCATION_CACHE.has(clean)) {
+    return PINCODE_LOCATION_CACHE.get(clean);
+  }
+  if (clean === "484551") {
+    const loc = { city: "Birsinghpur Pali, MP", district: "Umaria", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean === "484661") {
+    const loc = { city: "Nowrozabad, MP", district: "Umaria", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean === "484660") {
+    const loc = { city: "Chandia, MP", district: "Umaria", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean === "484224") {
+    const loc = { city: "Umaria, MP", district: "Umaria", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean === "484001") {
+    const loc = { city: "Shahdol, MP", district: "Shahdol", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean === "484110") {
+    const loc = { city: "Burhar, MP", district: "Shahdol", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean === "484552") {
+    const loc = { city: "Kotma, MP", district: "Anuppur", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean === "484555") {
+    const loc = { city: "Anuppur, MP", district: "Anuppur", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("482")) {
+    const loc = { city: "Jabalpur, MP", district: "Jabalpur", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean === "483501" || clean.startsWith("4835")) {
+    const loc = { city: "Katni, MP", district: "Katni", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("486")) {
+    const loc = { city: "Rewa, MP", district: "Rewa", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("485")) {
+    const loc = { city: "Satna, MP", district: "Satna", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("462")) {
+    const loc = { city: "Bhopal, MP", district: "Bhopal", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("452")) {
+    const loc = { city: "Indore, MP", district: "Indore", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("474")) {
+    const loc = { city: "Gwalior, MP", district: "Gwalior", state: "MP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("495")) {
+    const loc = { city: "Bilaspur, CG", district: "Bilaspur", state: "CG" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("492")) {
+    const loc = { city: "Raipur, CG", district: "Raipur", state: "CG" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("11")) {
+    const loc = { city: "New Delhi, DL", district: "New Delhi", state: "DL" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("400") || clean.startsWith("401")) {
+    const loc = { city: "Mumbai, MH", district: "Mumbai", state: "MH" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("411")) {
+    const loc = { city: "Pune, MH", district: "Pune", state: "MH" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("560")) {
+    const loc = { city: "Bengaluru, KA", district: "Bengaluru", state: "KA" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("500")) {
+    const loc = { city: "Hyderabad, TS", district: "Hyderabad", state: "TS" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("600")) {
+    const loc = { city: "Chennai, TN", district: "Chennai", state: "TN" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("700")) {
+    const loc = { city: "Kolkata, WB", district: "Kolkata", state: "WB" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("380")) {
+    const loc = { city: "Ahmedabad, GJ", district: "Ahmedabad", state: "GJ" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("302")) {
+    const loc = { city: "Jaipur, RJ", district: "Jaipur", state: "RJ" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  if (clean.startsWith("226")) {
+    const loc = { city: "Lucknow, UP", district: "Lucknow", state: "UP" };
+    PINCODE_LOCATION_CACHE.set(clean, loc);
+    return loc;
+  }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2e3);
+    const response = await fetch(`https://api.postalpincode.in/pincode/${clean}`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data[0]?.Status === "Success" && Array.isArray(data[0]?.PostOffice) && data[0].PostOffice.length > 0) {
+        const po = data[0].PostOffice[0];
+        const district = (po.District || "").trim();
+        const stateName = (po.State || "").trim();
+        const stateCode = STATE_CODE_MAP[stateName] || stateName.slice(0, 2).toUpperCase();
+        const city = district ? `${district}, ${stateCode}` : `${stateName}, India`;
+        const loc = { city, district: district || "India", state: stateCode };
+        PINCODE_LOCATION_CACHE.set(clean, loc);
+        return loc;
+      }
+    }
+  } catch {
+  }
+  const fallbackState = clean.startsWith("48") ? "MP" : clean.startsWith("49") ? "CG" : clean.startsWith("4") ? "MH" : "India";
+  const fallbackCity = clean.startsWith("48") ? `Madhya Pradesh (${clean})` : `India (${clean})`;
+  const fallbackLoc = { city: fallbackCity, district: "India", state: fallbackState };
+  PINCODE_LOCATION_CACHE.set(clean, fallbackLoc);
+  return fallbackLoc;
 }
 router6.post("/check-pincode", async (req, res) => {
   const { pincode } = req.body;
@@ -132205,7 +132375,8 @@ router6.post("/check-pincode", async (req, res) => {
   const cleanPin = pincode.trim();
   const settings = await getShopSettings();
   const allowed = isPincodeServiceable(cleanPin, settings.allowedPincodesJson);
-  const resolvedCity = resolveCityForPincode(cleanPin);
+  const resolvedLocation = await resolveLocationForPincode(cleanPin);
+  const resolvedCity = resolvedLocation.city;
   let allowedZones = "Birsinghpur Pali (484551)";
   try {
     const list = JSON.parse(settings.allowedPincodesJson || "[]");
@@ -132221,7 +132392,9 @@ router6.post("/check-pincode", async (req, res) => {
       isStoreOpen,
       pincode: cleanPin,
       city: resolvedCity,
-      message: `Sorry, delivery is currently not serviceable for PIN code ${cleanPin} (${resolvedCity}). We deliver exclusively to: ${allowedZones}.`
+      district: resolvedLocation.district,
+      state: resolvedLocation.state,
+      message: `Delivery is currently not serviceable for PIN code ${cleanPin} (${resolvedCity}). Raj Traders delivers exclusively to: ${allowedZones}.`
     });
     return;
   }
@@ -132230,6 +132403,8 @@ router6.post("/check-pincode", async (req, res) => {
     isStoreOpen,
     pincode: cleanPin,
     city: resolvedCity,
+    district: resolvedLocation.district,
+    state: resolvedLocation.state,
     estimatedDays: "Same Day / Scheduled Slot",
     isExpressAvailable: true,
     message: !isStoreOpen ? "Store is currently closed for new orders. Catalog browsing is active." : `Great news! PIN code ${cleanPin} (${resolvedCity}) is fully serviceable for fast delivery in ${allowedZones}.`

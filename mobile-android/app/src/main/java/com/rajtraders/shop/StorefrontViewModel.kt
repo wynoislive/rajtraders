@@ -109,7 +109,7 @@ data class StorefrontUiState(
     val totpNotice: String? = null,
     // PIN Code Delivery & Location States
     val selectedPincode: String = "484551",
-    val selectedCity: String = "Birsinghpur Pali",
+    val selectedCity: String = "Birsinghpur Pali, MP",
     val showPincodeDialog: Boolean = false,
     val pincodeCheckResult: com.rajtraders.shop.data.PincodeCheckResponse? = null,
     val isCheckingPincode: Boolean = false,

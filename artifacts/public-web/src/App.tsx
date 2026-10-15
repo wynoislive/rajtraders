@@ -669,14 +669,24 @@ export default function App() {
       });
       const data = await res.json();
       setPincodeResult(data);
-      if (data.allowed) {
+      if (data.pincode) {
         setPincode(data.pincode);
-        setCity(data.city);
         setDeliveryPincode(data.pincode);
       }
+      if (data.city) {
+        setCity(data.city);
+      }
+      if (data.allowed) {
+        showToast(`Delivery available in ${data.city}!`, 'success');
+      } else {
+        showToast(`PIN ${clean} is in ${data.city || 'unserviceable area'}. Deliveries are restricted to Birsinghpur Pali (${allowedPincodes.join(', ')}).`, 'info');
+      }
     } catch {
-      setPincodeResult({ allowed: true, pincode: clean, city: 'India', message: `Delivery available to ${clean}` });
+      const fallbackCity = clean.startsWith('482') ? 'Jabalpur, MP' : clean === '484551' ? 'Birsingpur Pali, MP' : clean.startsWith('48') ? 'Madhya Pradesh' : 'India';
       setPincode(clean);
+      setDeliveryPincode(clean);
+      setCity(fallbackCity);
+      setPincodeResult({ allowed: allowedPincodes.includes(clean), pincode: clean, city: fallbackCity, message: `Delivery PIN: ${clean} (${fallbackCity})` });
     } finally {
       setPincodeChecking(false);
     }
@@ -1282,7 +1292,14 @@ export default function App() {
           <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
             <div className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition" onClick={() => setShowPincodeModal(true)}>
               <MapPin size={15} className="text-[#E2A93B]" />
-              <span className="font-semibold">Deliver to <span className="underline decoration-[#E2A93B] font-bold">{city} {pincode}</span></span>
+              <span className="font-semibold">
+                Deliver to <span className="underline decoration-[#E2A93B] font-bold">{city} {pincode}</span>
+              </span>
+              {!isPincodeServiceable && (
+                <span className="bg-amber-400/20 text-amber-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-400/40">
+                  Unavailable
+                </span>
+              )}
               <span className="text-[#E2A93B] text-[10px]">▼</span>
             </div>
             <button
@@ -1296,6 +1313,24 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        {/* Unserviceable Location Notice Banner */}
+        {!isPincodeServiceable && (
+          <div className="bg-amber-50 border-b border-amber-200 text-amber-950 text-xs py-2 px-4 font-bold flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+              <span>
+                Delivery is currently unavailable for <strong>{city} ({pincode})</strong>. Raj Traders delivers exclusively to Birsinghpur Pali (484551).
+              </span>
+            </div>
+            <button
+              onClick={() => handleCheckPincode('484551')}
+              className="text-[11px] underline text-[#0E3D42] hover:text-[#E2A93B] font-extrabold ml-3 shrink-0"
+            >
+              Switch to Pali (484551)
+            </button>
+          </div>
+        )}
 
         {/* Main Store Header */}
         <header className="sticky top-0 z-30 bg-white border-b border-[#0E3D42]/10 backdrop-blur-md bg-white/90 px-4 sm:px-8 py-3.5 shadow-sm">
@@ -3322,20 +3357,61 @@ export default function App() {
               <button onClick={() => setShowPincodeModal(false)} aria-label="Close delivery pincode modal" className="p-1 rounded-lg hover:bg-gray-100"><X size={18} /></button>
             </div>
             <p className="text-xs text-gray-500 font-medium">Enter an Indian 6-digit PIN code to check deliverability and express timelines.</p>
-            <input
-              type="text"
-              maxLength={6}
-              value={pincode}
-              onChange={(e) => setPincode(e.target.value)}
-              className="w-full text-center tracking-widest font-black text-xl p-3 border rounded-xl border-gray-300"
-              placeholder="484551"
-            />
-            <div className="flex flex-wrap gap-2 justify-center">
-              {allowedPincodes.map((pin) => (
-                <button key={pin} onClick={() => { setPincode(pin); handleCheckPincode(pin); }} className="px-3 py-1.5 bg-[#0E3D42]/10 hover:bg-[#0E3D42] hover:text-white text-[#0E3D42] text-xs font-bold rounded-xl transition">{pin}</button>
-              ))}
+            <div className="space-y-2">
+              <input
+                type="text"
+                maxLength={6}
+                value={pincode}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setPincode(val);
+                  if (val.length === 6) {
+                    handleCheckPincode(val);
+                  }
+                }}
+                className="w-full text-center tracking-widest font-black text-2xl p-3.5 border-2 rounded-2xl border-gray-300 focus:outline-none focus:border-[#0E3D42]"
+                placeholder="484551"
+              />
+              {pincode.length === 6 && (
+                <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition ${
+                  isPincodeServiceable
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-900 border border-amber-200'
+                }`}>
+                  <span className="flex items-center gap-1.5">
+                    <MapPin size={14} className={isPincodeServiceable ? 'text-emerald-600' : 'text-amber-600'} />
+                    <strong>{city}</strong>
+                  </span>
+                  <span>{isPincodeServiceable ? '✓ Serviceable' : '⚠️ Delivery Unavailable'}</span>
+                </div>
+              )}
             </div>
-            <button onClick={() => { handleCheckPincode(pincode); setShowPincodeModal(false); }} className="w-full py-3 bg-[#0E3D42] text-white font-extrabold text-xs rounded-xl shadow">
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold text-gray-500 block text-center">Serviceable Store Hub:</span>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {allowedPincodes.map((pin) => (
+                  <button
+                    key={pin}
+                    onClick={() => {
+                      setPincode(pin);
+                      handleCheckPincode(pin);
+                    }}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-xl transition ${
+                      pincode === pin ? 'bg-[#0E3D42] text-white shadow-sm' : 'bg-[#0E3D42]/10 hover:bg-[#0E3D42] hover:text-white text-[#0E3D42]'
+                    }`}
+                  >
+                    {pin} (Pali)
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                handleCheckPincode(pincode);
+                setShowPincodeModal(false);
+              }}
+              className="w-full py-3.5 bg-[#0E3D42] text-white font-extrabold text-xs rounded-2xl shadow hover:bg-[#0E3D42]/90 transition"
+            >
               Save & Apply Location
             </button>
           </div>
