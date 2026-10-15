@@ -54,6 +54,7 @@ import {
   MessageCircle,
   Mail,
   Clipboard,
+  Copy,
 } from 'lucide-react';
 
 export type StorefrontProduct = Product & {
@@ -179,7 +180,14 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('raj_cart') || '[]'); } catch { return []; }
   });
   const [showCouponsDrawer, setShowCouponsDrawer] = useState(false);
-  const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
+  const [availableCoupons, setAvailableCoupons] = useState<any[]>(() => {
+    try {
+      const cached = localStorage.getItem('raj_cached_coupons');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [couponsLoading, setCouponsLoading] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot_password' | 'reset_password'>('login');
@@ -527,7 +535,7 @@ export default function App() {
   const [receipt, setReceipt] = useState<any>(null);
 
   // Account Portal Active Tab
-  const [activeAccountTab, setActiveAccountTab] = useState<'orders' | 'addresses' | 'favorites' | 'settings' | 'profile'>('orders');
+  const [activeAccountTab, setActiveAccountTab] = useState<'orders' | 'addresses' | 'favorites' | 'coupons' | 'settings' | 'profile'>('orders');
   const [changePassLoading, setChangePassLoading] = useState(false);
   const [changePassNotice, setChangePassNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -707,22 +715,38 @@ export default function App() {
     showToast(`Added ${product.name} to bag!`, 'success');
   };
 
-  // Fetch available coupons
+  // Fetch available coupons with smart caching & ETag revalidation
   const fetchCoupons = async () => {
-    setCouponsLoading(true);
+    // Only show spinner if there are no prerendered coupons yet
+    if (availableCoupons.length === 0) {
+      setCouponsLoading(true);
+    }
     try {
       const headers: Record<string, string> = {};
       const activeToken = token || localStorage.getItem('raj_token') || localStorage.getItem('raj_auth_token');
       if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
       if (user?.id) headers['x-user-id'] = user.id;
       if (user?.email) headers['x-user-email'] = user.email;
+
+      const cachedEtag = localStorage.getItem('raj_coupons_etag');
+      if (cachedEtag) headers['If-None-Match'] = cachedEtag;
+
       const res = await fetch(getApiUrl('/api/v1/discounts/active'), { headers });
+      if (res.status === 304) {
+        // Server confirms coupons are unmodified. Keep prerendered state.
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
-        setAvailableCoupons(Array.isArray(data) ? data : []);
+        if (Array.isArray(data)) {
+          setAvailableCoupons(data);
+          localStorage.setItem('raj_cached_coupons', JSON.stringify(data));
+          const newEtag = res.headers.get('ETag');
+          if (newEtag) localStorage.setItem('raj_coupons_etag', newEtag);
+        }
       }
     } catch {
-      setAvailableCoupons([]);
+      // Retain existing prerendered coupons on network issues
     } finally {
       setCouponsLoading(false);
     }
@@ -953,25 +977,44 @@ export default function App() {
   };
 
   const handleApplyDiscount = async (codeOverride?: any) => {
-    const codeToApply = (typeof codeOverride === 'string' ? codeOverride : discountCode).trim();
-    if (!codeToApply) return;
+    const rawCode = (typeof codeOverride === 'string' ? codeOverride : discountCode).trim();
+    if (!rawCode) {
+      showToast('Please enter a promo code.', 'info');
+      return;
+    }
+    const codeToApply = rawCode.toUpperCase();
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const activeToken = token || localStorage.getItem('raj_token');
+      if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
+      if (user?.id) headers['x-user-id'] = user.id;
+      if (user?.email) headers['x-user-email'] = user.email;
+
+      const isFirst = (customerOrders?.length || 0) === 0;
+
       const res = await fetch(getApiUrl('/api/v1/discounts/validate'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: codeToApply, subtotalCents: cartTotalCents, isFirstOrder: orders.length === 0 }),
+        headers,
+        body: JSON.stringify({ code: codeToApply, subtotalCents: cartTotalCents, isFirstOrder: isFirst }),
       });
       const data = await res.json();
       setDiscountResult(data);
       if (data.valid) {
         setDiscountCode(codeToApply);
-        showToast(`Coupon ${data.code} applied!`, 'success');
+        showToast(`Coupon ${data.code} applied! Saved ${money(data.discountCents)}`, 'success');
       } else {
         showToast(data.message || 'Invalid coupon code', 'error');
       }
     } catch {
       setDiscountResult({ valid: false, message: 'Could not validate code.' });
+      showToast('Could not validate discount code. Please check your network.', 'error');
     }
+  };
+
+  const handleRemoveDiscount = () => {
+    setDiscountResult(null);
+    setDiscountCode('');
+    showToast('Coupon removed', 'info');
   };
 
   const handleCheckout = async () => {
@@ -1164,6 +1207,17 @@ export default function App() {
   const deliveryFeeCents = fulfillmentType === 'pickup' ? 0 : (isFreeDelivery ? 0 : (shopSettings.flatDeliveryFeeCents || 3000));
   const discountCents = discountResult?.valid ? discountResult.discountCents : 0;
   const finalPayableCents = Math.max(100, cartTotalCents + packagingFeeCents + deliveryFeeCents - discountCents);
+
+  // Combined Total Savings (Item MRP discounts + Coupon/Credit savings + Free Delivery savings)
+  const mrpTotalCents = cart.reduce((acc, i) => {
+    const compare = (i.product as any).compareAtPriceCents && (i.product as any).compareAtPriceCents > i.product.priceCents
+      ? (i.product as any).compareAtPriceCents
+      : i.product.priceCents;
+    return acc + compare * i.quantity;
+  }, 0);
+  const itemMrpSavingsCents = Math.max(0, mrpTotalCents - cartTotalCents);
+  const deliveryFeeSavingsCents = isFreeDelivery && fulfillmentType === 'delivery' ? (shopSettings.flatDeliveryFeeCents || 3000) : 0;
+  const totalSavingsCents = itemMrpSavingsCents + deliveryFeeSavingsCents + discountCents;
 
   // Reverse GST calculation (5% inclusive GST standard)
   const taxableTotalCents = Math.round(cartTotalCents / 1.05);
@@ -1555,9 +1609,28 @@ export default function App() {
                           <span className={isFreeDelivery ? 'text-emerald-700' : ''}>{isFreeDelivery ? 'FREE' : money(deliveryFeeCents)}</span>
                         </div>
                         {discountResult?.valid && (
-                          <div className="flex justify-between text-emerald-700">
+                          <div className="flex justify-between text-emerald-700 items-center">
                             <span>Discount ({discountResult.code})</span>
-                            <span>-{money(discountCents)}</span>
+                            <div className="flex items-center gap-2">
+                              <span>-{money(discountCents)}</span>
+                              <button
+                                type="button"
+                                onClick={handleRemoveDiscount}
+                                className="text-[10px] text-red-600 hover:text-red-800 underline font-extrabold"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {/* Bold Total Savings Row (Before Total Amount, After Delivery Fee) */}
+                        {totalSavingsCents > 0 && (
+                          <div className="flex justify-between items-center py-2 px-3 rounded-xl bg-emerald-50/90 border border-emerald-200/80 text-emerald-900 text-xs font-black">
+                            <span className="flex items-center gap-1.5">
+                              <Sparkles size={14} className="text-emerald-600" />
+                              <span>Total Savings</span>
+                            </span>
+                            <span className="text-sm font-black text-emerald-700">-{money(totalSavingsCents)}</span>
                           </div>
                         )}
                         <div className="flex justify-between text-base font-black border-t border-gray-200 pt-3 text-[#0E3D42]">
@@ -1582,39 +1655,15 @@ export default function App() {
                             placeholder="WELCOME25"
                             className="flex-1 p-2.5 text-xs font-semibold rounded-xl border border-gray-300 uppercase tracking-wider font-mono outline-none focus:border-[#0E3D42]"
                           />
-                          <button onClick={() => handleApplyDiscount()} className="px-4 py-2 bg-[#0E3D42] text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 transition">Apply</button>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyDiscount()}
+                            disabled={!discountCode.trim()}
+                            className="px-4 py-2 bg-[#0E3D42] disabled:bg-gray-300 text-white text-xs font-bold rounded-xl hover:bg-[#0E3D42]/90 transition"
+                          >
+                            Apply
+                          </button>
                         </div>
-
-                        {/* Quick 1-Tap Coupon Chips */}
-                        {availableCoupons.length > 0 && (
-                          <div className="pt-1 flex flex-wrap gap-1.5 items-center">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quick Apply:</span>
-                            {availableCoupons.map((c: any) => {
-                              const isCredit = c.isRefundCredit || c.code.startsWith('CREDIT-') || c.code.startsWith('REFUND-');
-                              const isApplied = discountResult?.valid && discountResult?.code === c.code;
-                              return (
-                                <button
-                                  key={c.code}
-                                  type="button"
-                                  onClick={() => handleApplyDiscount(c.code)}
-                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition flex items-center gap-1 ${
-                                    isApplied
-                                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                                      : isCredit
-                                      ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200 shadow-sm'
-                                      : 'bg-teal-50 text-[#0E3D42] border-teal-200 hover:bg-teal-100'
-                                  }`}
-                                  title={`1-tap apply ${c.code}`}
-                                >
-                                  <span>{isCredit ? '🏷️' : '✨'} {c.code}</span>
-                                  <span className="text-[10px] opacity-80">
-                                    ({c.type === 'percentage' ? `${c.value}%` : money(c.value)})
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
                       </div>
 
                       {!isFreeDelivery && cartTotalCents < (shopSettings.freeDeliveryThresholdCents || 50000) && (
@@ -2094,6 +2143,7 @@ export default function App() {
                     { id: 'orders', label: 'My Orders', icon: Package },
                     { id: 'addresses', label: 'Saved Addresses', icon: MapPin },
                     { id: 'favorites', label: 'Wishlist & Favorites', icon: Heart },
+                    { id: 'coupons', label: 'Coupons & Credits', icon: Tag },
                     { id: 'settings', label: 'Settings & Security', icon: Lock },
                     { id: 'profile', label: 'Edit Profile', icon: User },
                   ].map((tab) => {
@@ -2327,6 +2377,124 @@ export default function App() {
                               <button onClick={() => addToCart(product)} className="px-3 py-1.5 bg-[#0E3D42] text-white text-xs font-bold rounded-lg">Add</button>
                             </div>
                           ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeAccountTab === 'coupons' && (
+                    <div className="space-y-6">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-xl font-black text-[#0E3D42]">My Coupons & Store Credits</h2>
+                          <p className="text-xs text-gray-500 font-semibold mt-0.5">Exclusive promo discounts and refund balances available for your orders</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => fetchCoupons()}
+                          className="px-3.5 py-1.5 rounded-xl border border-gray-300 text-[#0E3D42] text-xs font-bold hover:bg-gray-50 flex items-center gap-1.5 transition"
+                        >
+                          <RefreshCw size={13} className={couponsLoading ? 'animate-spin' : ''} /> Refresh
+                        </button>
+                      </div>
+
+                      {couponsLoading && availableCoupons.length === 0 ? (
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          {[1, 2].map((n) => (
+                            <div key={n} className="h-32 bg-gray-100 animate-pulse rounded-2xl" />
+                          ))}
+                        </div>
+                      ) : availableCoupons.length === 0 ? (
+                        <div className="text-center py-12 space-y-3">
+                          <Tag size={40} className="mx-auto text-gray-300" />
+                          <p className="text-sm font-bold text-gray-500">No active coupons found for your account.</p>
+                          <p className="text-xs text-gray-400">Keep an eye out for seasonal festival codes and sign-up rewards!</p>
+                        </div>
+                      ) : (
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          {availableCoupons.map((c: any) => {
+                            const isCredit = c.isRefundCredit || c.code.startsWith('CREDIT-') || c.code.startsWith('REFUND-');
+                            const discountDisplay = c.type === 'percentage' ? `${c.value}% OFF` : `${money(c.value)} OFF`;
+                            const isApplied = discountResult?.valid && discountResult?.code === c.code;
+
+                            return (
+                              <div
+                                key={c.code}
+                                className={`p-5 rounded-3xl border transition-all relative overflow-hidden flex flex-col justify-between ${
+                                  isCredit
+                                    ? 'bg-gradient-to-br from-amber-50/90 to-amber-100/50 border-amber-200 shadow-sm'
+                                    : 'bg-white border-gray-200/90 hover:border-[#0E3D42]/30 shadow-sm'
+                                }`}
+                              >
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-mono font-black text-sm text-[#0E3D42] tracking-wider bg-white/90 px-2.5 py-1 rounded-xl border border-gray-200 shadow-2xs">
+                                      {c.code}
+                                    </span>
+                                    {isCredit ? (
+                                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+                                        Store Credit
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                        Verified Offer
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="pt-1">
+                                    <div className="text-xl font-black text-[#0E3D42]">{discountDisplay}</div>
+                                    <p className="text-xs text-gray-600 font-semibold mt-1">
+                                      {c.description || (isCredit ? 'Store credit balance linked to your account' : 'Official Raj Traders celebration discount')}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 pt-3 border-t border-gray-200/80 space-y-3">
+                                  <div className="flex items-center justify-between text-[11px] text-gray-500 font-medium">
+                                    <span>
+                                      {c.minSubtotalCents && c.minSubtotalCents > 0
+                                        ? `Min Order: ${money(c.minSubtotalCents)}`
+                                        : 'No minimum order'}
+                                    </span>
+                                    <span>
+                                      {c.expiresAt
+                                        ? `Valid till ${new Date(c.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                                        : 'Never expires'}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(c.code);
+                                        showToast(`Copied coupon code ${c.code}!`, 'success');
+                                      }}
+                                      className="flex-1 py-2 px-3 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-xs font-bold text-[#0E3D42] flex items-center justify-center gap-1.5 transition"
+                                    >
+                                      <Copy size={13} /> Copy Code
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDiscountCode(c.code);
+                                        setLocation('/cart');
+                                        showToast(`Applied ${c.code} to bag!`, 'success');
+                                      }}
+                                      className={`px-4 py-2 rounded-xl text-xs font-black transition ${
+                                        isApplied
+                                          ? 'bg-emerald-600 text-white'
+                                          : 'bg-[#0E3D42] hover:bg-[#0E3D42]/90 text-white shadow-sm'
+                                      }`}
+                                    >
+                                      {isApplied ? 'Applied ✓' : 'Use in Cart'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

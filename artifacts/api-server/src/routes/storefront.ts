@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, asc, eq, ilike, or, ne, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { db, discountsTable, productsTable, registrationClaimsTable, registrationPoliciesTable, shopSettingsTable, ordersTable, usersTable, customerNotificationsTable } from "@workspace/db";
 import { seedStoreData } from "../lib/seed";
 import { getUserIdFromToken } from "./customer-auth";
@@ -415,7 +416,7 @@ router.get("/v1/discounts/active", async (req, res): Promise<void> => {
       return true;
     });
 
-    res.json(activeCoupons.map((d: any) => {
+    const mapped = activeCoupons.map((d: any) => {
       const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
       return {
         code: d.code,
@@ -426,7 +427,19 @@ router.get("/v1/discounts/active", async (req, res): Promise<void> => {
         expiresAt: asIso(d.expiresAt),
         isRefundCredit: isPersonalCredit,
       };
-    }));
+    });
+
+    const bodyString = JSON.stringify(mapped);
+    const etag = `"${createHash("sha256").update(bodyString).digest("hex").slice(0, 16)}"`;
+    res.setHeader("ETag", etag);
+    res.setHeader("Cache-Control", "private, no-cache");
+
+    if (req.headers["if-none-match"] === etag) {
+      res.status(304).end();
+      return;
+    }
+
+    res.json(mapped);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch coupons." });
   }
@@ -440,7 +453,7 @@ router.post("/v1/discounts/validate", async (req, res): Promise<void> => {
   }
   const code = parsed.data.code.trim().toUpperCase();
   const [discount] = await db.select().from(discountsTable).where(eq(discountsTable.code, code));
-  const { valid, discountCents } = computeDiscount(
+  const { valid, discountCents, reason } = computeDiscount(
     discount,
     parsed.data.subtotalCents,
     parsed.data.isFirstOrder,
@@ -450,7 +463,7 @@ router.post("/v1/discounts/validate", async (req, res): Promise<void> => {
       valid,
       code,
       discountCents,
-      message: valid ? "Discount applied." : "This code is invalid or no longer available.",
+      message: reason || (valid ? "Discount applied." : "This code is invalid or no longer available."),
     }),
   );
 });

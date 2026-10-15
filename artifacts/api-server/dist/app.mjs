@@ -124248,6 +124248,7 @@ var health_default = router;
 
 // src/routes/storefront.ts
 var import_express3 = __toESM(require_express2(), 1);
+import { createHash as createHash3 } from "node:crypto";
 
 // src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
@@ -129373,15 +129374,31 @@ var customer_auth_default = router2;
 
 // src/utils/discounts.ts
 function computeDiscount(discount, subtotalCents, isFirstOrder, now = Date.now()) {
-  const valid = Boolean(
-    discount && discount.active && discount.startsAt.getTime() <= now + 12e4 && (!discount.expiresAt || discount.expiresAt.getTime() >= now) && (discount.usageLimit === null || discount.usageCount < discount.usageLimit) && subtotalCents >= discount.minimumSubtotalCents && (!discount.firstOrderOnly || isFirstOrder)
-  );
-  if (!valid || !discount) {
-    return { valid: false, discountCents: 0 };
+  if (!discount) {
+    return { valid: false, discountCents: 0, reason: "Coupon code does not exist." };
+  }
+  if (!discount.active) {
+    return { valid: false, discountCents: 0, reason: "This coupon is currently inactive." };
+  }
+  if (discount.startsAt.getTime() > now + 12e4) {
+    return { valid: false, discountCents: 0, reason: "This coupon is not active yet." };
+  }
+  if (discount.expiresAt && discount.expiresAt.getTime() < now) {
+    return { valid: false, discountCents: 0, reason: "This coupon has expired." };
+  }
+  if (discount.usageLimit !== null && discount.usageCount >= discount.usageLimit) {
+    return { valid: false, discountCents: 0, reason: "Coupon usage limit has been reached." };
+  }
+  if (subtotalCents < discount.minimumSubtotalCents) {
+    const minRs = (discount.minimumSubtotalCents / 100).toFixed(0);
+    return { valid: false, discountCents: 0, reason: `Minimum order value of \u20B9${minRs} required.` };
+  }
+  if (discount.firstOrderOnly && !isFirstOrder) {
+    return { valid: false, discountCents: 0, reason: "Valid only on your first order." };
   }
   const rawDiscountCents = discount.type === "percentage" ? Math.floor(subtotalCents * discount.value / 100) : Math.round(discount.value);
   const discountCents = Math.max(0, Math.min(rawDiscountCents, subtotalCents));
-  return { valid: true, discountCents };
+  return { valid: true, discountCents, reason: "Discount applied." };
 }
 
 // src/routes/storefront.ts
@@ -129699,7 +129716,7 @@ router3.get("/v1/discounts/active", async (req, res) => {
       }
       return true;
     });
-    res.json(activeCoupons.map((d) => {
+    const mapped = activeCoupons.map((d) => {
       const isPersonalCredit = d.code.startsWith("CREDIT-") || d.code.startsWith("REFUND-");
       return {
         code: d.code,
@@ -129710,7 +129727,16 @@ router3.get("/v1/discounts/active", async (req, res) => {
         expiresAt: asIso(d.expiresAt),
         isRefundCredit: isPersonalCredit
       };
-    }));
+    });
+    const bodyString = JSON.stringify(mapped);
+    const etag = `"${createHash3("sha256").update(bodyString).digest("hex").slice(0, 16)}"`;
+    res.setHeader("ETag", etag);
+    res.setHeader("Cache-Control", "private, no-cache");
+    if (req.headers["if-none-match"] === etag) {
+      res.status(304).end();
+      return;
+    }
+    res.json(mapped);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch coupons." });
   }
@@ -129723,7 +129749,7 @@ router3.post("/v1/discounts/validate", async (req, res) => {
   }
   const code = parsed.data.code.trim().toUpperCase();
   const [discount] = await db.select().from(discountsTable).where(eq(discountsTable.code, code));
-  const { valid, discountCents } = computeDiscount(
+  const { valid, discountCents, reason } = computeDiscount(
     discount,
     parsed.data.subtotalCents,
     parsed.data.isFirstOrder
@@ -129733,7 +129759,7 @@ router3.post("/v1/discounts/validate", async (req, res) => {
       valid,
       code,
       discountCents,
-      message: valid ? "Discount applied." : "This code is invalid or no longer available."
+      message: reason || (valid ? "Discount applied." : "This code is invalid or no longer available.")
     })
   );
 });

@@ -3,6 +3,7 @@ import type { discountsTable } from "@workspace/db";
 export interface DiscountComputation {
   valid: boolean;
   discountCents: number;
+  reason?: string;
 }
 
 type DiscountRow = typeof discountsTable.$inferSelect;
@@ -22,18 +23,27 @@ export function computeDiscount(
   isFirstOrder: boolean,
   now: number = Date.now(),
 ): DiscountComputation {
-  const valid = Boolean(
-    discount &&
-      discount.active &&
-      discount.startsAt.getTime() <= now + 120000 &&
-      (!discount.expiresAt || discount.expiresAt.getTime() >= now) &&
-      (discount.usageLimit === null || discount.usageCount < discount.usageLimit) &&
-      subtotalCents >= discount.minimumSubtotalCents &&
-      (!discount.firstOrderOnly || isFirstOrder),
-  );
-
-  if (!valid || !discount) {
-    return { valid: false, discountCents: 0 };
+  if (!discount) {
+    return { valid: false, discountCents: 0, reason: "Coupon code does not exist." };
+  }
+  if (!discount.active) {
+    return { valid: false, discountCents: 0, reason: "This coupon is currently inactive." };
+  }
+  if (discount.startsAt.getTime() > now + 120000) {
+    return { valid: false, discountCents: 0, reason: "This coupon is not active yet." };
+  }
+  if (discount.expiresAt && discount.expiresAt.getTime() < now) {
+    return { valid: false, discountCents: 0, reason: "This coupon has expired." };
+  }
+  if (discount.usageLimit !== null && discount.usageCount >= discount.usageLimit) {
+    return { valid: false, discountCents: 0, reason: "Coupon usage limit has been reached." };
+  }
+  if (subtotalCents < discount.minimumSubtotalCents) {
+    const minRs = (discount.minimumSubtotalCents / 100).toFixed(0);
+    return { valid: false, discountCents: 0, reason: `Minimum order value of ₹${minRs} required.` };
+  }
+  if (discount.firstOrderOnly && !isFirstOrder) {
+    return { valid: false, discountCents: 0, reason: "Valid only on your first order." };
   }
 
   const rawDiscountCents =
@@ -43,5 +53,5 @@ export function computeDiscount(
 
   // Never let a discount exceed the subtotal (prevents negative totals).
   const discountCents = Math.max(0, Math.min(rawDiscountCents, subtotalCents));
-  return { valid: true, discountCents };
+  return { valid: true, discountCents, reason: "Discount applied." };
 }
