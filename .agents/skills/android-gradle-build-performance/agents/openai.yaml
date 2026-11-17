@@ -1,4 +1,0 @@
-interface:
-  display_name: "Android Gradle Build Performance"
-  short_description: "Diagnose and improve Android and Gradle build performance with scans, cache checks, and bottleneck audits."
-  default_prompt: "Use $android-gradle-build-performance when the request is about Diagnose and improve Android and Gradle build performance with scans, cache checks, and bottleneck audits.."
